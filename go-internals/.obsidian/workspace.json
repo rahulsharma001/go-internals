@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Go Memory Model.md",
+                "file": "Go Memory Allocation & Value Semantics.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Go Memory Model"
+              "title": "Go Memory Allocation & Value Semantics"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Go Memory Model.md",
+                "file": "Go Memory Allocation & Value Semantics.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Go Memory Model"
+              "title": "Backlinks for Go Memory Allocation & Value Semantics"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Go Memory Model.md",
+                "file": "Go Memory Allocation & Value Semantics.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from Go Memory Model"
+              "title": "Outgoing links from Go Memory Allocation & Value Semantics"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Go Memory Model.md",
+                "file": "Go Memory Allocation & Value Semantics.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Go Memory Model"
+              "title": "Outline of Go Memory Allocation & Value Semantics"
             }
           }
         ]
@@ -184,10 +184,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "4ca854d182283b79",
+  "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "memory-model.md.base",
     "Go Memory Model.md",
+    "Go Memory Allocation & Value Semantics.md",
+    "memory-model.md.base",
     "Welcome.md"
   ]
 }
