@@ -12,7 +12,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 
 | # | Topic | Status | Why It Matters |
 |---|-------|--------|----------------|
-| 1.1 | [[Go Type System & Value Semantics]] | ⬜ | Pass-by-value, zero values, named types, type identity, assignability rules |
+| 1.1 | [[Go Type System & Value Semantics]] | ✅ | Pass-by-value, zero values, named types, type identity, assignability rules |
 | 1.2 | [[Go Memory Allocation & Value Semantics]] | ✅ | Stack vs heap, escape analysis, GC basics — the foundation for everything |
 | 1.3 | [[Pointers & Pointer Semantics]] | ⬜ | Pointer receivers vs value receivers, when to use which, nil pointer behavior |
 | 1.4 | [[Strings, Runes & UTF-8 Internals]] | ⬜ | String header (ptr + len), byte vs rune, range behavior, immutability, `len()` trap |

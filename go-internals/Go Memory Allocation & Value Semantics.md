@@ -31,30 +31,31 @@ Go is **strictly pass-by-value**, and the **compiler (via escape analysis)** dec
 - Even pointers are copied (the address itself, not the data)
 - Sharing happens only through internal pointers within copied values
 
-### Visual: Where does data live?
+```mermaid
+graph TD
+    subgraph G1["Goroutine 1 — STACK"]
+        A["x := 42"]
+        B["buf [64]byte"]
+    end
+    subgraph G2["Goroutine 2 — STACK"]
+        C["y := 99"]
+        D["ptr *User"]
+    end
+    subgraph HEAP["HEAP (shared, GC-managed)"]
+        E["User{Name, Age}"]
+        F["[]byte (big)"]
+    end
+    D -->|"points to"| E
 
+    style A fill:#e8f5e9,stroke:#4caf50
+    style B fill:#e8f5e9,stroke:#4caf50
+    style C fill:#e8f5e9,stroke:#4caf50
+    style D fill:#e8f5e9,stroke:#4caf50
+    style E fill:#fff3e0,stroke:#ff9800
+    style F fill:#fff3e0,stroke:#ff9800
 ```
- ┌──────────── PROCESS MEMORY ────────────┐
- │                                        │
- │  ┌── Goroutine 1 ─┐ ┌─ Goroutine 2 ─┐│
- │  │  STACK          │ │  STACK         ││
- │  │  ┌───────────┐  │ │  ┌──────────┐ ││
- │  │  │ x := 42   │  │ │  │ y := 99  │ ││
- │  │  │ buf [64]B  │  │ │  │ ptr ─────┼─┼┼─┐
- │  │  └───────────┘  │ │  └──────────┘ ││ │
- │  │ ~1-2ns alloc    │ │               ││ │
- │  │ Auto-freed      │ │               ││ │
- │  └─────────────────┘ └───────────────┘│ │
- │                                        │ │
- │  ┌──────── HEAP (shared) ──────────┐   │ │
- │  │  ┌────────┐  ┌──────────────┐   │   │ │
- │  │  │ User{} │◄─┼──────────────┼───┼───┘
- │  │  └────────┘  │ []byte (big) │   │   │
- │  │              └──────────────┘   │   │
- │  │  ~25-50ns alloc + GC scan cost  │   │
- │  └─────────────────────────────────┘   │
- └────────────────────────────────────────┘
-```
+
+> Stack: ~1-2ns alloc, auto-freed on return. Heap: ~25-50ns alloc + GC scan cost.
 
 ---
 
@@ -80,41 +81,23 @@ The compiler walks this graph looking for paths that violate two invariants:
 
 If either is violated → variable escapes to heap.
 
-### Visual: Escape Analysis Decision Flow
+```mermaid
+flowchart TD
+    START["Variable declared"] --> Q1{"Returned / stored in\noutliving location?"}
+    Q1 -- YES --> HEAP1["HEAP"]
+    Q1 -- NO --> Q2{"Sent to goroutine /\nchannel / global?"}
+    Q2 -- YES --> HEAP2["HEAP"]
+    Q2 -- NO --> Q3{"Size unknown at\ncompile time?"}
+    Q3 -- YES --> HEAP3["HEAP"]
+    Q3 -- NO --> Q4{"Assigned to interface\n(value > ptr size)?"}
+    Q4 -- YES --> HEAP4["OFTEN HEAP"]
+    Q4 -- NO --> STACK["STACK"]
 
-```
-         ┌────────────────────────┐
-         │  Variable declared     │
-         └──────────┬─────────────┘
-                    ▼
-         ┌────────────────────────┐
-         │ Address returned /     │── YES ──▶ HEAP
-         │ stored in outliving    │
-         │ location?              │
-         └──────────┬─────────────┘
-                    │ NO
-                    ▼
-         ┌────────────────────────┐
-         │ Sent to goroutine /   │── YES ──▶ HEAP
-         │ channel / global?     │
-         └──────────┬─────────────┘
-                    │ NO
-                    ▼
-         ┌────────────────────────┐
-         │ Size unknown at       │── YES ──▶ HEAP
-         │ compile time?         │
-         └──────────┬─────────────┘
-                    │ NO
-                    ▼
-         ┌────────────────────────┐
-         │ Assigned to interface │── YES ──▶ OFTEN HEAP
-         │ (value > ptr size)?   │      (impl-specific)
-         └──────────┬─────────────┘
-                    │ NO
-                    ▼
-                 ┌───────┐
-                 │ STACK │
-                 └───────┘
+    style HEAP1 fill:#ffcdd2,stroke:#e53935
+    style HEAP2 fill:#ffcdd2,stroke:#e53935
+    style HEAP3 fill:#ffcdd2,stroke:#e53935
+    style HEAP4 fill:#ffe0b2,stroke:#ff9800
+    style STACK fill:#c8e6c9,stroke:#43a047
 ```
 
 ### Stack Internals
@@ -123,20 +106,15 @@ If either is violated → variable escapes to heap.
 - **Contiguous stack model** (since Go 1.4)
 - Growth = allocate **new larger stack** + **copy old data** + **adjust all pointers**
 
-### Visual: Stack Growth
-
 ```
- BEFORE (~2 KB)              AFTER (~4 KB)
- ┌────────────┐             ┌──────────────────┐
- │ frame: C() │             │                  │
- │ frame: B() │ ── copy ──▶ │ frame: C()       │
- │ frame: A() │             │ frame: B()       │
- └────────────┘             │ frame: A()       │
-                            │   (room to grow) │
-                            └──────────────────┘
+BEFORE (~2 KB)              AFTER (~4 KB)
+  frame: C()                  frame: C()
+  frame: B()   ── copy ──▶    frame: B()
+  frame: A()                  frame: A()
+                              (room to grow)
 
- ALL pointers into old stack are REWRITTEN.
- This is why Go bans pointer arithmetic.
+ALL pointers into old stack are REWRITTEN.
+This is why Go bans pointer arithmetic.
 ```
 
 ### Heap + GC
@@ -145,31 +123,26 @@ If either is violated → variable escapes to heap.
 - STW phases: typically **sub-millisecond** (< 100μs)
 - Real latency killer: **mark assist** — goroutines allocating during GC are forced to help mark before their allocation proceeds
 
-### Visual: Tri-Color Mark and Sweep
+```mermaid
+graph LR
+    subgraph Tri-Color Marking
+        R["root"] --> B1["BLACK"]
+        B1 --> B2["BLACK"]
+        B2 --> G1["GREY"]
+        G1 --> W1["WHITE\n(garbage)"]
+        B2 --> B3["BLACK"]
+        B3 --> W1
+    end
 
+    style R fill:#e1f5fe,stroke:#0288d1
+    style B1 fill:#212121,stroke:#000,color:#fff
+    style B2 fill:#212121,stroke:#000,color:#fff
+    style B3 fill:#212121,stroke:#000,color:#fff
+    style G1 fill:#bdbdbd,stroke:#757575
+    style W1 fill:#ffffff,stroke:#e0e0e0
 ```
- ┌──────────────────────────────────────┐
- │       Tri-Color Marking             │
- │                                      │
- │ WHITE = unvisited (sweep candidates) │
- │ GREY  = visited, children unscanned  │
- │ BLACK = visited + children scanned   │
- │                                      │
- │ 1. All objects start WHITE           │
- │ 2. Roots marked GREY                │
- │ 3. Pick GREY → scan children → BLACK │
- │ 4. Repeat until no GREY remains     │
- │ 5. Sweep all remaining WHITE        │
- │                                      │
- │  ○ WHITE   ◐ GREY    ● BLACK        │
- │                                      │
- │  root ──▶ ● ──▶ ● ──▶ ◐ ──▶ ○     │
- │                  │           ↑       │
- │                  └──▶ ● ────┘       │
- │                                      │
- │  After marking: ○ = garbage → freed  │
- └──────────────────────────────────────┘
-```
+
+> WHITE = unvisited (sweep candidate). GREY = visited, children unscanned. BLACK = fully scanned. After marking, remaining WHITE objects are garbage → freed.
 
 ### Write Barrier
 
@@ -219,22 +192,12 @@ func bar() int {
 func update(x *int) {
     *x = 20 // modifies original via dereference
 }
-// The pointer itself is COPIED, but both
-// copies point to the same memory.
 ```
 
-### Visual: Pointer copy
-
 ```
- CALLER                     CALLEE
- ┌────────────┐            ┌────────────┐
- │ p ─────────┼──┐         │ x ─────────┼──┐
- └────────────┘  │         └────────────┘  │
-                 │  (same address, copied) │
-                 ▼                          ▼
-              ┌──────┐
-              │  42  │  ◄── both point here
-              └──────┘
+caller: p ──┐      callee: x ──┐
+             ▼                   ▼
+           [ 42 ]  ◄── both point here (pointer copied, data shared)
 ```
 
 ### Slice header copy
@@ -249,22 +212,29 @@ func grow(s []int) {
 }
 ```
 
-### Visual: Slice internals
+```mermaid
+graph LR
+    subgraph SliceHeader["Slice Header (24 bytes)"]
+        PTR["ptr"]
+        LEN["len: 3"]
+        CAP["cap: 5"]
+    end
+    subgraph Array["Underlying Array"]
+        E0["10"] --- E1["20"] --- E2["30"] --- E3["_"] --- E4["_"]
+    end
+    PTR -->|"points to"| E0
 
+    style PTR fill:#e8f5e9,stroke:#4caf50
+    style LEN fill:#e8f5e9,stroke:#4caf50
+    style CAP fill:#e8f5e9,stroke:#4caf50
+    style E0 fill:#fff3e0,stroke:#ff9800
+    style E1 fill:#fff3e0,stroke:#ff9800
+    style E2 fill:#fff3e0,stroke:#ff9800
+    style E3 fill:#fafafa,stroke:#bdbdbd
+    style E4 fill:#fafafa,stroke:#bdbdbd
 ```
- SLICE HEADER (24 bytes, copied on pass)
- ┌──────────────────────────────────┐
- │ ptr ──────────┐  len: 3  cap: 5 │
- └───────────────┼──────────────────┘
-                 ▼
- UNDERLYING ARRAY
- ┌────┬────┬────┬────┬────┐
- │ 10 │ 20 │ 30 │    │    │
- └────┴────┴────┴────┴────┘
-  [0]  [1]  [2]  [3]  [4]
-        ▲               ▲
-      len=3           cap=5
-```
+
+> Passing slice = copying the 24-byte header. Both copies see the same array.
 
 ### Map is a pointer
 
@@ -304,28 +274,18 @@ func grow(s []int) {
 
 **Fix**: return the new slice or pass `*[]int`.
 
-### Visual: Append trap
-
 ```
- BEFORE (cap=3, len=3 — full)
- caller.s ──▶ [10, 20, 30]
-
- INSIDE grow():
-   s = append(s, 4) → NEW array allocated
-   local s ──▶ [10, 20, 30, 4]
-   caller.s ──▶ [10, 20, 30]  ← stale!
-
- AFTER return:
- caller.s ──▶ [10, 20, 30]      ← unchanged
- local s  ──▶ [10, 20, 30, 4]   ← garbage
+BEFORE: caller.s ──▶ [10, 20, 30]       (cap=3, full)
+INSIDE: local s  ──▶ [10, 20, 30, 4]    (new array!)
+AFTER:  caller.s ──▶ [10, 20, 30]       ← unchanged, stale
 ```
 
 ### Slice memory leak from sub-slicing
 
 ```go
 func getFirstThree(data []byte) []byte {
-    return data[:3] // LEAK: holds ref to entire
-}                    // backing array (could be MBs)
+    return data[:3] // LEAK: holds ref to entire backing array
+}
 ```
 
 **Fix**: copy the subset.
@@ -346,18 +306,16 @@ var i interface{} = p
 fmt.Println(i == nil) // false!
 ```
 
-**Why**: An interface is nil only when **both** `tab/type` AND `data` are nil. Wrapping a typed nil gives a non-nil interface with `type=*MyStruct, data=nil`.
-
-**Fix**: return `nil` directly, not a typed nil.
+**Why**: An interface is nil only when **both** `tab/type` AND `data` are nil. Wrapping a typed nil gives a non-nil interface.
 
 ```go
-// BAD
+// BAD — returns non-nil interface wrapping a nil pointer
 func getUser() error {
     var err *MyError = nil
-    return err // non-nil interface!
+    return err
 }
 
-// GOOD
+// GOOD — returns actual nil interface
 func getUser() error {
     return nil
 }
@@ -393,8 +351,6 @@ for _, v := range arr {
 
 **Go 1.22+**: Fixed at compiler level — loop variable is now per-iteration.
 
-> "This was fixed in Go 1.22. The loop variable is now scoped per-iteration."
-
 ### Closure escape
 
 ```go
@@ -407,18 +363,8 @@ func makeAdder(n int) func(int) int {
 
 The closure outlives `makeAdder`, so captured `n` must survive → heap-allocated.
 
-### Visual: Closure capture
-
 ```
- makeAdder(5) returns:
- ┌────────────────────┐
- │ closure {          │
- │   code: func(x)    │
- │   env ──▶ ┌─────┐  │
- │           │ n=5 │  │  ◄── heap
- │           └─────┘  │
- │ }                  │
- └────────────────────┘
+closure { code: func(x), env ──▶ [n=5] }  ← env is on the heap
 ```
 
 ---
@@ -494,7 +440,6 @@ go build -gcflags="-m -l"    # disable inlining (clearer output)
 
 ```bash
 go test -bench=. -benchmem           # allocs/op in benchmarks
-go test -cpuprofile cpu.prof         # CPU profile
 go test -memprofile mem.prof         # heap profile
 go tool pprof -alloc_space mem.prof  # total bytes allocated
 go tool pprof -inuse_space mem.prof  # currently live bytes
@@ -508,23 +453,17 @@ GOGC=100                             # GC trigger ratio (default)
 GOMEMLIMIT=512MiB ./myserver         # soft memory cap (Go 1.19+)
 ```
 
-### GC tuning mental model
+### GC tuning
 
 ```
- GOGC=100 (default)       GOGC=50
- ┌────────────┐           ┌────────────┐
- │ live: 100MB│           │ live: 100MB│
- │ trigger at │           │ trigger at │
- │   200MB    │           │   150MB    │
- │ ▓▓▓▓░░░░░░│           │ ▓▓▓▓░░░░░░│
- │ ▓▓▓▓▓▓▓▓░░│ ← GC      │ ▓▓▓▓▓▓░░░░│ ← GC (sooner)
- └────────────┘           └────────────┘
- Less CPU, more RAM       More CPU, less RAM
+GOGC=100 (default): GC at 200MB when live=100MB  → less CPU, more RAM
+GOGC=50:            GC at 150MB when live=100MB  → more CPU, less RAM
+GOMEMLIMIT=512MiB:  runtime adjusts GC pacing to stay under 512MB
 ```
 
 > "GOGC trades throughput for memory. GOMEMLIMIT (Go 1.19+) is the modern approach — set a memory budget and the runtime adjusts GC pacing. In production, set GOMEMLIMIT and use high GOGC (or off) to let the limit drive GC."
 
-### Go pointer types (know the full taxonomy)
+### Go pointer types (full taxonomy)
 
 | Type | Package | Since | Use Case |
 |---|---|---|---|
