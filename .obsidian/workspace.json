@@ -184,10 +184,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "7dcdbc0f2a97cdcd",
+  "active": "4ca854d182283b79",
   "lastOpenFiles": [
-    "Go Memory Model (Happens-Before).md",
     "Go Memory Allocation & Value Semantics.md",
+    "Go Memory Model (Happens-Before).md",
     "Roadmap.md",
     "Go Type System & Value Semantics.md",
     "Go Memory Model.md",
