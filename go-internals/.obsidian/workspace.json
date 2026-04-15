@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roadmap.md",
+                "file": "Go Type System & Value Semantics.md",
                 "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Roadmap"
+              "title": "Go Type System & Value Semantics"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Roadmap.md",
+                "file": "Go Type System & Value Semantics.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Roadmap"
+              "title": "Backlinks for Go Type System & Value Semantics"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Roadmap.md",
+                "file": "Go Type System & Value Semantics.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from Roadmap"
+              "title": "Outgoing links from Go Type System & Value Semantics"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Roadmap.md",
+                "file": "Go Type System & Value Semantics.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of Roadmap"
+              "title": "Outline of Go Type System & Value Semantics"
             }
           }
         ]
@@ -186,10 +186,10 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "Go Type System & Value Semantics.md",
+    "Go Memory Model (Happens-Before).md",
     "Go Memory Allocation & Value Semantics.md",
     "Roadmap.md",
-    "Go Memory Model (Happens-Before).md",
+    "Go Type System & Value Semantics.md",
     "Go Memory Model.md",
     "memory-model.md.base",
     "Welcome.md"
