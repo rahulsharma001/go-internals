@@ -88,7 +88,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "right": {
     "id": "06b9fd80f4139a7a",
@@ -190,10 +191,11 @@
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "bases:Create new base": false,
+      "obsidian-git:Open Git source control": false
     }
   },
-  "active": "4ca854d182283b79",
+  "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
     "Go Memory Allocation & Value Semantics.md",
     "Go Memory Model (Happens-Before).md",
