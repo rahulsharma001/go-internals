@@ -2,6 +2,7 @@
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
+> Section 13 is your comprehensive interview Q&A bank → [[questions/Go Type System - Interview Questions]]
 > Something not clicking? → [[simplified/Go Type System & Value Semantics - Simplified]]
 
 ---
@@ -430,6 +431,8 @@ Either change to value receiver: `func (u User) String()` or pass a pointer: `pr
 3. Write a function `printArea(s Shape)` and call it with both types
 4. Observe which requires `&` and which doesn't. Then verify with `var _ Shape = Circle{}` and `var _ Shape = (*Rectangle)(nil)` compile-time checks.
 
+> Full solutions with explanations → [[exercises/Go Type System - Exercises]]
+
 ---
 
 ## 7. Edge Cases & Gotchas
@@ -663,6 +666,18 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 ## 12. Final Verbal Answer
 
 > "Go has a statically typed system with structural interface satisfaction — types implement interfaces implicitly by having the right method set, no `implements` keyword needed. Every type has an underlying type, a guaranteed zero value, and a method set. The critical rule: a value of type `T` only has value-receiver methods in its method set, while `*T` has both value and pointer receiver methods. This matters for interface satisfaction — a value can't satisfy an interface requiring pointer-receiver methods, because the interface stores a copy and mutations would be lost. Go uses composition over inheritance through struct embedding, which promotes fields and methods but is delegation, not polymorphism — the embedded type is always the receiver. Defined types create new distinct types for type safety, while type aliases are just alternate names. Designing for useful zero values is idiomatic — `sync.Mutex{}`, `bytes.Buffer{}`, and `http.Client{}` all work without initialization."
+
+---
+
+## 13. Comprehensive Interview Questions
+
+> Full interview question bank (15 questions) → [[questions/Go Type System - Interview Questions]]
+
+Preview of most frequently asked:
+
+1. **Why can't a value type satisfy an interface with pointer receiver methods?** `[COMMON]`
+2. **How does struct embedding differ from inheritance? Show a case where it surprises you.** `[COMMON]`
+3. **What's the nil interface trap and how do you avoid it in production?** `[TRICKY]`
 
 ---
 

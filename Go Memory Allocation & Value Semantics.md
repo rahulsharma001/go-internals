@@ -2,6 +2,7 @@
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
+> Section 13 is your comprehensive interview Q&A bank → [[questions/Go Memory Allocation - Interview Questions]]
 > Something not clicking? → [[simplified/Go Memory Allocation & Value Semantics - Simplified]]
 
 ---
@@ -373,6 +374,8 @@ Write a Go program that:
 3. Run `go build -gcflags="-m"` and verify which escapes and which doesn't
 4. Bonus: create a struct larger than 128 bytes and benchmark value receiver vs pointer receiver using `testing.B`
 
+> Full solutions with explanations → [[exercises/Go Memory Allocation - Exercises]]
+
 ---
 
 ## 7. Edge Cases & Gotchas
@@ -689,6 +692,18 @@ GOMEMLIMIT=512MiB:  runtime adjusts GC pacing to stay under 512MB
 ## 12. Final Verbal Answer
 
 > "Go is strictly pass-by-value. The compiler uses escape analysis — a static data-flow analysis that builds a directed graph of assignments — to decide whether variables live on the stack or heap. Stack allocation is near-free at 1-2 nanoseconds, while heap allocation costs 25-50 nanoseconds plus future garbage collection work. The GC is a concurrent tri-color mark-and-sweep collector where Stop-The-World pauses are sub-millisecond, but the real production cost is mark assist — goroutines forced to help with GC marking during allocation, causing tail latency spikes. Types like slices, maps, and interfaces appear reference-like because they contain internal pointers, but the headers themselves are always copied by value. In high-performance systems, minimizing heap allocations is critical — using value semantics for small structs, sync.Pool for buffer reuse, pre-allocated slices, and GOMEMLIMIT tuning to keep GC pressure under control."
+
+---
+
+## 13. Comprehensive Interview Questions
+
+> Full interview question bank (15 questions) → [[questions/Go Memory Allocation - Interview Questions]]
+
+Preview of most frequently asked:
+
+1. **Explain Go's escape analysis. How does the compiler decide stack vs heap?** `[COMMON]`
+2. **What's the difference between `new()` and `make()`? Does `new()` always heap-allocate?** `[COMMON]`
+3. **How would you reduce GC pressure in a high-throughput Go service?** `[COMMON]`
 
 ---
 
