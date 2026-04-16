@@ -1,0 +1,90 @@
+# Go Terms Glossary
+
+> Quick reference for abbreviations, runtime struct names, and technical terms used across the notes.
+> Every term is expanded with its full form and a one-line plain-English meaning.
+
+---
+
+## Runtime & Compiler Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| GC | Garbage Collector | Background system that automatically frees memory you're no longer using |
+| STW | Stop-The-World | A brief pause where ALL goroutines are frozen so the GC can do bookkeeping (sub-millisecond in Go) |
+| GMP | Goroutine-Machine-Processor | Go's scheduler model: G = goroutine, M = OS thread, P = logical processor with a run queue |
+| AST | Abstract Syntax Tree | Tree-shaped representation of your source code that the compiler analyzes |
+| SSA | Static Single Assignment | Compiler intermediate form where each variable is assigned exactly once — enables optimizations |
+| GOGC | Go Garbage Collection ratio | Environment variable controlling how aggressively GC runs (default 100 = trigger when heap doubles) |
+| GOMEMLIMIT | Go Memory Limit | Soft memory cap (Go 1.19+) — runtime adjusts GC pacing to stay under this budget |
+
+## Runtime Struct Names
+
+| Term | What It Is | Plain-English Meaning |
+|------|------------|------------------------|
+| iface | Interface with methods (runtime struct) | Two-field struct: {pointer to method table, pointer to actual data} — how Go stores typed interfaces |
+| eface | Empty interface (runtime struct) | Two-field struct: {pointer to type info, pointer to data} — how Go stores `any` / `interface{}` |
+| itab | Interface Table | Cached lookup table mapping a concrete type to an interface's method addresses — avoids repeated lookups |
+| hmap | Hash Map | The runtime struct backing every `map[K]V` — contains buckets, hash seed, count, and overflow pointers |
+| bmap | Bucket Map | Individual bucket in a map — holds up to 8 key-value pairs plus tophash bytes for fast probing |
+| sudog | Pseudo-G (waiting goroutine) | A goroutine that's parked waiting on a channel send or receive operation |
+| g | Goroutine struct | Runtime representation of a goroutine — contains stack info, status, scheduling state |
+| m | Machine struct | Runtime representation of an OS thread |
+| p | Processor struct | Logical processor with its own run queue of goroutines — GOMAXPROCS controls how many exist |
+| mcache | M-Cache | Per-P cache of small memory spans — avoids locking the central allocator for small allocations |
+| mcentral | M-Central | Central free list for a specific size class — shared across all P's, requires locking |
+| mheap | M-Heap | The global heap manager — allocates large spans and manages page-level memory |
+| mspan | M-Span | A contiguous run of memory pages managed by the heap — the basic unit of Go's memory allocator |
+| hchan | Hash Channel | The runtime struct backing every channel — contains a circular buffer, send/recv queues, mutex |
+
+## Performance & Measurement Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| p50 | 50th Percentile (median) | Half of all requests are faster than this value |
+| p99 | 99th Percentile | 99% of requests are faster than this value — measures worst-case typical experience |
+| p999 | 99.9th Percentile | Only 1 in 1000 requests is slower than this — measures tail latency |
+| allocs/op | Allocations per operation | How many heap allocations a single operation triggers — fewer = less GC pressure |
+| ns/op | Nanoseconds per operation | How long a single operation takes in benchmark — lower is faster |
+
+## Memory & Allocation Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Escape analysis | — | Compiler's decision process for whether a variable lives on the stack (fast, auto-freed) or heap (slower, GC-managed) |
+| Stack | — | Per-goroutine private memory, auto-cleaned on function return (~1-2ns allocation) |
+| Heap | — | Shared memory managed by the garbage collector (~25-50ns allocation + future GC work) |
+| Write barrier | — | Hidden runtime check on pointer writes during GC — preserves the tri-color marking invariant |
+| Mark assist | — | When a goroutine allocating during GC is forced to help with marking before its allocation proceeds — the real cause of tail latency |
+| Tri-color marking | — | GC algorithm: objects are White (unvisited), Grey (visited but children unscanned), Black (fully scanned). Remaining White = garbage. |
+| Size class | — | Predefined memory sizes (8B, 16B, 32B, ..., 32KB) the allocator uses — avoids fragmentation |
+| Tiny allocator | — | Special fast path for allocations ≤ 16 bytes with no pointers — packs multiple tiny objects into one 16-byte block |
+
+## Go Language Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Defined type | `type X int` | Creates a brand-new type with its own identity and method set — `X` and `int` are distinct |
+| Type alias | `type X = int` | Just another name for the same type — `X` IS `int`, no conversion needed |
+| Underlying type | — | The base type in a type definition — `type Celsius float64` has underlying type `float64` |
+| Zero value | — | The default value Go assigns to every variable — `0` for numbers, `""` for strings, `nil` for pointers/slices/maps |
+| Method set | — | The set of methods available on a type — determines which interfaces it satisfies |
+| Value receiver | `func (t T) Method()` | Method gets a COPY of the value — can't modify the original |
+| Pointer receiver | `func (t *T) Method()` | Method gets the memory address — CAN modify the original |
+| Embedding | `type Outer struct { Inner }` | Composition: Inner's fields and methods are promoted to Outer — NOT inheritance |
+| Interface satisfaction | — | A type satisfies an interface if it has all the required methods — implicit, no `implements` keyword |
+
+## Concurrency Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Goroutine | — | Lightweight thread managed by Go's runtime — costs ~2-8 KB stack, can run millions |
+| Channel | — | Typed pipe for goroutines to communicate — can be buffered (queue) or unbuffered (handshake) |
+| Mutex | Mutual Exclusion lock | Only one goroutine can hold it at a time — protects shared data from concurrent access |
+| RWMutex | Read-Write Mutex | Multiple readers OR one writer — optimizes for read-heavy workloads |
+| Data race | — | Two goroutines access the same memory concurrently, at least one writing, with no synchronization |
+| Happens-before | — | The formal ordering guarantee: if A happens-before B, then B sees A's memory writes |
+| GOMAXPROCS | Go Max Processors | How many OS threads can execute goroutines simultaneously — defaults to number of CPU cores |
+
+---
+
+> This glossary is updated as new notes are added. If you encounter a term not listed here, check the specific topic's note or the [[Roadmap]].

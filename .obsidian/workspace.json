@@ -197,6 +197,8 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "simplified",
+    "Glossary.md",
     "Go Type System & Value Semantics.md",
     "Go Memory Allocation & Value Semantics.md",
     "Go Memory Model (Happens-Before).md",
