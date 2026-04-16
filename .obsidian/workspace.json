@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "simplified/Go Memory Allocation & Value Semantics - Simplified.md",
+                "file": "Roadmap.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Go Memory Allocation & Value Semantics - Simplified"
+              "title": "Roadmap"
             }
           }
         ]
@@ -196,9 +196,9 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "simplified/Go Memory Allocation & Value Semantics - Simplified.md",
     "Go Memory Allocation & Value Semantics.md",
     "simplified/Go Type System & Value Semantics - Simplified.md",
-    "simplified/Go Memory Allocation & Value Semantics - Simplified.md",
     "simplified",
     "Glossary.md",
     "Go Type System & Value Semantics.md",
