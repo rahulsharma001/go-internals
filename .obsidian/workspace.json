@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "exercises/Go Memory Allocation - Exercises.md",
+                "file": "Go Memory Allocation & Value Semantics.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Go Memory Allocation - Exercises"
+              "title": "Go Memory Allocation & Value Semantics"
             }
           }
         ]
@@ -88,8 +88,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "06b9fd80f4139a7a",
@@ -197,10 +196,10 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "questions/Go Memory Allocation - Interview Questions.md",
     "Go Memory Allocation & Value Semantics.md",
     "exercises/Go Memory Allocation - Exercises.md",
     "questions/Go Type System - Interview Questions.md",
-    "questions/Go Memory Allocation - Interview Questions.md",
     "exercises/Go Type System - Exercises.md",
     "questions",
     "exercises",
