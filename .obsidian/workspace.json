@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "questions/GIN Framework - Interview Questions.md",
+                "file": "Roadmap.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "GIN Framework - Interview Questions"
+              "title": "Roadmap"
             }
           }
         ]
@@ -196,9 +196,13 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "frameworks/GIN Framework.md",
+    "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
+    "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
+    "Strings, Runes & UTF-8 Internals.md",
     "Gap Tracker.md",
     "frameworks/_index.md",
+    "frameworks/GIN Framework.md",
+    "questions/GIN Framework - Interview Questions.md",
     "exercises/GIN Framework - Exercises.md",
     "security/_index.md",
     "databases/MongoDB.md",

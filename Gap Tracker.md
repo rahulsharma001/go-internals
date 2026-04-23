@@ -38,7 +38,7 @@
   - [ ] Complete exercises (Tier 1, 2, 3)
   - [ ] Review simplified companion
   - [ ] Review interview questions (15 Qs)
-- [ ] [[frameworks/GIN Framework|GIN Framework]] -- Tier A (1-2h)
+- [x] [[frameworks/GIN Framework|GIN Framework]] -- Tier A (1-2h)
   - [ ] Read main note
   - [ ] Complete exercises (Tier 1, 2, 3)
   - [ ] Review simplified companion
