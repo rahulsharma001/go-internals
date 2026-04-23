@@ -85,6 +85,32 @@
 | Happens-before | — | The formal ordering guarantee: if A happens-before B, then B sees A's memory writes |
 | GOMAXPROCS | Go Max Processors | How many OS threads can execute goroutines simultaneously — defaults to number of CPU cores |
 
+## Database Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| BSON | Binary JSON | MongoDB's binary-encoded JSON format — more efficient than text JSON, supports typed fields |
+| ObjectId | — | 12-byte unique identifier in MongoDB — contains timestamp + random + counter, generated client-side |
+| WiredTiger | — | MongoDB's default storage engine since v3.2 — handles B-tree indexes, document-level locking, compression |
+| Aggregation Pipeline | — | MongoDB's data processing framework — documents flow through stages ($match, $group, $sort) like Unix pipes |
+| Replica Set | — | Group of MongoDB servers maintaining the same data — one primary (writes), multiple secondaries (reads/failover) |
+| Shard Key | — | Field used to distribute data across shards — bad choice = hotspots, can't change easily |
+| Write Concern | — | Durability guarantee level — `w:1` (primary ack), `w:majority` (most nodes ack), `w:0` (no ack) |
+| COLLSCAN | Collection Scan | MongoDB scanning every document — equivalent of SQL full table scan, means missing index |
+| IXSCAN | Index Scan | MongoDB using an index to find documents — what you want to see in explain() output |
+
+## Framework Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Radix Tree | Compressed Trie | Data structure Gin uses for O(log n) route matching — pre-compiled at startup, zero allocation |
+| gin.Context | — | Per-request object wrapping request, response, params, key-value store — NOT goroutine-safe |
+| Handler Chain | — | Ordered slice of middleware + handler functions — executed sequentially with c.Next() for nesting |
+| c.Next() | — | Yields to next handler in chain — code after c.Next() runs in response phase (reverse order) |
+| c.Abort() | — | Stops remaining handlers from executing — sets chain index to sentinel, but current function continues |
+| ShouldBindJSON | — | Deserialize + validate JSON body to struct — returns error (unlike BindJSON which auto-responds 400) |
+| gin.H | — | Shortcut for `map[string]any` — convenience type for JSON responses |
+
 ---
 
 > This glossary is updated as new notes are added. If you encounter a term not listed here, check the specific topic's note or the [[Roadmap]].
