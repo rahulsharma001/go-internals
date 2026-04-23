@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "frameworks/GIN Framework.md",
+                "file": "questions/GIN Framework - Interview Questions.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "GIN Framework"
+              "title": "GIN Framework - Interview Questions"
             }
           }
         ]
@@ -196,11 +196,12 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "exercises/GIN Framework - Exercises.md",
     "frameworks/GIN Framework.md",
+    "Gap Tracker.md",
+    "frameworks/_index.md",
+    "exercises/GIN Framework - Exercises.md",
     "security/_index.md",
     "databases/MongoDB.md",
-    "Gap Tracker.md",
     "Go Memory Allocation & Value Semantics.md",
     "questions/Go Memory Allocation - Interview Questions.md",
     "exercises/Go Memory Allocation - Exercises.md",
