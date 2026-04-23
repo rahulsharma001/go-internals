@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roadmap.md",
+                "file": "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Roadmap"
+              "title": "Strings, Runes & UTF-8 Internals - Simplified"
             }
           }
         ]
@@ -197,6 +197,7 @@
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
     "questions/Strings, Runes & UTF-8 Internals - Interview Questions.md",
+    "Roadmap.md",
     "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
     "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
     "Strings, Runes & UTF-8 Internals.md",
@@ -214,7 +215,6 @@
     "exercises/Go Type System - Exercises.md",
     "questions",
     "exercises",
-    "Roadmap.md",
     "simplified/Go Memory Allocation & Value Semantics - Simplified.md",
     "simplified/Go Type System & Value Semantics - Simplified.md",
     "simplified",
