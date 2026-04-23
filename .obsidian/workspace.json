@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "exercises/GIN Framework - Exercises.md",
+                "file": "frameworks/GIN Framework.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "GIN Framework - Exercises"
+              "title": "GIN Framework"
             }
           }
         ]
@@ -196,8 +196,8 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "frameworks/GIN Framework.md",
     "exercises/GIN Framework - Exercises.md",
+    "frameworks/GIN Framework.md",
     "security/_index.md",
     "databases/MongoDB.md",
     "Gap Tracker.md",
