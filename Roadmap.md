@@ -15,7 +15,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 | 1.1 | [[Go Type System & Value Semantics]] | ✅ | Pass-by-value, zero values, named types, type identity, assignability rules |
 | 1.2 | [[Go Memory Allocation & Value Semantics]] | ✅ | Stack vs heap, escape analysis, GC basics — the foundation for everything |
 | 1.3 | [[Pointers & Pointer Semantics]] | ⬜ | Pointer receivers vs value receivers, when to use which, nil pointer behavior |
-| 1.4 | [[Strings, Runes & UTF-8 Internals]] | ⬜ | String header (ptr + len), byte vs rune, range behavior, immutability, `len()` trap |
+| 1.4 | [[Strings, Runes & UTF-8 Internals]] | ✅ | String header (ptr + len), byte vs rune, range behavior, immutability, `len()` trap |
 | 1.5 | [[Arrays & Slice Internals]] | ⬜ | Slice header (ptr + len + cap), append mechanics, copy-on-grow, slice tricks, memory leaks |
 | 1.6 | [[Map Internals]] | ⬜ | hmap struct, buckets, overflow chains, load factor 6.5, hash seed, evacuation, iteration randomness |
 | 1.7 | [[Struct Layout & Memory Alignment]] | ⬜ | Padding rules, field ordering for minimal size, `unsafe.Sizeof`, cache-line awareness |

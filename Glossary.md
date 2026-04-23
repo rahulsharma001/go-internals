@@ -59,6 +59,21 @@
 | Size class | — | Predefined memory sizes (8B, 16B, 32B, ..., 32KB) the allocator uses — avoids fragmentation |
 | Tiny allocator | — | Special fast path for allocations ≤ 16 bytes with no pointers — packs multiple tiny objects into one 16-byte block |
 
+## String & Encoding Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| StringHeader | reflect.StringHeader | Two-field struct (Data pointer + Len int) backing every Go string — always 16 bytes on 64-bit |
+| UTF-8 | Unicode Transformation Format — 8-bit | Variable-width encoding where each Unicode character uses 1-4 bytes. Co-designed by Rob Pike and Ken Thompson (Go's creators) |
+| Rune | — | Alias for `int32` representing a single Unicode code point (U+0000 to U+10FFFF) |
+| Code point | — | A unique number assigned to each character in Unicode (e.g., U+0041 = 'A', U+1F600 = '😀') |
+| Grapheme cluster | — | One visual character as perceived by a human — may be composed of multiple runes (e.g., base char + combining accent) |
+| U+FFFD | Unicode Replacement Character | The character Go produces when decoding invalid UTF-8 bytes in a range loop |
+| NFC | Normalization Form Canonical Composition | Unicode normalization that composes characters into precomposed forms (é as one code point) |
+| NFD | Normalization Form Canonical Decomposition | Unicode normalization that decomposes characters (é as e + combining accent) |
+| .rodata | Read-Only Data section | Section of the compiled binary where string literals are stored — immutable at runtime |
+| strings.Builder | — | Mutable byte buffer optimized for string construction — uses zero-copy String() method |
+
 ## Go Language Terms
 
 | Term | Full Form | Plain-English Meaning |
