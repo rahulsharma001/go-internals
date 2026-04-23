@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "databases/MongoDB.md",
+                "file": "frameworks/GIN Framework.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "MongoDB"
+              "title": "GIN Framework"
             }
           }
         ]
@@ -196,6 +196,10 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "security/_index.md",
+    "frameworks/GIN Framework.md",
+    "exercises/GIN Framework - Exercises.md",
+    "databases/MongoDB.md",
     "Gap Tracker.md",
     "Go Memory Allocation & Value Semantics.md",
     "questions/Go Memory Allocation - Interview Questions.md",
