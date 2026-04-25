@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
+                "file": "Roadmap.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Strings, Runes & UTF-8 Internals - Exercises"
+              "title": "Roadmap"
             }
           }
         ]
@@ -194,8 +194,16 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "4ca854d182283b79",
+  "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "Arrays & Slice Internals.md",
+    "visuals/Arrays & Slice Internals - Visual Map.md",
+    "revision/Arrays & Slice Internals - Revision.md",
+    "questions/Arrays & Slice Internals - Interview Questions.md",
+    "exercises/Arrays & Slice Internals - Exercises.md",
+    "simplified/Arrays & Slice Internals - Simplified.md",
+    "Strings, Runes & UTF-8 Internals.md",
+    "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
     "Connections.md",
     "Daily Revision.md",
     "visuals/MongoDB - Visual Map.md",
@@ -210,20 +218,12 @@
     "revision/Strings, Runes & UTF-8 Internals - Revision.md",
     "visuals",
     "revision",
-    "Strings, Runes & UTF-8 Internals.md",
     "questions/Strings, Runes & UTF-8 Internals - Interview Questions.md",
     "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
     "Roadmap.md",
-    "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
     "Gap Tracker.md",
     "frameworks/_index.md",
     "frameworks/GIN Framework.md",
-    "questions/GIN Framework - Interview Questions.md",
-    "exercises/GIN Framework - Exercises.md",
-    "security/_index.md",
-    "databases/MongoDB.md",
-    "Go Memory Allocation & Value Semantics.md",
-    "questions/Go Memory Allocation - Interview Questions.md",
     "questions",
     "exercises",
     "simplified",
