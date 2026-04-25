@@ -264,6 +264,36 @@ errors.Is(err, ErrRequired) → walks chain → true at depth 2
 
 ---
 
+### [[T10 Defer, Panic & Recover Internals]]
+
+**Blurt check** (cover below, answer from memory):
+1. When are deferred function arguments evaluated?
+2. What order do deferred functions execute in?
+3. Can deferred functions modify return values? How?
+4. Where must recover() be called to work?
+5. Can a parent goroutine catch a child goroutine's panic?
+
+**5-second answer:**
+> `defer` schedules cleanup to run when the function returns. Three rules: args evaluated at defer time, LIFO execution, can modify named return values. `panic` unwinds the stack, running defers. `recover` only works inside a directly deferred function in the same goroutine. Panics are goroutine-isolated — unrecovered panic in any goroutine crashes the whole program. Never defer in loops — accumulates until function returns.
+
+**Key visual:**
+```
+defer A(); defer B(); defer C()
+Execution order: C → B → A (LIFO, like a stack of plates)
+
+panic("boom") → run defers (LIFO) → if recover() in defer → stop unwind
+                                   → if no recover → crash program
+```
+
+**Traps to remember:**
+- defer in loop → accumulates all defers, exhausts resources (wrap in helper func)
+- recover() not in a defer → always returns nil, does nothing
+- os.Exit() bypasses ALL defers — use return + defer for cleanup
+
+**Weak? Drill deeper** → [[revision/T10 Defer, Panic & Recover Internals - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.
