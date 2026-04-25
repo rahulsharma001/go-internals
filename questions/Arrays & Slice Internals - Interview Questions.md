@@ -139,7 +139,7 @@ caller must use returned slice: s = append(s, x)
 ```
 
 **Key facts:**
-- The built-in `append` may return a new slice value even if capacity was sufficient (rare) but the contract is: always use `s = append(s, e)`.
+- The contract is: always use `s = append(s, e)` — even if capacity is sufficient, the return value is the authoritative header with the updated length.
 - If `len < cap`, new elements are placed in `[len:cap)` and `len` increases.
 - If more room is needed, a new array is allocated, length grows, and the old array becomes collectable if nothing references it.
 - The growth algorithm (Go 1.18+) is documented in the runtime; capacity increases follow size-class rules after the formula (see Q12 in this set for growth details).

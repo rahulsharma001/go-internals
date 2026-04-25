@@ -150,6 +150,34 @@ Index {a,b,c}: supports {a}, {a,b}, {a,b,c} -- NOT {b} or {c} alone
 
 ---
 
+### [[Arrays & Slice Internals]]
+
+**Blurt check** (cover below, answer from memory):
+1. What are the 3 fields in a slice header? Total size?
+2. Array vs slice: what's copied on assignment/pass?
+3. What happens when append exceeds capacity?
+4. Why doesn't the caller see appended elements? (the append trap)
+5. What is the three-index slice expression `a[l:h:m]` for?
+
+**5-second answer:**
+> A slice is a 24-byte header (ptr + len + cap) describing a window into a backing array. Passing copies the header, sharing the array. Append within capacity writes to the shared array; beyond capacity allocates a new array. Growth doubles below 256, smoothly transitions to ~1.25x for large slices. The caller's header is stale after append -- always return and reassign.
+
+**Key visual:**
+```
+SliceHeader [ptr|len=3|cap=5] ──▶ [1][2][3][_][_]
+Append within cap: writes to [3], len→4, SAME array
+Append beyond cap: NEW array, old eligible for GC, caller's header stale
+```
+
+**Traps to remember:**
+- Append in a function: caller's slice header is stale (return + reassign)
+- Sub-slice `s2 := s1[2:5]` keeps entire backing array alive (use copy/Clone)
+- nil slice (`var s []int`) vs empty slice (`s := []int{}`): JSON marshals differently
+
+**Weak? Drill deeper** → [[revision/Arrays & Slice Internals - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.

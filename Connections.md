@@ -12,20 +12,40 @@ graph TD
     TypeSystem["Go Type System\n& Value Semantics"]
     MemAlloc["Go Memory Allocation\n& Value Semantics"]
     Strings["Strings, Runes\n& UTF-8 Internals"]
+    Slices["Arrays & Slice\nInternals"]
     GIN["GIN Framework"]
     MongoDB["MongoDB"]
 
     TypeSystem -->|"method sets, interfaces,\nzero values"| MemAlloc
     TypeSystem -->|"structural typing,\ninterface design"| GIN
     MemAlloc -->|"escape analysis,\nstack vs heap"| Strings
+    MemAlloc -->|"escape analysis,\ngrowslice heap alloc"| Slices
+    Strings -->|"StringHeader mirrors\nSliceHeader"| Slices
     MemAlloc -->|"sync.Pool, value semantics,\nGC pressure"| GIN
-    Strings -->|"[]byte handling,\nstring building"| GIN
+    Slices -->|"request body []byte,\nroute params"| GIN
     GIN -->|"driver pooling,\nbson marshaling"| MongoDB
 ```
 
 ---
 
 ## Cross-Topic Connections (completed topics)
+
+### Memory Allocation → Arrays & Slices
+- Slice backing arrays escape to heap when returned or shared across goroutines
+- `growslice()` triggers heap allocation -- every reallocation is GC work
+- Pre-allocating with `make([]T, 0, n)` reduces heap churn
+- `[]Struct` (contiguous, stack-friendly) vs `[]*Struct` (pointers, heap scatter) is a value semantics decision
+
+### Strings → Arrays & Slices
+- StringHeader (ptr + len, 16B) is a subset of SliceHeader (ptr + len + cap, 24B)
+- `[]byte(s)` and `string(b)` share the same backing array concerns
+- `strings.Builder` internally wraps a `[]byte` -- same growth mechanics as slices
+- Sub-string memory leak mirrors sub-slice memory leak (shared backing)
+
+### Arrays & Slices → GIN
+- Request body parsing reads into `[]byte` then unmarshals
+- Gin's middleware chain is `[]HandlerFunc` -- a slice of function values
+- Route parameters extracted from radix tree into slices
 
 ### Type System → Memory Allocation
 - Value vs pointer semantics determine stack vs heap placement
@@ -64,9 +84,9 @@ graph TD
 
 ### Completed → Phase 1 (remaining)
 - **Type System** → [[Pointers & Pointer Semantics]] (pointer receivers, nil behavior)
-- **Memory Allocation** → [[Arrays & Slice Internals]] (slice header, append mechanics, escape)
-- **Memory Allocation** → [[Map Internals]] (hmap, bucket allocation, GC interaction)
+- **Arrays & Slices** → [[Map Internals]] (hmap uses bucket arrays, similar growth/GC concerns)
 - **Strings** → [[Struct Layout & Memory Alignment]] (StringHeader is a struct with specific alignment)
+- **Arrays & Slices** → [[Struct Layout & Memory Alignment]] ([]Struct contiguous layout, cache line awareness)
 
 ### Completed → Phase 4 (Concurrency)
 - **Memory Allocation** → [[Goroutine Internals]] (2-8KB stack, stack growth)

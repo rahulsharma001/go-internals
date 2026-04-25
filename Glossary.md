@@ -74,6 +74,21 @@
 | .rodata | Read-Only Data section | Section of the compiled binary where string literals are stored — immutable at runtime |
 | strings.Builder | — | Mutable byte buffer optimized for string construction — uses zero-copy String() method |
 
+## Array & Slice Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| SliceHeader | reflect.SliceHeader | Three-field struct (Data pointer + Len int + Cap int) backing every Go slice — always 24 bytes on 64-bit |
+| Backing array | — | The actual contiguous memory block that a slice's pointer field references — shared between sub-slices |
+| growslice | runtime.growslice | Runtime function called when append needs a larger backing array — allocates, copies, returns new slice |
+| nextslicecap | runtime.nextslicecap | Runtime function that calculates the new capacity during slice growth — uses threshold of 256 |
+| Size class | — | Predefined memory sizes the allocator uses — growslice rounds up to the nearest one, so actual cap may exceed calculated value |
+| Three-index slice | `a[low:high:max]` | Full slice expression that limits capacity to `max-low` — prevents append from overwriting shared backing data |
+| nil slice | `var s []int` | Slice with nil pointer, len=0, cap=0 — valid for append/len/cap but marshals to JSON `null` |
+| Empty slice | `s := []int{}` | Slice with non-nil pointer, len=0, cap=0 — marshals to JSON `[]` |
+| slices.Clone | slices.Clone (Go 1.21+) | Creates an independent copy of a slice — equivalent to make+copy but cleaner |
+| copy() | — | Built-in that copies elements between slices — returns number of elements copied (min of src/dst length) |
+
 ## Go Language Terms
 
 | Term | Full Form | Plain-English Meaning |
