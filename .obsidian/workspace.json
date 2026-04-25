@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roadmap.md",
+                "file": "T04 Arrays & Slice Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Roadmap"
+              "title": "T04 Arrays & Slice Internals"
             }
           }
         ]
@@ -196,6 +196,7 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "Roadmap.md",
     "visuals/T06 MongoDB - Visual Map.md",
     "visuals/T05 GIN Framework - Visual Map.md",
     "visuals/T04 Arrays & Slice Internals - Visual Map.md",
@@ -221,7 +222,6 @@
     "simplified/T02 Go Memory Allocation & Value Semantics - Simplified.md",
     "simplified/T01 Go Type System & Value Semantics - Simplified.md",
     "questions/T06 MongoDB - Interview Questions.md",
-    "questions/T05 GIN Framework - Interview Questions.md",
     "visuals",
     "revision",
     "questions",
