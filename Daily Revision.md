@@ -294,6 +294,37 @@ panic("boom") → run defers (LIFO) → if recover() in defer → stop unwind
 
 ---
 
+### [[T11 Interface Internals (iface & eface)]]
+
+**Blurt check** (cover below, answer from memory):
+1. What are the two internal representations of interfaces?
+2. What fields does iface have vs eface?
+3. What is the itab and what does it cache?
+4. When is an interface nil? Why does the typed nil trap exist?
+5. What's the method set of T vs *T for interface satisfaction?
+
+**5-second answer:**
+> Go interfaces are two-word structs. Empty interfaces (any) use eface: {_type, data}. Non-empty interfaces use iface: {tab, data} where tab points to an itab containing method pointers. itabs are cached globally — computed once per type-interface pair. An interface is nil only when BOTH words are nil. Assigning a typed nil pointer sets the type word, making the interface non-nil. T's method set has value receivers; *T has both.
+
+**Key visual:**
+```
+eface (any):  [ _type | data ]     ← 16 bytes
+iface (Reader): [ tab | data ]     ← 16 bytes
+  tab → itab: [ inter | _type | hash | fun[0] fun[1]... ]
+
+nil interface:  [ nil | nil ]      ← true nil
+typed nil:      [ *MyErr | nil ]   ← NOT nil (type is set)
+```
+
+**Traps to remember:**
+- Typed nil pointer in interface → non-nil interface (return bare nil)
+- Comparing interfaces with uncomparable dynamic types → panic
+- *io.Reader (pointer to interface) is almost always wrong
+
+**Weak? Drill deeper** → [[revision/T11 Interface Internals (iface & eface) - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.
