@@ -1,5 +1,7 @@
 # Daily Revision
 
+> Your 8-week master guide: [[Study Plan]]. Check it first to know what to study today.
+
 > Open this every morning. One scroll, top to bottom.
 > ~2 min per topic. Cover the "Blurt check" prompts BEFORE reading answers.
 > Weak on something? Click the drill-down link at the bottom of each block.
@@ -175,6 +177,34 @@ Append beyond cap: NEW array, old eligible for GC, caller's header stale
 - nil slice (`var s []int`) vs empty slice (`s := []int{}`): JSON marshals differently
 
 **Weak? Drill deeper** → [[revision/T04 Arrays & Slice Internals - Revision]]
+
+---
+
+### [[T07 Pointers & Pointer Semantics]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is a pointer's size on 64-bit? What's its zero value?
+2. Pointer receiver vs value receiver — what's the difference in mutation?
+3. What's the method set of T vs *T? Why does it matter for interfaces?
+4. When does a pointer cause heap allocation? How to check?
+5. What is the typed nil interface trap?
+
+**5-second answer:**
+> A pointer holds a memory address (8 bytes). Go is always pass-by-value — passing a pointer copies the address. Pointer receivers can modify the struct; value receivers get a copy. T's method set has only value-receiver methods; *T has both — this determines interface satisfaction. Returning a pointer escapes data to the heap. Key traps: nil dereference panics, typed-nil interface, never copy mutex.
+
+**Key visual:**
+```
+stack: [ x = 42 ] at 0xA0
+       [ p = 0xA0 ]          ← p holds x's address (8 bytes)
+*p = 100 → follows 0xA0 → x becomes 100
+```
+
+**Traps to remember:**
+- Dereferencing nil pointer → panic (check != nil first)
+- Typed nil pointer in interface → non-nil interface (return bare nil)
+- Value receiver on mutex-containing type → copies the lock (use pointer receiver)
+
+**Weak? Drill deeper** → [[revision/T07 Pointers & Pointer Semantics - Revision]]
 
 ---
 

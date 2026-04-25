@@ -103,6 +103,17 @@
 | Embedding | `type Outer struct { Inner }` | Composition: Inner's fields and methods are promoted to Outer — NOT inheritance |
 | Interface satisfaction | — | A type satisfies an interface if it has all the required methods — implicit, no `implements` keyword |
 
+## Pointer Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| &x | Address-of operator | Returns the memory address of variable x — gives you a pointer to x |
+| *p | Dereference operator | Follows the pointer p to read or write the value it points to |
+| *T | Pointer to T | A variable that holds the memory address of a value of type T — always 8 bytes on 64-bit |
+| nil pointer | — | A pointer that holds address 0x0 — dereferencing it causes a runtime panic |
+| Addressable | — | A value whose memory address can be taken with &. Map values and bare return values are NOT addressable |
+| weak.Pointer[T] | Weak pointer (Go 1.24+) | A pointer that doesn't prevent garbage collection — returns nil if the target is collected |
+
 ## Concurrency Terms
 
 | Term | Full Form | Plain-English Meaning |
