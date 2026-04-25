@@ -60,7 +60,7 @@ Now consider a multi-byte string like `"café"`:
 | 3 bytes | U+0800 – U+FFFF | `中`, `日`, `한`, `₹` |
 | 4 bytes | U+10000 – U+10FFFF | `😀`, `🎉`, `𝕳` |
 
-> **Coming from PHP:** PHP strings are also byte sequences, and `strlen()` returns bytes just like Go's `len()`. But PHP has `mb_strlen()` as a separate function. In Go, the equivalent is `utf8.RuneCountInString()`. The key difference: PHP's string functions default to single-byte (Latin-1), and you need `mb_*` functions for multi-byte. Go's `for range` natively handles UTF-8 — there's no separate "multibyte" mode. Also, PHP strings are mutable (`$s[0] = 'H'` works); Go strings are **immutable** — you must convert to `[]byte` or `[]rune` first.
+> **In plain English:** A Go string is like a film reel — you see frames (bytes), not the movie (characters). The letter "é" takes 2 frames. A Chinese character takes 3 frames. `len()` counts frames, not characters. The `for range` loop is smart enough to group frames back into characters for you.
 
 ---
 
@@ -181,7 +181,7 @@ Are string lengths equal?
 3. Same length, different pointer? → memcmp byte-by-byte (O(n), often SIMD-accelerated)
 ```
 
-> **Coming from PHP:** PHP's `===` strict comparison for strings also compares byte-by-byte, but PHP strings carry no length field — they use NUL-termination internally (with a separate length for binary safety). Go's length-first comparison is faster for the mismatch case.
+> **In plain English:** Go checks string length first (instant) — if lengths differ, they're not equal. If lengths match, it compares byte-by-byte. This means checking "hello" != "world" is instant (different lengths), while checking "hello" vs "hella" requires scanning.
 
 ---
 
@@ -492,7 +492,7 @@ Fix: return string([]byte(huge[:i]))   <-- forces a copy, releases huge
   Or: return strings.Clone(huge[:i])   <-- Go 1.20+ idiomatic
 ```
 
-> **Coming from PHP:** PHP strings use copy-on-write refcounting. `substr($huge, 0, 5)` creates an independent copy in PHP. In Go, substring slicing is zero-copy, which is fast but can leak memory.
+> **In plain English:** Taking a substring in Go is like drawing a smaller frame on a large photograph — the entire photo stays in memory because the frame just points at it. If you only need the small piece, make an actual print (copy) so the big photo can be thrown away.
 
 ### Gotcha 2: `string(intValue)` creates a character, not digit string
 
@@ -531,7 +531,7 @@ i=3 r=U+FFFD   (0x80 is a lone continuation byte → replacement char)
 Each bad byte produces exactly one U+FFFD and advances by 1 byte.
 ```
 
-> **Coming from PHP:** PHP doesn't validate UTF-8 by default — `for` loops just process raw bytes. Go's range loop actively detects and replaces invalid sequences. This is safer but can be surprising if you expect raw byte pass-through.
+> **In plain English:** When Go's `for range` hits garbled bytes, it doesn't crash or skip them — it replaces each bad byte with a special "I don't know" character (U+FFFD) and keeps going. It's like a translator who writes "[unclear]" instead of guessing at a word they can't read.
 
 ### Gotcha 5: Rune count != visual character count (grapheme clusters)
 

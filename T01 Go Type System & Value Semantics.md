@@ -35,7 +35,7 @@ Go is **statically typed** with **structural typing for interfaces** (satisfied 
 2. **What is its zero value?** (determines safety)
 3. **What is its method set?** (determines interface satisfaction)
 
-> **Coming from PHP:** In PHP, classes define types and you use `instanceof` to check them. In Go, there are no classes. You define types with `type X struct{...}` and interfaces are satisfied **implicitly** — if your type has the right methods, it satisfies the interface. No `implements` keyword. Think of it like PHP's duck typing (`method_exists`) but enforced at compile time.
+> **In plain English:** Go doesn't care what you call your type — it only cares what methods it has. If it walks like a duck and quacks like a duck, it satisfies the "Duck" interface. No signup form needed.
 
 ```mermaid
 graph TD
@@ -81,7 +81,7 @@ Type alias:  type Temperature = float64
   You CANNOT attach methods to Temperature
 ```
 
-> **Coming from PHP:** A defined type is like creating a class that wraps a primitive: `class Celsius { private float $value; }` — it's a distinct thing. A type alias is like PHP's `use` statement for class names — just another name for the same thing.
+> **In plain English:** A defined type is like creating a new brand of coffee — it's still coffee inside, but you can't accidentally mix it with tea. A type alias is just a nickname — same coffee, different label.
 
 | Feature | Defined Type (`type X T`) | Type Alias (`type X = T`) |
 |---|---|---|
@@ -143,7 +143,7 @@ Go guarantees every variable is initialized to its **zero value** — there is n
 
 > Design types so their zero value is **useful**. `sync.Mutex{}` is ready to use. `bytes.Buffer{}` is an empty buffer. This is idiomatic Go.
 
-> **Coming from PHP:** PHP has `null` as the absence of value, and uninitialized variables trigger warnings. Go has NO null — every type has a defined zero value. `var s string` is `""`, not null. `var i int` is `0`, not null. It's like PHP's type coercion defaults but guaranteed at the language level. The nil in Go only applies to pointers, slices, maps, channels, functions, and interfaces.
+> **In plain English:** In Go, there's no such thing as "uninitialized." Every variable starts with a sensible default — numbers start at 0, strings start empty, booleans start false. It's like every seat in a theater having a default "empty" card on it before anyone sits down.
 
 ### Method Sets: The Interface Gateway
 
@@ -201,7 +201,7 @@ d.Speak() is syntactic sugar for d.Animal.Speak()
 The receiver of Speak() is ALWAYS Animal, not Dog.
 ```
 
-> **Coming from PHP:** In PHP, `class Dog extends Animal` gives Dog virtual dispatch — `$this->name()` calls Dog's override. In Go, embedding is NOT inheritance. When Dog embeds Animal, calling `d.Speak()` calls `Animal.Speak()` with `Animal` as the receiver. If Dog has its own `Speak()`, it shadows (doesn't override) Animal's. There's no virtual dispatch, no `parent::`, no polymorphism through embedding.
+> **In plain English:** Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. The Hospital gets credit for having the capability, but the Doctor is always the one doing it.
 
 ---
 
@@ -346,7 +346,7 @@ Step 2: Inside Base.Greet(): "Hello, " + b.Name()
 Step 3: Result: "Hello, Base"
                  <-- NOT "Hello, Derived"!
 
-In PHP/Java: $this->name() would call Derived's override (virtual dispatch)
+In most OOP languages, this would call Derived's Name(). Not in Go.
 In Go: b.Name() calls Base.Name() because b IS Base. No virtual dispatch.
 This is delegation, not polymorphism.
 ```
@@ -460,7 +460,7 @@ Go prevents this at compile time.
 
 **Why**: Go won't silently take the address of a value stored in an interface, because the interface holds a copy — mutations via pointer receiver would be lost.
 
-> **Coming from PHP:** In PHP, all objects are passed by handle — `$obj->write()` always works on the original. In Go, interface assignment copies the value, so pointer-receiver methods are blocked on values to prevent silent mutation of copies.
+> **In plain English:** When you put a value into an interface box, Go makes a photocopy. If the method needs to modify the original, a photocopy won't do — so Go blocks it at compile time rather than letting you silently modify a copy.
 
 ### Method calling flexibility is syntactic sugar ONLY
 
@@ -564,7 +564,7 @@ Not all types can be map keys or compared with `==`:
 m := map[[]int]string{} // ❌ COMPILE ERROR: slice not comparable
 ```
 
-> **Coming from PHP:** In PHP, arrays can be compared with `==` and used as... well, everything. In Go, slices, maps, and functions are NOT comparable. You can't use them as map keys and you can't use `==` on them (except comparing to nil).
+> **In plain English:** Some types in Go are too complex to compare with `==` — slices, maps, and functions. It's like asking "are these two recipes the same?" — there's no simple yes/no answer, so Go refuses to guess.
 
 ---
 

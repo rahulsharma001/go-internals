@@ -32,7 +32,7 @@ graph LR
     C1 --> D2["Doc {name, email, phone}"]
 ```
 
-> **Coming from MySQL:** In MySQL, you design tables first (schema-on-write). In MongoDB, you design documents around how you'll query them (schema-on-read). A JOIN across 3 MySQL tables often becomes a single embedded document in MongoDB.
+> **In plain English:** Instead of designing rigid forms (tables) and making everyone fill them out the same way, MongoDB lets each document be its own folder with whatever papers make sense. The key design question isn't "what does my data look like?" — it's "how will I look up and read this data?"
 
 ---
 
@@ -73,7 +73,7 @@ Application Code
 
 The `mongo.Client` maintains a connection pool per server. **Create ONE client at application startup and reuse it everywhere.** This is the #1 mistake new Go+MongoDB developers make.
 
-> **Coming from MySQL:** This is identical to `sql.DB` in Go -- you create one, it manages a pool internally. The difference: MongoDB's client also handles replica set discovery and server selection automatically.
+> **In plain English:** Create ONE MongoDB client when your app starts and reuse it everywhere — like having one phone line to the database that many goroutines share. Creating a new client per request is like dialing a new phone number every time you want to ask a question.
 
 ---
 
@@ -196,7 +196,7 @@ pipeline := mongo.Pipeline{
 cursor, err := collection.Aggregate(ctx, pipeline)
 ```
 
-> **Coming from MySQL:** Aggregation pipelines are MongoDB's equivalent of `GROUP BY` + `HAVING` + subqueries. Each stage transforms the data stream. Think of it as a Unix pipe: `grep | awk | sort`.
+> **In plain English:** An aggregation pipeline is like an assembly line — each station transforms the data flowing through. First filter ($match), then group ($group), then sort ($sort). Each stage receives the output of the previous one.
 
 ---
 
@@ -259,7 +259,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-> **Coming from MySQL:** Same pattern as `sql.DB` -- one pool, many goroutines.
+> **In plain English:** Creating a new database connection for every request is like calling a taxi every time you need to cross the room. Create one connection pool at startup and let everyone share it.
 
 ### Gotcha 2: Using `bson.M` where order matters
 

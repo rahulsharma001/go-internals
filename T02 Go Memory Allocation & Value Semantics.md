@@ -39,7 +39,7 @@ Go is **strictly pass-by-value**, and the **compiler (via escape analysis)** dec
 - Even pointers are copied (the address itself, not the data)
 - Sharing happens only through internal pointers within copied values
 
-> **Coming from PHP:** In PHP-FPM, each request runs in its own process with its own memory — when the request ends, ALL memory is freed. There's no garbage collector pressure. In Go, ALL goroutines share ONE heap in ONE process. Memory allocated by goroutine A can be accessed by goroutine B. This is why Go needs a garbage collector and why reducing heap allocations matters for performance — something you never had to think about in PHP.
+> **In plain English:** Stack is your personal desk — fast, private, cleaned up when you leave. Heap is the shared office storage — anyone can access it, but someone (the garbage collector) has to clean it up periodically, which slows things down.
 
 ```mermaid
 graph TD
@@ -66,7 +66,7 @@ graph TD
 
 Escape analysis uses **static data-flow analysis** on the AST (Abstract Syntax Tree). The compiler examines your code BEFORE it runs and decides: can this variable safely live on the stack, or must it go to the heap?
 
-> **Coming from PHP:** PHP doesn't have escape analysis. PHP uses reference counting + a cycle collector for memory management. Every object is heap-allocated — there's no "stack vs heap" decision. Go's compiler is smarter: it tries to keep things on the stack whenever possible to avoid GC work.
+> **In plain English:** The Go compiler is like a smart warehouse manager who decides: "Will this box be needed after this function returns? If yes, put it in long-term storage (heap). If no, keep it on the quick shelf (stack) and toss it when we're done."
 
 **Does it escape? Walk this checklist:**
 
@@ -206,7 +206,7 @@ Step 4: update returns — its stack frame is destroyed
   main stack: [ val = 20 ]   the change persists
 ```
 
-> **Coming from PHP:** In PHP, objects are always "passed by reference" (really, by handle). In Go, you must explicitly pass `&val` to share data. Nothing is shared unless you opt in with a pointer.
+> **In plain English:** In Go, nothing is shared unless you explicitly hand over the address. Passing a value is like giving someone a photocopy. Passing a pointer is like giving someone your home address — they can come in and move things around.
 
 ### Slice header copy
 
@@ -251,7 +251,7 @@ Step 2: grow(data) — header is COPIED again
                                                             <-- THIS is why append isn't visible
 ```
 
-> **Coming from PHP:** PHP arrays auto-grow transparently because PHP uses copy-on-write with reference counting. In Go, `append` may create a NEW backing array, and the caller's slice header still points to the old one. You MUST return the new slice: `data = grow(data)`.
+> **In plain English:** When a slice runs out of room and `append` builds a bigger one, it's like moving to a bigger apartment. The function that did the moving knows the new address, but anyone who had your old address still shows up at the old place. That's why you must return and reassign the new slice.
 
 ### Map is a pointer
 
@@ -405,7 +405,7 @@ Fix: return the new slice
   data = grow(data)  ← now caller has the updated header
 ```
 
-> **Coming from PHP:** PHP arrays grow transparently — `$arr[] = 4` just works because PHP's copy-on-write handles the reallocation. In Go, YOU must propagate the new slice back to the caller.
+> **In plain English:** `append` is like asking the post office to add a room to your house. If there's space, they extend it in place. If not, they build a whole new house and move everything — but they only tell YOU the new address. Anyone who had your old address is now going to an empty lot.
 
 ### Slice memory leak from sub-slicing
 
@@ -468,7 +468,7 @@ A truly nil interface has BOTH fields nil:
   i = [ type: nil | data: nil ]  → i == nil is true
 ```
 
-> **Coming from PHP:** PHP's `is_null($x)` checks one thing. Go's `i == nil` on an interface checks TWO things — the type slot and the data slot. If you put a nil pointer INTO an interface, the type slot gets filled, so the interface itself isn't nil anymore. It's like putting an empty labeled box on a shelf — the shelf isn't empty, it has a box (even though the box is empty).
+> **In plain English:** A nil interface is an empty shelf. A non-nil interface holding a nil pointer is a shelf with an empty labeled box on it. The shelf isn't empty — it has a box (even though the box is empty). Go checks if the shelf is empty, not if the box is empty.
 
 ```go
 // BAD — returns non-nil interface wrapping a nil pointer
