@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Roadmap.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Roadmap"
+              "title": "Study Plan"
             }
           }
         ]
@@ -196,6 +196,7 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "Roadmap.md",
     "questions/T12 Interface Design Principles - Interview Questions.md",
     "T12 Interface Design Principles.md",
     "visuals/T12 Interface Design Principles - Visual Map.md",
@@ -221,7 +222,6 @@
     "simplified/T09 Error Handling Patterns - Simplified.md",
     "T09 Error Handling Patterns.md",
     "questions/T08 Map Internals - Interview Questions.md",
-    "visuals/T08 Map Internals - Visual Map.md",
     "visuals",
     "revision",
     "questions",
