@@ -325,6 +325,38 @@ typed nil:      [ *MyErr | nil ]   ← NOT nil (type is set)
 
 ---
 
+### [[T12 Interface Design Principles]]
+
+**Blurt check** (cover below, answer from memory):
+1. What does "accept interfaces, return structs" mean?
+2. Why should interfaces be small (1-2 methods)?
+3. Where should interfaces be defined — at the producer or consumer?
+4. What is interface pollution? Give an example.
+5. When should you NOT create an interface?
+
+**5-second answer:**
+> Go interface design follows three rules: keep interfaces small (1-2 methods like io.Reader), define them at the consumer (not the producer), and never create them "just in case." Return concrete structs from constructors — let callers define their own narrow interfaces. Interface composition (io.ReadWriter = Reader + Writer) beats fat interfaces. Interface pollution — creating interfaces for every type — is the #1 design mistake from Java/C# backgrounds.
+
+**Key visual:**
+```
+WRONG (producer-defined fat interface):
+  package user → type UserService interface { 15 methods }
+  test needs to mock ALL 15
+
+RIGHT (consumer-defined slim interface):
+  package billing → type UserGetter interface { GetUser(id) }
+  test mocks only 1 method
+```
+
+**Traps to remember:**
+- Interface for a single implementation = unnecessary indirection
+- Exporting interfaces prematurely locks your API surface
+- `any` (empty interface) everywhere = no type safety, defeats Go's type system
+
+**Weak? Drill deeper** → [[revision/T12 Interface Design Principles - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.

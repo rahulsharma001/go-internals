@@ -56,7 +56,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 - [x] [[T09 Error Handling Patterns]] (~1.5 hrs)
 - [x] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs)
 - [x] [[T11 Interface Internals (iface & eface)]] (~2 hrs)
-- [ ] [[T12 Interface Design Principles]] (~1.5 hrs)
+- [x] [[T12 Interface Design Principles]] (~1.5 hrs)
 
 **Estimated total:** ~10 hrs across 14 days (~45 min/day study)
 

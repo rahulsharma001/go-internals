@@ -41,7 +41,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 |---|-------|--------|----------------|
 | 3.1 | [[T11 Interface Internals (iface & eface)]] | ✅ | iface struct (tab + data), eface struct (_type + data), itab caching, dynamic dispatch |
 | 3.2 | [[Type Assertions & Type Switches]] | ⏭ SKIP | Covered within Interface Internals (T11) |
-| 3.3 | [[T12 Interface Design Principles]] | ⬜ | Small interfaces, implicit satisfaction, accept interfaces / return structs, interface pollution |
+| 3.3 | [[T12 Interface Design Principles]] | ✅ | Small interfaces, implicit satisfaction, accept interfaces / return structs, interface pollution |
 | 3.4 | [[Empty Interface (any) & Boxing]] | ⏭ SKIP | Covered within Interface Internals (T11) |
 
 ---
