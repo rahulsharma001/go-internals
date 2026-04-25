@@ -1,7 +1,7 @@
 # Go Type System & Value Semantics — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[Go Type System & Value Semantics]]
-> Q&A bank → [[questions/Go Type System & Value Semantics - Interview Questions]]
+> Drill-down from [[Daily Revision]] | Full notes → [[T01 Go Type System & Value Semantics]]
+> Q&A bank → [[questions/T01 Go Type System - Interview Questions]]
 
 ---
 

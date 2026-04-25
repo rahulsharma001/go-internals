@@ -1,6 +1,6 @@
 # Go Memory Allocation & Value Semantics — Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[Go Memory Allocation & Value Semantics]] → Section 6.5
+> Complete solutions for Practice Checkpoint exercises from [[T02 Go Memory Allocation & Value Semantics]] → Section 6.5
 
 ---
 
@@ -206,4 +206,4 @@ BenchmarkSmallPointerReceiver-8  500000000     ~1 ns/op    0 B/op    0 allocs/op
 
 ---
 
-> Back to main note → [[Go Memory Allocation & Value Semantics]]
+> Back to main note → [[T02 Go Memory Allocation & Value Semantics]]

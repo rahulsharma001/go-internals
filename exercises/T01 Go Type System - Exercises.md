@@ -1,6 +1,6 @@
 # Go Type System & Value Semantics — Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[Go Type System & Value Semantics]] → Section 6.5
+> Complete solutions for Practice Checkpoint exercises from [[T01 Go Type System & Value Semantics]] → Section 6.5
 
 ---
 
@@ -122,4 +122,4 @@ The rule is simple: **if ANY method uses a pointer receiver, you must pass a poi
 
 ---
 
-> Back to main note → [[Go Type System & Value Semantics]]
+> Back to main note → [[T01 Go Type System & Value Semantics]]

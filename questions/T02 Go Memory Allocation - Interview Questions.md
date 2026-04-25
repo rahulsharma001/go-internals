@@ -1,6 +1,6 @@
 # Go Memory Allocation & Value Semantics — Interview Questions
 
-> Comprehensive interview Q&A bank for [[Go Memory Allocation & Value Semantics]].
+> Comprehensive interview Q&A bank for [[T02 Go Memory Allocation & Value Semantics]].
 > Sorted by frequency at top tech companies (Google, Amazon, Meta, Uber, Stripe, Cloudflare).
 > Tags: `[COMMON]` = asked frequently, `[ADVANCED]` = deep understanding expected, `[TRICKY]` = gotcha/trap question
 
@@ -589,4 +589,4 @@
 
 ---
 
-> Back to main note → [[Go Memory Allocation & Value Semantics]]
+> Back to main note → [[T02 Go Memory Allocation & Value Semantics]]

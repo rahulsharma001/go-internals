@@ -1,6 +1,6 @@
 # Go Type System & Value Semantics — Interview Questions
 
-> Comprehensive interview Q&A bank for [[Go Type System & Value Semantics]].
+> Comprehensive interview Q&A bank for [[T01 Go Type System & Value Semantics]].
 > Sorted by frequency at top tech companies (Google, Amazon, Meta, Uber, Stripe, Cloudflare).
 > Tags: `[COMMON]` = asked frequently, `[ADVANCED]` = deep understanding expected, `[TRICKY]` = gotcha/trap question
 
@@ -582,4 +582,4 @@ if method missing:  cannot convert (*myWriter)(nil) to io.Writer
 
 ---
 
-> Back to main note → [[Go Type System & Value Semantics]]
+> Back to main note → [[T01 Go Type System & Value Semantics]]

@@ -2,8 +2,8 @@
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank → [[questions/Go Memory Allocation - Interview Questions]]
-> Something not clicking? → [[simplified/Go Memory Allocation & Value Semantics - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank → [[questions/T02 Go Memory Allocation - Interview Questions]]
+> Something not clicking? → [[simplified/T02 Go Memory Allocation & Value Semantics - Simplified]]
 
 ---
 
@@ -374,7 +374,7 @@ Write a Go program that:
 3. Run `go build -gcflags="-m"` and verify which escapes and which doesn't
 4. Bonus: create a struct larger than 128 bytes and benchmark value receiver vs pointer receiver using `testing.B`
 
-> Full solutions with explanations → [[exercises/Go Memory Allocation - Exercises]]
+> Full solutions with explanations → [[exercises/T02 Go Memory Allocation - Exercises]]
 
 ---
 
@@ -697,7 +697,7 @@ GOMEMLIMIT=512MiB:  runtime adjusts GC pacing to stay under 512MB
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (15 questions) → [[questions/Go Memory Allocation - Interview Questions]]
+> Full interview question bank (15 questions) → [[questions/T02 Go Memory Allocation - Interview Questions]]
 
 Preview of most frequently asked:
 

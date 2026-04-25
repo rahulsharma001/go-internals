@@ -1,6 +1,6 @@
 # Go Type System & Value Semantics — Simplified
 
-> This is the plain-English companion to [[Go Type System & Value Semantics]].
+> This is the plain-English companion to [[T01 Go Type System & Value Semantics]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.
 
 ---
@@ -252,4 +252,4 @@ If you want a convenient rename during refactoring, use aliases.
 
 ---
 
-> Ready for the full technical version? → [[Go Type System & Value Semantics]]
+> Ready for the full technical version? → [[T01 Go Type System & Value Semantics]]

@@ -1,6 +1,6 @@
 # Go Type System & Value Semantics — Visual Map
 
-> Visual-only reference for [[Go Type System & Value Semantics]].
+> Visual-only reference for [[T01 Go Type System & Value Semantics]].
 > No prose — just diagrams, layouts, and cheat tables.
 
 ---

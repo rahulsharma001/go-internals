@@ -1,6 +1,6 @@
 # Go Memory Allocation & Value Semantics — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[Go Memory Allocation & Value Semantics]]
+> Drill-down from [[Daily Revision]] | Full notes → [[T02 Go Memory Allocation & Value Semantics]]
 > Q&A bank → [[questions/Go Memory Allocation & Value Semantics - Interview Questions]]
 
 ---

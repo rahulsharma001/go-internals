@@ -1,6 +1,6 @@
 # Go Memory Allocation & Value Semantics — Simplified
 
-> This is the plain-English companion to [[Go Memory Allocation & Value Semantics]].
+> This is the plain-English companion to [[T02 Go Memory Allocation & Value Semantics]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.
 
 ---
@@ -244,4 +244,4 @@ Imagine a tour guide saying "look at what I'm pointing at" to three different gr
 
 ---
 
-> Ready for the full technical version? → [[Go Memory Allocation & Value Semantics]]
+> Ready for the full technical version? → [[T02 Go Memory Allocation & Value Semantics]]

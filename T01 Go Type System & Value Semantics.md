@@ -2,8 +2,8 @@
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank → [[questions/Go Type System - Interview Questions]]
-> Something not clicking? → [[simplified/Go Type System & Value Semantics - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank → [[questions/T01 Go Type System - Interview Questions]]
+> Something not clicking? → [[simplified/T01 Go Type System & Value Semantics - Simplified]]
 
 ---
 
@@ -11,7 +11,7 @@
 
 Go's type system — how types are defined, how they relate to each other, and the rules governing identity, assignability, method sets, and composition. The foundation every other Go concept builds on.
 
-> **Scope note**: This covers the type system itself (defined types, aliases, underlying types, zero values, method sets, embedding). For stack/heap allocation and pass-by-value mechanics, see [[Go Memory Allocation & Value Semantics]].
+> **Scope note**: This covers the type system itself (defined types, aliases, underlying types, zero values, method sets, embedding). For stack/heap allocation and pass-by-value mechanics, see [[T02 Go Memory Allocation & Value Semantics]].
 
 ---
 
@@ -431,7 +431,7 @@ Either change to value receiver: `func (u User) String()` or pass a pointer: `pr
 3. Write a function `printArea(s Shape)` and call it with both types
 4. Observe which requires `&` and which doesn't. Then verify with `var _ Shape = Circle{}` and `var _ Shape = (*Rectangle)(nil)` compile-time checks.
 
-> Full solutions with explanations → [[exercises/Go Type System - Exercises]]
+> Full solutions with explanations → [[exercises/T01 Go Type System - Exercises]]
 
 ---
 
@@ -535,7 +535,7 @@ m["alice"] = u
 
 Or use `map[string]*User` for direct mutation.
 
-### Nil interface vs typed nil (from [[Go Memory Allocation & Value Semantics]])
+### Nil interface vs typed nil (from [[T02 Go Memory Allocation & Value Semantics]])
 
 ```go
 var p *MyStruct = nil
@@ -671,7 +671,7 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (15 questions) → [[questions/Go Type System - Interview Questions]]
+> Full interview question bank (15 questions) → [[questions/T01 Go Type System - Interview Questions]]
 
 Preview of most frequently asked:
 
