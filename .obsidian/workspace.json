@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Strings, Runes & UTF-8 Internals.md",
+                "file": "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Strings, Runes & UTF-8 Internals"
+              "title": "Strings, Runes & UTF-8 Internals - Exercises"
             }
           }
         ]
@@ -196,11 +196,11 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
-    "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
+    "Strings, Runes & UTF-8 Internals.md",
     "questions/Strings, Runes & UTF-8 Internals - Interview Questions.md",
+    "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
     "Roadmap.md",
     "exercises/Strings, Runes & UTF-8 Internals - Exercises.md",
-    "Strings, Runes & UTF-8 Internals.md",
     "Gap Tracker.md",
     "frameworks/_index.md",
     "frameworks/GIN Framework.md",
