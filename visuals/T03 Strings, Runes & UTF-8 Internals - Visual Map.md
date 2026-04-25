@@ -1,6 +1,6 @@
-# Strings, Runes & UTF-8 Internals — Visual Map
+# T03 Strings, Runes & UTF-8 Internals — Visual Map
 
-> Visual-only reference for [[Strings, Runes & UTF-8 Internals]].
+> Visual-only reference for [[T03 Strings, Runes & UTF-8 Internals]].
 > No prose — just diagrams, layouts, and cheat tables.
 
 ---

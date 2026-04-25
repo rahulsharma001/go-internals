@@ -1,6 +1,6 @@
-# MongoDB -- Exercise Solutions
+# T06 MongoDB -- Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[databases/MongoDB]].
+> Complete solutions for Practice Checkpoint exercises from [[databases/T06 MongoDB]].
 
 ---
 
@@ -177,4 +177,4 @@ Average price per category:
 
 ---
 
-> Exercise from [[databases/MongoDB]] -- Section 6.5
+> Exercise from [[databases/T06 MongoDB]] -- Section 6.5

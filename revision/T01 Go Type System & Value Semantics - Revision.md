@@ -1,4 +1,4 @@
-# Go Type System & Value Semantics — Revision Card
+# T01 Go Type System & Value Semantics — Revision Card
 
 > Drill-down from [[Daily Revision]] | Full notes → [[T01 Go Type System & Value Semantics]]
 > Q&A bank → [[questions/T01 Go Type System - Interview Questions]]

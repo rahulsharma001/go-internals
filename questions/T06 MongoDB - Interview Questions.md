@@ -1,6 +1,6 @@
-# MongoDB -- Interview Questions
+# T06 MongoDB -- Interview Questions
 
-> Comprehensive interview Q&A bank for [[databases/MongoDB]].
+> Comprehensive interview Q&A bank for [[databases/T06 MongoDB]].
 > Sorted by frequency at top tech companies. Tags: [COMMON] [ADVANCED] [TRICKY]
 
 ---

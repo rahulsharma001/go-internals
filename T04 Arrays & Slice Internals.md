@@ -1,8 +1,8 @@
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank → [[questions/Arrays & Slice Internals - Interview Questions]]
-> Something not clicking? → [[simplified/Arrays & Slice Internals - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank → [[questions/T04 Arrays & Slice Internals - Interview Questions]]
+> Something not clicking? → [[simplified/T04 Arrays & Slice Internals - Simplified]]
 
 ---
 
@@ -440,7 +440,7 @@ func consume(lines []string, grow []string) { // want to return updated; bug
 2. **Implement `rotate` by reverses (3-reverse trick) in-place.**
 3. **Implement safe line reader using `data[:pos:pos]` to prevent append stomp in reused buffer.**
 
-> Full solutions with explanations → [[exercises/Arrays & Slice Internals - Exercises]]
+> Full solutions with explanations → [[exercises/T04 Arrays & Slice Internals - Exercises]]
 
 ---
 
@@ -537,7 +537,7 @@ q = append(q, x) // realloc: q▶B new, p still▶A
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (10–15 questions) → [[questions/Arrays & Slice Internals - Interview Questions]]
+> Full interview question bank (10–15 questions) → [[questions/T04 Arrays & Slice Internals - Interview Questions]]
 
 **Preview questions (answers in linked file):**
 

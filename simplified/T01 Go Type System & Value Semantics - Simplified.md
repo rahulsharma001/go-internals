@@ -1,4 +1,4 @@
-# Go Type System & Value Semantics — Simplified
+# T01 Go Type System & Value Semantics — Simplified
 
 > This is the plain-English companion to [[T01 Go Type System & Value Semantics]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.

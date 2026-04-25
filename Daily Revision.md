@@ -6,7 +6,7 @@
 
 ---
 
-### [[Go Type System & Value Semantics]]
+### [[T01 Go Type System & Value Semantics]]
 
 **Blurt check** (cover below, answer from memory):
 1. What is structural typing and how does Go use it?
@@ -30,11 +30,11 @@ Method set: T → value receivers only.  *T → value + pointer receivers.
 - Embedded type's method receiver is always the embedded type, not the outer
 - `type X int` (new type, can add methods) vs `type X = int` (alias, cannot)
 
-**Weak? Drill deeper** → [[revision/Go Type System & Value Semantics - Revision]]
+**Weak? Drill deeper** → [[revision/T01 Go Type System & Value Semantics - Revision]]
 
 ---
 
-### [[Go Memory Allocation & Value Semantics]]
+### [[T02 Go Memory Allocation & Value Semantics]]
 
 **Blurt check** (cover below, answer from memory):
 1. What are the 4 triggers that cause escape to heap?
@@ -61,11 +61,11 @@ Escape? 1.returned ptr 2.goroutine/chan 3.global 4.unknown size → heap
 - Slice append beyond capacity: new backing array, caller's header is stale
 - "STW pauses are the bottleneck" is outdated -- mark assist is the real killer
 
-**Weak? Drill deeper** → [[revision/Go Memory Allocation & Value Semantics - Revision]]
+**Weak? Drill deeper** → [[revision/T02 Go Memory Allocation & Value Semantics - Revision]]
 
 ---
 
-### [[Strings, Runes & UTF-8 Internals]]
+### [[T03 Strings, Runes & UTF-8 Internals]]
 
 **Blurt check** (cover below, answer from memory):
 1. What are the two fields in StringHeader? Total size?
@@ -88,11 +88,11 @@ Builder: buf [G][o][ ][i][s] → String() points at same buf (zero copy)
 - `small := huge[:5]` keeps entire huge string alive (use `strings.Clone`)
 - `string(65)` = "A" not "65" (Unicode code point, not decimal)
 
-**Weak? Drill deeper** → [[revision/Strings, Runes & UTF-8 Internals - Revision]]
+**Weak? Drill deeper** → [[revision/T03 Strings, Runes & UTF-8 Internals - Revision]]
 
 ---
 
-### [[frameworks/GIN Framework]]
+### [[frameworks/T05 GIN Framework]]
 
 **Blurt check** (cover below, answer from memory):
 1. How does Gin's radix tree routing differ from DefaultServeMux?
@@ -117,11 +117,11 @@ Context: sync.Pool → per-request → recycled (NOT goroutine-safe)
 - `r.Run()` has no timeouts and no graceful shutdown
 - `c.Bind()` auto-responds 400 -- use `c.ShouldBind()` for control
 
-**Weak? Drill deeper** → [[revision/GIN Framework - Revision]]
+**Weak? Drill deeper** → [[revision/T05 GIN Framework - Revision]]
 
 ---
 
-### [[databases/MongoDB]]
+### [[databases/T06 MongoDB]]
 
 **Blurt check** (cover below, answer from memory):
 1. Embedding vs referencing -- when to use each?
@@ -146,11 +146,11 @@ Index {a,b,c}: supports {a}, {a,b}, {a,b,c} -- NOT {b} or {c} alone
 - `bson.M` has random field order -- use `bson.D` for pipelines, sorts, indexes
 - "Schemaless" does NOT mean "schema-free" -- you need a migration strategy
 
-**Weak? Drill deeper** → [[revision/MongoDB - Revision]]
+**Weak? Drill deeper** → [[revision/T06 MongoDB - Revision]]
 
 ---
 
-### [[Arrays & Slice Internals]]
+### [[T04 Arrays & Slice Internals]]
 
 **Blurt check** (cover below, answer from memory):
 1. What are the 3 fields in a slice header? Total size?
@@ -174,7 +174,7 @@ Append beyond cap: NEW array, old eligible for GC, caller's header stale
 - Sub-slice `s2 := s1[2:5]` keeps entire backing array alive (use copy/Clone)
 - nil slice (`var s []int`) vs empty slice (`s := []int{}`): JSON marshals differently
 
-**Weak? Drill deeper** → [[revision/Arrays & Slice Internals - Revision]]
+**Weak? Drill deeper** → [[revision/T04 Arrays & Slice Internals - Revision]]
 
 ---
 

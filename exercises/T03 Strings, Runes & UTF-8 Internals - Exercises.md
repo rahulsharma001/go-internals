@@ -1,6 +1,6 @@
-# Strings, Runes & UTF-8 Internals — Exercise Solutions
+# T03 Strings, Runes & UTF-8 Internals — Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[Strings, Runes & UTF-8 Internals]].
+> Complete solutions for Practice Checkpoint exercises from [[T03 Strings, Runes & UTF-8 Internals]].
 
 ---
 
@@ -167,4 +167,4 @@ func main() {
 }
 ```
 
-> Exercise from [[Strings, Runes & UTF-8 Internals]] → Section 6.5
+> Exercise from [[T03 Strings, Runes & UTF-8 Internals]] → Section 6.5

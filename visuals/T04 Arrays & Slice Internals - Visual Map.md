@@ -1,6 +1,6 @@
-# Arrays & Slice Internals — Visual Map
+# T04 Arrays & Slice Internals — Visual Map
 
-> Visual-only reference for [[Arrays & Slice Internals]].
+> Visual-only reference for [[T04 Arrays & Slice Internals]].
 > No prose — just diagrams, layouts, and cheat tables.
 
 ---

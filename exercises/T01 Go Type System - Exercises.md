@@ -1,4 +1,4 @@
-# Go Type System & Value Semantics — Exercise Solutions
+# T01 Go Type System & Value Semantics — Exercise Solutions
 
 > Complete solutions for Practice Checkpoint exercises from [[T01 Go Type System & Value Semantics]] → Section 6.5
 

@@ -1,7 +1,7 @@
-# Go Memory Allocation & Value Semantics — Revision Card
+# T02 Go Memory Allocation & Value Semantics — Revision Card
 
 > Drill-down from [[Daily Revision]] | Full notes → [[T02 Go Memory Allocation & Value Semantics]]
-> Q&A bank → [[questions/Go Memory Allocation & Value Semantics - Interview Questions]]
+> Q&A bank → [[questions/T02 Go Memory Allocation - Interview Questions]]
 
 ---
 

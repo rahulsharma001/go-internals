@@ -1,6 +1,6 @@
-# GIN Framework -- Interview Questions
+# T05 GIN Framework -- Interview Questions
 
-> Comprehensive interview Q&A bank for [[frameworks/GIN Framework]].
+> Comprehensive interview Q&A bank for [[frameworks/T05 GIN Framework]].
 > Sorted by frequency at top tech companies. Tags: [COMMON] [ADVANCED] [TRICKY]
 
 ---

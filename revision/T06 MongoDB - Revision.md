@@ -1,7 +1,7 @@
-# MongoDB — Revision Card
+# T06 MongoDB — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[databases/MongoDB]]
-> Q&A bank → [[questions/MongoDB - Interview Questions]]
+> Drill-down from [[Daily Revision]] | Full notes → [[databases/T06 MongoDB]]
+> Q&A bank → [[questions/T06 MongoDB - Interview Questions]]
 
 ---
 

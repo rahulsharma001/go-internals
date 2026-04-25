@@ -1,4 +1,4 @@
-# Go Memory Allocation & Value Semantics — Simplified
+# T02 Go Memory Allocation & Value Semantics — Simplified
 
 > This is the plain-English companion to [[T02 Go Memory Allocation & Value Semantics]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.

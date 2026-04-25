@@ -1,10 +1,10 @@
-# GIN Framework with Go
+# T05 GIN Framework with Go
 
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific -- read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank --> [[questions/GIN Framework - Interview Questions]]
-> Something not clicking? --> [[simplified/GIN Framework - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank --> [[questions/T05 GIN Framework - Interview Questions]]
+> Something not clicking? --> [[simplified/T05 GIN Framework - Simplified]]
 
 ---
 
@@ -303,7 +303,7 @@ Build a Gin API with:
 4. GET `/api/users/:id` that returns a mock user with proper error handling for invalid IDs
 5. POST `/api/users` with struct binding and validation
 
-> Full solutions with explanations --> [[exercises/GIN Framework - Exercises]]
+> Full solutions with explanations --> [[exercises/T05 GIN Framework - Exercises]]
 
 ---
 
@@ -453,7 +453,7 @@ if err := c.ShouldBindJSON(&req); err != nil {
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (12 questions) --> [[questions/GIN Framework - Interview Questions]]
+> Full interview question bank (12 questions) --> [[questions/T05 GIN Framework - Interview Questions]]
 
 Preview:
 1. "How does Gin's router differ from Go's default ServeMux?" [COMMON]

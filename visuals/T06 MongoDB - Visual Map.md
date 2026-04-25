@@ -1,6 +1,6 @@
-# MongoDB — Visual Map
+# T06 MongoDB — Visual Map
 
-> Visual-only reference for [[databases/MongoDB]].
+> Visual-only reference for [[databases/T06 MongoDB]].
 > No prose — just diagrams, layouts, and cheat tables.
 
 ---

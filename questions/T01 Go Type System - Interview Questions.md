@@ -1,4 +1,4 @@
-# Go Type System & Value Semantics — Interview Questions
+# T01 Go Type System & Value Semantics — Interview Questions
 
 > Comprehensive interview Q&A bank for [[T01 Go Type System & Value Semantics]].
 > Sorted by frequency at top tech companies (Google, Amazon, Meta, Uber, Stripe, Cloudflare).

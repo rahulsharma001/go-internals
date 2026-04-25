@@ -8,7 +8,7 @@
 
 | # | Topic | Status | Source JD | Est. Hours |
 |---|-------|--------|-----------|------------|
-| 1 | [[frameworks/GIN Framework\|GIN Framework]] | ⬜ | Kissht | 1-2h |
+| 1 | [[frameworks/T05 GIN Framework\|GIN Framework]] | ⬜ | Kissht | 1-2h |
 
 ---
 

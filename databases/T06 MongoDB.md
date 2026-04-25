@@ -1,10 +1,10 @@
-# MongoDB with Go
+# T06 MongoDB with Go
 
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (25 min).
 > Sections 4-5 deepen understanding (20 min).
 > Sections 7-12 are interview-specific -- read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank --> [[questions/MongoDB - Interview Questions]]
-> Something not clicking? --> [[simplified/MongoDB - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank --> [[questions/T06 MongoDB - Interview Questions]]
+> Something not clicking? --> [[simplified/T06 MongoDB - Simplified]]
 
 ---
 
@@ -234,7 +234,7 @@ Build a simple Go program that:
 4. Uses an aggregation pipeline to find the average price per category
 5. Properly handles context timeouts and cleanup
 
-> Full solutions with explanations --> [[exercises/MongoDB - Exercises]]
+> Full solutions with explanations --> [[exercises/T06 MongoDB - Exercises]]
 
 ---
 
@@ -382,7 +382,7 @@ cursor, _ := coll.Find(ctx, filter)
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (15 questions) --> [[questions/MongoDB - Interview Questions]]
+> Full interview question bank (15 questions) --> [[questions/T06 MongoDB - Interview Questions]]
 
 Preview:
 1. "Explain the difference between embedding and referencing in MongoDB schema design" [COMMON]

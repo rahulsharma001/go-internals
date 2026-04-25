@@ -1,10 +1,10 @@
-# Strings, Runes & UTF-8 Internals
+# T03 Strings, Runes & UTF-8 Internals
 
 > **Reading Guide**: Sections 1-3 and 6 are essential first read (20 min).
 > Sections 4-5 deepen understanding (15 min).
 > Sections 7-12 are interview-specific — read closer to interview day.
-> Section 13 is your comprehensive interview Q&A bank → [[questions/Strings, Runes & UTF-8 Internals - Interview Questions]]
-> Something not clicking? → [[simplified/Strings, Runes & UTF-8 Internals - Simplified]]
+> Section 13 is your comprehensive interview Q&A bank → [[questions/T03 Strings, Runes & UTF-8 Internals - Interview Questions]]
+> Something not clicking? → [[simplified/T03 Strings, Runes & UTF-8 Internals - Simplified]]
 
 ---
 
@@ -461,7 +461,7 @@ Build a function `RuneStats(s string)` that returns a struct with:
 
 Test with: `"Hello, 世界! 🎉"` and `string([]byte{0xff, 0xfe, 0x41})`
 
-> Full solutions with explanations → [[exercises/Strings, Runes & UTF-8 Internals - Exercises]]
+> Full solutions with explanations → [[exercises/T03 Strings, Runes & UTF-8 Internals - Exercises]]
 
 ---
 
@@ -692,7 +692,7 @@ func BenchmarkBuilder(b *testing.B) {
 
 ## 13. Comprehensive Interview Questions
 
-> Full interview question bank (15 questions) → [[questions/Strings, Runes & UTF-8 Internals - Interview Questions]]
+> Full interview question bank (15 questions) → [[questions/T03 Strings, Runes & UTF-8 Internals - Interview Questions]]
 
 Preview:
 - What is the internal representation of a Go string, and what does passing a string to a function actually copy?

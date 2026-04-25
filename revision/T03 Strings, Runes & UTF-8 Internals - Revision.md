@@ -1,7 +1,7 @@
-# Strings, Runes & UTF-8 Internals — Revision Card
+# T03 Strings, Runes & UTF-8 Internals — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[Strings, Runes & UTF-8 Internals]]
-> Q&A bank → [[questions/Strings, Runes & UTF-8 Internals - Interview Questions]]
+> Drill-down from [[Daily Revision]] | Full notes → [[T03 Strings, Runes & UTF-8 Internals]]
+> Q&A bank → [[questions/T03 Strings, Runes & UTF-8 Internals - Interview Questions]]
 
 ---
 

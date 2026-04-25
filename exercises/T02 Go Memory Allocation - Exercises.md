@@ -1,4 +1,4 @@
-# Go Memory Allocation & Value Semantics — Exercise Solutions
+# T02 Go Memory Allocation & Value Semantics — Exercise Solutions
 
 > Complete solutions for Practice Checkpoint exercises from [[T02 Go Memory Allocation & Value Semantics]] → Section 6.5
 

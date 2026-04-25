@@ -1,6 +1,6 @@
-# Strings, Runes & UTF-8 Internals — Interview Questions
+# T03 Strings, Runes & UTF-8 Internals — Interview Questions
 
-> Comprehensive interview Q&A bank for [[Strings, Runes & UTF-8 Internals]].
+> Comprehensive interview Q&A bank for [[T03 Strings, Runes & UTF-8 Internals]].
 > Sorted by frequency at top tech companies. Tags: [COMMON] [ADVANCED] [TRICKY]
 
 ---

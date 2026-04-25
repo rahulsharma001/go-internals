@@ -1,7 +1,7 @@
-# GIN Framework — Revision Card
+# T05 GIN Framework — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[frameworks/GIN Framework]]
-> Q&A bank → [[questions/GIN Framework - Interview Questions]]
+> Drill-down from [[Daily Revision]] | Full notes → [[frameworks/T05 GIN Framework]]
+> Q&A bank → [[questions/T05 GIN Framework - Interview Questions]]
 
 ---
 

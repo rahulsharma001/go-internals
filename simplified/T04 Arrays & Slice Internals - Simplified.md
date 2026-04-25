@@ -1,6 +1,6 @@
-# Arrays & Slice Internals — Simplified
+# T04 Arrays & Slice Internals — Simplified
 
-> This is the plain-English companion to [[Arrays & Slice Internals]].
+> This is the plain-English companion to [[T04 Arrays & Slice Internals]].
 > Read this when the main note feels overwhelming.
 
 ---
@@ -132,4 +132,4 @@ Read the main note for the full rules about when **append** copies to a new bloc
 
 ---
 
-> Ready for the full technical version? → [[Arrays & Slice Internals]]
+> Ready for the full technical version? → [[T04 Arrays & Slice Internals]]

@@ -1,8 +1,8 @@
-# Arrays & Slice Internals — Interview Questions
+# T04 Arrays & Slice Internals — Interview Questions
 
 #qa #go #interview
 
-Back to: [[Arrays & Slice Internals]]
+Back to: [[T04 Arrays & Slice Internals]]
 
 A compact bank of Go array and slice questions, ordered from most to least common at high-signal (FAANG and Go-heavy) companies.
 

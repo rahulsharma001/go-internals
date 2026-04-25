@@ -1,6 +1,6 @@
-# GIN Framework -- Exercise Solutions
+# T05 GIN Framework -- Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[frameworks/GIN Framework]].
+> Complete solutions for Practice Checkpoint exercises from [[frameworks/T05 GIN Framework]].
 
 ---
 
@@ -184,4 +184,4 @@ curl -H "X-API-Key: secret-token-123" localhost:8080/api/users/abc
 
 ---
 
-> Exercise from [[frameworks/GIN Framework]] -- Section 6.5
+> Exercise from [[frameworks/T05 GIN Framework]] -- Section 6.5

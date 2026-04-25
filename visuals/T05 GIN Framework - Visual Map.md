@@ -1,6 +1,6 @@
-# GIN Framework — Visual Map
+# T05 GIN Framework — Visual Map
 
-> Visual-only reference for [[frameworks/GIN Framework]].
+> Visual-only reference for [[frameworks/T05 GIN Framework]].
 > No prose — just diagrams, layouts, and cheat tables.
 
 ---

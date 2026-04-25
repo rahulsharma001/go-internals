@@ -33,12 +33,12 @@
 **Compatibility: 72% --> ~92% (after gap closure)**
 
 ### Must-Have Gaps
-- [ ] [[databases/MongoDB|MongoDB]] -- Tier A (2-3h)
+- [ ] [[databases/T06 MongoDB|MongoDB]] -- Tier A (2-3h)
   - [ ] Read main note
   - [ ] Complete exercises (Tier 1, 2, 3)
   - [ ] Review simplified companion
   - [ ] Review interview questions (15 Qs)
-- [x] [[frameworks/GIN Framework|GIN Framework]] -- Tier A (1-2h)
+- [x] [[frameworks/T05 GIN Framework|GIN Framework]] -- Tier A (1-2h)
   - [ ] Read main note
   - [ ] Complete exercises (Tier 1, 2, 3)
   - [ ] Review simplified companion

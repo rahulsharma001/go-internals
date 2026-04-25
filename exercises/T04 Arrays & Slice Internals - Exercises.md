@@ -1,6 +1,6 @@
-# Arrays & Slice Internals — Exercise Solutions
+# T04 Arrays & Slice Internals — Exercise Solutions
 
-> Complete solutions for Practice Checkpoint exercises from [[Arrays & Slice Internals]].
+> Complete solutions for Practice Checkpoint exercises from [[T04 Arrays & Slice Internals]].
 
 ---
 

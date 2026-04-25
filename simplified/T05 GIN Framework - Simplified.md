@@ -1,6 +1,6 @@
-# GIN Framework -- Simplified
+# T05 GIN Framework -- Simplified
 
-> This is the plain-English companion to [[frameworks/GIN Framework]].
+> This is the plain-English companion to [[frameworks/T05 GIN Framework]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.
 
 ---
@@ -62,4 +62,4 @@ r.Run(":8080")
 
 ---
 
-> Ready for the full technical version? --> [[frameworks/GIN Framework]]
+> Ready for the full technical version? --> [[frameworks/T05 GIN Framework]]

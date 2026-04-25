@@ -1,7 +1,7 @@
-# Arrays & Slice Internals — Revision Card
+# T04 Arrays & Slice Internals — Revision Card
 
-> Drill-down from [[Daily Revision]] | Full notes → [[Arrays & Slice Internals]]
-> Q&A bank → [[questions/Arrays & Slice Internals - Interview Questions]]
+> Drill-down from [[Daily Revision]] | Full notes → [[T04 Arrays & Slice Internals]]
+> Q&A bank → [[questions/T04 Arrays & Slice Internals - Interview Questions]]
 
 ---
 

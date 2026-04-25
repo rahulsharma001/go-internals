@@ -1,6 +1,6 @@
-# MongoDB -- Simplified
+# T06 MongoDB -- Simplified
 
-> This is the plain-English companion to [[databases/MongoDB]].
+> This is the plain-English companion to [[databases/T06 MongoDB]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.
 
 ---
@@ -63,4 +63,4 @@ cursor, _ := collection.Find(ctx, bson.D{{"age", bson.D{{"$gte", 25}}}})
 
 ---
 
-> Ready for the full technical version? --> [[databases/MongoDB]]
+> Ready for the full technical version? --> [[databases/T06 MongoDB]]

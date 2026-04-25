@@ -1,6 +1,6 @@
-# Strings, Runes & UTF-8 Internals — Simplified
+# T03 Strings, Runes & UTF-8 Internals — Simplified
 
-> This is the plain-English companion to [[Strings, Runes & UTF-8 Internals]].
+> This is the plain-English companion to [[T03 Strings, Runes & UTF-8 Internals]].
 > Read this when the main note feels overwhelming. Every concept is explained with real-world analogies.
 
 ---
@@ -182,4 +182,4 @@ People often write code assuming every character is exactly one byte. This works
 
 ---
 
-> Ready for the full technical version? → [[Strings, Runes & UTF-8 Internals]]
+> Ready for the full technical version? → [[T03 Strings, Runes & UTF-8 Internals]]

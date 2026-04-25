@@ -1,4 +1,4 @@
-# Go Memory Allocation & Value Semantics — Interview Questions
+# T02 Go Memory Allocation & Value Semantics — Interview Questions
 
 > Comprehensive interview Q&A bank for [[T02 Go Memory Allocation & Value Semantics]].
 > Sorted by frequency at top tech companies (Google, Amazon, Meta, Uber, Stripe, Cloudflare).

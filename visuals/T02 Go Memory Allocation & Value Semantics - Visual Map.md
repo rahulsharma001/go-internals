@@ -1,4 +1,4 @@
-# Go Memory Allocation & Value Semantics — Visual Map
+# T02 Go Memory Allocation & Value Semantics — Visual Map
 
 > Visual-only reference for [[T02 Go Memory Allocation & Value Semantics]].
 > No prose — just diagrams, layouts, and cheat tables.

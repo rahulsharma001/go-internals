@@ -8,7 +8,7 @@
 
 | # | Topic | Status | Source JD | Est. Hours |
 |---|-------|--------|-----------|------------|
-| 1 | [[databases/MongoDB\|MongoDB]] | ⬜ | Kissht | 2-3h |
+| 1 | [[databases/T06 MongoDB\|MongoDB]] | ⬜ | Kissht | 2-3h |
 
 ---
 
