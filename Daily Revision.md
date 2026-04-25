@@ -208,6 +208,33 @@ stack: [ x = 42 ] at 0xA0
 
 ---
 
+### [[T08 Map Internals]]
+
+**Blurt check** (cover below, answer from memory):
+1. What struct backs every Go map? How many KV pairs per bucket?
+2. What triggers map growth? Is it done all at once?
+3. Why is map not safe for concurrent access? What happens?
+4. Can you take the address of a map value? Why not?
+5. What's the tophash array for?
+
+**5-second answer:**
+> A Go map is a hash table backed by hmap. 2^B buckets, each holding 8 KV pairs with tophash filters for fast matching. Low hash bits select bucket, top 8 bits filter within it. Growth at load factor 6.5, incremental evacuation. NOT concurrent-safe — Go panics on detected races. Map values aren't addressable because growth moves entries. Iteration order deliberately randomized.
+
+**Key visual:**
+```
+Bucket: [tophash: h0..h7][keys: k0..k7][values: v0..v7][overflow: *bmap]
+hmap: count + B + hash0 + buckets ptr → [bucket0]...[bucket 2^B-1]
+```
+
+**Traps to remember:**
+- Concurrent map access → fatal panic (use sync.RWMutex or sync.Map)
+- Write to nil map → panic (use make())
+- Map never shrinks after mass delete (re-create to reclaim memory)
+
+**Weak? Drill deeper** → [[revision/T08 Map Internals - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.

@@ -52,7 +52,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 **Topics:**
 
 - [x] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs)
-- [ ] [[T08 Map Internals]] (~2 hrs)
+- [x] [[T08 Map Internals]] (~2 hrs)
 - [ ] [[T09 Error Handling Patterns]] (~1.5 hrs)
 - [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs)
 - [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs)
