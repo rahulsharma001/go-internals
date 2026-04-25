@@ -235,6 +235,35 @@ hmap: count + B + hash0 + buckets ptr → [bucket0]...[bucket 2^B-1]
 
 ---
 
+### [[T09 Error Handling Patterns]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is the error interface? How many methods?
+2. What are the three error patterns? (sentinel, custom, wrapping)
+3. What's the difference between errors.Is and errors.As?
+4. What does %w do in fmt.Errorf that %v doesn't?
+5. What is the typed nil error trap?
+
+**5-second answer:**
+> Go's error is just an interface with `Error() string`. Three patterns: sentinel errors (predefined values, checked with `errors.Is`), custom error types (struct with extra fields, extracted with `errors.As`), and error wrapping (`fmt.Errorf %w` preserves the chain). `errors.Is` walks the unwrap chain comparing values. `errors.As` walks it looking for a matching type. Never use `==` on wrapped errors. Never return a typed nil pointer through an error interface.
+
+**Key visual:**
+```
+fmt.Errorf("save: %w", fmt.Errorf("validate: %w", ErrRequired))
+
+Unwrap chain: "save: validate: required" → "validate: required" → ErrRequired
+errors.Is(err, ErrRequired) → walks chain → true at depth 2
+```
+
+**Traps to remember:**
+- `==` breaks after wrapping (use `errors.Is` always)
+- `%v` formats but doesn't wrap — `errors.Is` won't find the original
+- Typed nil `*MyError` returned as `error` → non-nil interface
+
+**Weak? Drill deeper** → [[revision/T09 Error Handling Patterns - Revision]]
+
+---
+
 > **Revision tips:**
 > - When you have 15+ topics, split into "focus" (weakest 5) and "maintenance" (strong ones)
 > - Focus topics: full blurt check + read answers. Maintenance: 5-second answer only.
