@@ -194,8 +194,10 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "7dcdbc0f2a97cdcd",
+  "active": "4ca854d182283b79",
   "lastOpenFiles": [
+    "visuals",
+    "revision",
     "Strings, Runes & UTF-8 Internals.md",
     "questions/Strings, Runes & UTF-8 Internals - Interview Questions.md",
     "simplified/Strings, Runes & UTF-8 Internals - Simplified.md",
