@@ -337,12 +337,37 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `main` runs as goroutine `G-main` on OS thread `M0`. Kernel has already given `M0` a **full-size pthread-style user stack** (order **~1–8 MB** depending on OS/ulimit). The heap holds `sync.WaitGroup` state and scheduler metadata; no extra goroutines yet.
+
 ```
-100_000 goroutines created
-        |
-        v
-Each starts, immediately Done()'s, exits
-Still: huge fan-out is normal in Go if work is structured sanely
+Process (illustrative):
+  text/data           ◄── program + runtime
+  heap                ◄── `wg`, global state
+  M0 stack [~1–8 MB]  ◄── kernel-mapped for this OS thread
+  G-main stack        ◄── ~2–8 KB initial segment, runtime-grown if needed
+```
+
+Step 2: Each `go func()` creates `G₀…G₉₉₉₉₉`. Per goroutine: descriptor + **~2–8 KB** initial stack (runtime allocates; grows on demand). **100_000** such stacks are **~400 MB** order-of-magnitude *if* each stays tiny—vs **100_000 OS threads** at **~2 MB** average stack ⇒ **~200 GB** virtual stack footprint before you count TLS and kernel structs.
+
+```
+100_000 goroutines:
+  Σ(initial G stacks)  ──→ ~100_000 × (~2–8 KB)  ◄── hundreds of MB, manageable on many machines
+100_000 OS threads (hypothetical same pattern):
+  Σ(per-thread stacks) ──→ ~100_000 × (~1–8 MB)   ◄── TB-scale address space / RLIMIT cliff
+```
+
+Step 3: Each child immediately `Done()`s and exits. Runtime frees or pools `G` stacks; `wg.Wait()` observes zero waiters. **M:N:** thousands of `G` completions interleave on **few** `M`s—no **1:1** `G`↔kernel thread mapping.
+
+```
+Scheduler view:
+  G's completed in bursts  ──→  bound to ≤ GOMAXPROCS active runners on CPU at once
+  context switches among G's on same M  ◄── mostly user-space (~100s ns class) vs kernel thread switch (~µs class + cache/TLB)
+```
+
+```
+Aha: Fan-out to 100_000 tasks stayed in **runtime-sized** memory because each unit is a **kilobyte-scale** green thread, not a **megabyte-scale** OS thread stack.
 ```
 
 **Error-driven contrast:** The same **pattern** with **100_000 OS threads** is not a fair fight. You will typically blow **memory** on stacks, hit **OS limits**, and spend time in **kernel scheduling** long before you finish.
@@ -374,12 +399,31 @@ func main() {
 }
 ```
 
-```
-This file still uses goroutines.
-Imagine replacing each `go` with `pthread_create` or equivalent:
+MEMORY TRACE:
 
-     n * MB-scale stacks per thread   -> memory cliff
-     n * kernel threads      -> creation latency + scheduler meltdown
+Step 1: Identical **Go** layout as the previous example: **100_000** `G` records with **~2–8 KB** stacks and runtime descriptors. Kernel still sees only **few** `M` stacks (**~1–8 MB** each).
+
+```
+Actual memory story (this program):
+  goroutine side  ──→ ~100_000 × (small stack + descriptor)
+  OS thread side  ◄── O(GOMAXPROCS)-sized M stacks, not O(n)
+```
+
+Step 2: **Hypothetical** `pthread_create` per iteration: each new thread gets kernel bookkeeping + **default stack** often **megabytes**. Creation walks syscall paths; the global run queue holds **100_000** kernel schedulable entities.
+
+```
+If `go` → `pthread_create` mentally:
+  thread 0 stack [~1–8 MB] ──→ 0x7f.... 
+  thread 1 stack [~1–8 MB] ──→ 0x7f.... 
+  ...
+  thread 99999               ──→ address space + `/proc/self/status` VmRSS grows like a cliff
+  context switches           ──→ kernel saves/restores full thread_t + MM state more often
+```
+
+Step 3: Comment in source is the lesson: **same syntax shape in Go** still maps to **green threads**; swapping APIs swaps **memory class** from **KB/G** to **MB/M**.
+
+```
+Aha: The trap is not the loop—it's **what each iteration allocates**. OS thread = **kernel stack + sched entity**; goroutine = **runtime slice + tiny stack**.
 ```
 
 ### Checking GOMAXPROCS
@@ -397,11 +441,26 @@ func main() {
 }
 ```
 
-```
-GOMAXPROCS(0) reads current setting without changing it
+MEMORY TRACE:
 
-Typical laptop:
-  might report logical CPU count unless you changed it
+Step 1: `runtime.GOMAXPROCS(0)` only **reads** the parallelism limit; it does not allocate goroutines or grow the `M` pool beyond what the runtime already uses. **Heap / stacks unchanged** by this call except for any temporary args on the caller's stack.
+
+```
+Illustrative:
+  GOMAXPROCS = N   ──→ at most **N** logical Ps driving **N** pieces of Go code on-CPU simultaneously (model detail in [[T14 GMP Scheduler]])
+  goroutine count  ◄── **uncapped** by this setting; millions of Gs may exist while N Ms run bytecode
+```
+
+Step 2: On a laptop with 8 logical CPUs and default settings, print is often **8**. That means **up to ~8 parallel OS-thread runners** for **CPU-bound** Go work—not "8 goroutines max."
+
+```
+CPU parallelism budget:
+  raise GOMAXPROCS  ──→ more M's may execute Go in parallel on different cores (if hardware/OS allow)
+  lower GOMAXPROCS  ──→ fewer parallel runners; **does not** shrink existing G stacks or free parked Gs
+```
+
+```
+Aha: **GOMAXPROCS** dials **how many OS-backed runners** can burn CPU at once; it is not a goroutine **count** knob or a memory **release** knob.
 ```
 
 ### Many waiters, few runners
@@ -424,17 +483,35 @@ func main() {
 }
 ```
 
-```
-50_000 goroutines block on `<-ch`
-        |
-        v
-They are parked, not each burning an OS thread stack
-        |
-        v
-After `close(ch)`, waiters wake and exit
+MEMORY TRACE:
 
-If each waiter were a dedicated OS thread blocked on a futex,
-your process memory graph would look like a cliff.
+Step 1: **50_000** `go func()` launches. Each `G` allocates **~2–8 KB** initial stack + wait state pointing at channel `ch`. All block on `<-ch`; runtime marks them **waiting**, not **runnable**.
+
+```
+Channel waiters (conceptual per G):
+  Gᵢ stack        ◄── ~2–8 KB (idle frame for `<-ch`)
+  Gᵢ status       ──→ parked on `ch`'s receive queue
+  backing M       ◄── few Ms still exist; **no** 50_000 kernel stacks for these waiters
+```
+
+Step 2: During `Sleep`, **no** 50_000 OS threads each hold **~1–8 MB** stacks blocked in the kernel. **M:N:** a small set of `M`s idles or runs other work; **context-switch savings** vs 50_000 futex-blocked pthreads are enormous (kernel thread switch + TLB/cache vs runtime dequeue of another `G` on same `M`).
+
+```
+If each waiter were OS thread k:
+  Σ stacks  ──→ 50_000 × (~1–8 MB)  ◄── same cliff as 100_000-thread thought experiment, scaled
+As goroutines:
+  Σ stacks  ──→ 50_000 × (~2–8 KB)  ◄── parked cheaply in user heap / runtime structures
+```
+
+Step 3: `close(ch)` broadcasts; waiters become runnable, drain, exit. Memory for stacks returns to runtime pools.
+
+```
+M:N snapshot while parked:
+  g g g … (50k waiting)  ──→ multiplexed onto ──→  M M … (few, ≤ GOMAXPROCS busy at once for runnable work)
+```
+
+```
+Aha: **Blocking** in Go **parks** the **kilobyte-scale** goroutine; it does not force a **megabyte-scale** **dedicated** kernel thread per waiter.
 ```
 
 **Error-driven reading:** This program is a **stress toy**, not a **template** for production logic. It exists to **contrast** **parked goroutines** with **parked OS threads**.

@@ -25,15 +25,28 @@ The outlet analogy again: the **interface** is the **socket shape**. The **concr
 
 Rough picture of what an interface value conceptually carries:
 
+MEMORY TRACE:
+
+Step 1: Zero interface local (illustrative — e.g. `var s Speaker` before assignment)
+stack:
+  `s` @ 0x7ffcc0a0        ◄── interface slot (two words: type descriptor / data)
+heap:
+  —
+
+──→  type word:  nil  (no dynamic type)
+──→  data word:  nil  (no dynamic value)
+
+Step 2: After `s = Dog{name:"Rex"}` (same section later — pattern preview)
+stack:
+  `s` still @ 0x7ffcc0a0  ◄── now holds non-nil type + pointer to value (or inline word)
+heap:
+  Dog payload @ 0xc0000140a0   ◄── `name`, etc.
+
+──→  type word:  *Dog / itab for `Speaker`  ◄── "which plug shape"
+──→  data word:  points at (or holds) concrete Dog  ◄── "the gadget"
+
 ```
-Interface value (conceptual)
-+------------------+------------------+
-| dynamic type     | dynamic value    |
-| (type metadata)  | (pointer/data)   |
-+------------------+------------------+
-        |                    |
-        v                    v
-   "what plug shape?"   "the actual gadget"
+Aha moment: you always reason about the pair (dynamic type, dynamic value). Nil-interface confusion is always about whether the type word is still set.
 ```
 
 **Error-driven trap preview.** This **compiles** and prints **`false`** for `e == nil`:
@@ -51,11 +64,33 @@ var e error = p
 
 The full step-through lives in **Section 6**. The headline bug pattern is:
 
+MEMORY TRACE:
+
+Step 1: `var p *MyError = nil` — typed nil pointer only
+stack:
+  `p` @ 0x7ffcc0b0     ◄── pointer variable
+heap:
+  —
+
+──→  `p` stores address 0x0  (nil *MyError)
+
+Step 2: `var e error = p` — interface assignment packs (type, value)
+stack:
+  `e` @ 0x7ffcc0c0     ◄── `error` is an interface value
+heap:
+  —
+
+──→  type word:  *MyError / error itab  ◄── TYPE IS SET (not "absent")
+──→  data word:  0x0  ◄── same nil pointer bits as `p`
+
+Step 3: `e == nil` compares the whole interface, not the pointer alone
+stack:
+  (comparison uses both words of `e`)
+heap:
+  —
+
 ```
-You put a nil POINTER of concrete type *T into interface I.
-The interface's TYPE half says "*T".
-The interface's VALUE half is nil — but the INTERFACE VALUE ITSELF is non-nil.
-So `i == nil` is false.
+Aha moment: typed nil — type set, value nil — is NOT a nil interface. `e == nil` is false because the type half is non-nil.
 ```
 
 > **In plain English:** A **labeled empty box** is not the same as **no box at all**. `nil` interface means **no label and no payload**. A **typed** `nil` payload still has a **label**.
@@ -84,12 +119,34 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: Compile-time — method set for `Dog` (value receiver)
+stack:
+  (compile-time only — no runtime frame yet)
+heap:
+  —
+
+──→  `Dog`'s method set includes `Speak() string`  ◄── matches `Speaker`
+
+Step 2: `main` calls `Announce(Dog{name: "Rex"})` — argument becomes `Speaker`
+stack:
+  `main` frame: literal `Dog{name: "Rex"}` @ 0x7ffcc0d0
+  `Announce` param `s` @ 0x7ffcc120   ◄── interface `Speaker` (iface words)
+heap:
+  Dog value @ 0xc000016080   ◄── `name: "Rex"` (or equivalent)
+
+──→  `s` type word:  itab for `(Dog, Speaker)`  (or *Dog pattern per implementation)
+──→  `s` data word:  ◄── points at Dog payload
+
+Step 3: Method dispatch — `s.Speak()`
+stack:
+  call resolves through itab → `Dog.Speak` (value receiver)
+heap:
+  same Dog @ 0xc000016080
+
 ```
-Compiler checklist (simplified)
------------------------------
-Dog has method: Speak() string  ---> matches Speaker.Speak
-=> Dog satisfies Speaker
-=> Announce(Dog{...}) is allowed
+Aha moment: implicit satisfaction is "can we build an iface with this concrete type for this interface?" — no separate implements table at runtime.
 ```
 
 > **In plain English:** The compiler is a **bouncer checking dance moves**, not **checking your ID card against a list of approved names**.
@@ -104,6 +161,26 @@ type error interface {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `error` as a named interface type (prelude — no variable yet)
+stack:
+  —
+heap:
+  —
+
+──→  required method: `Error() string`  ◄── one slot in the iface / itab template
+
+Step 2: Any concrete type with that method can fill an `error` iface value
+stack:
+  future `var e error` will be (type word, data word)
+heap:
+  concrete value lives here once assigned
+
+```
+Aha moment: `error` is not special at runtime — it is still a two-word interface; the name is just the standard library's contract.
+```
+
 Anything with `Error() string` is an `error`. That is why you can `return fmt.Errorf(...)`, custom structs, or `errors.New("msg")` through the same return paths.
 
 ```go
@@ -116,14 +193,33 @@ func f() error {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `error` interface layout (conceptual — one method)
+stack:
+  (interface descriptor: needs `Error() string`)
+heap:
+  —
+
+──→  iface identity:  method tuple `(Error)`  ◄── smallest useful contract
+
+Step 2: `MyErr` value implements `error` (value receiver `Error`)
+stack:
+  `f` builds return value `err error` @ 0x7ffcc140
+heap:
+  MyErr struct @ 0xc0000160a0   ◄── `msg: "boom"`
+
+──→  `err` type word:  itab for `(MyErr, error)`
+──→  `err` data word:  ◄── points at MyErr value (not a pointer here)
+
+Step 3: Caller sees `error` — dynamic type is `MyErr` until asserted
+stack:
+  caller's `err` iface copies the same pair
+heap:
+  same MyErr @ 0xc0000160a0
+
 ```
-error interface
-+-------------+
-| Error()     |
-+-------------+
-        ^
-        |
-   MyErr has Error() string  =>  MyErr values satisfy error
+Aha moment: `error` is still a two-word iface; the only requirement is that the dynamic type's method table exposes `Error() string`.
 ```
 
 > **In plain English:** **`error` is the smallest useful contract** in Go: "give me a string explanation."
@@ -144,15 +240,37 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `Println(42)` — `any` holds a scalar (implementation may use special representation)
+stack:
+  `Println` param `v` @ 0x7ffcc160   ◄── `any` / empty interface (`eface`)
+heap:
+  —
+
+──→  type word:  `int` descriptor
+──→  data word:  holds `42` (or pointer to boxed int — implementation detail)
+
+Step 2: `Println("hi")` — string is (ptr, len)
+stack:
+  `v` @ 0x7ffcc160
+heap:
+  string data @ 0xc0000160c0   ◄── backing bytes for `"hi"`
+
+──→  type word:  `string`
+──→  data word:  string header (ptr + len)
+
+Step 3: `Println(struct{ X int }{X: 1})` — struct literal
+stack:
+  temporary struct @ 0x7ffcc180
+heap:
+  may be stack-only; iface still records concrete struct type
+
+──→  type word:  anonymous struct type
+──→  data word:  ◄── points at `{X:1}`
+
 ```
-any / interface{}
-+------------------+
-| (no methods      |
-|  required)       |
-+------------------+
-        ^
-        |
-  all types satisfy this (including structs, ints, pointers...)
+Aha moment: empty method set means every concrete type fits — you always pay the (type, value) tax on `any`.
 ```
 
 > **In plain English:** **`any` is a generic shipping crate**. You can ship **anything**, but you **lose specific tools** until you **open the crate** with assertions or reflection.
@@ -161,15 +279,31 @@ any / interface{}
 
 An interface value is **not** "just a pointer." Conceptually it stores **type information** plus **the data** or **nil data** for that type.
 
-```
-Conceptual layout after assignment:
-+------------------+---------------------------+
-| dynamic type     | dynamic value             |
-| concrete T or *T | data or pointer bits      |
-+------------------+---------------------------+
-```
-
 Assigning a **pointer** sets dynamic type to **`*T`**. The dynamic value is the **pointer itself**, which may be **`nil`**.
+
+MEMORY TRACE:
+
+Step 1: Assignment `var i I = concrete` — iface receives a pair
+stack:
+  `i` @ 0x7ffcc1a0
+heap:
+  concrete payload @ 0xc000016100  (if pointer target or large value)
+
+──→  type word:  concrete dynamic type `T` or `*T`
+──→  data word:  pointer bits OR inline value per ABI
+
+Step 2: Pointer case `var i I = (*Dog)(nil)` (illustrative typed-nil pattern)
+stack:
+  `i` @ 0x7ffcc1a0
+heap:
+  —
+
+──→  type word:  *Dog / itab  ◄── set
+──→  data word:  nil pointer  ◄── still a non-nil interface value
+
+```
+Aha moment: "assigning a pointer" means the type word names `*T`; a nil `*T` is still a complete iface pair.
+```
 
 ### 4.5 Type assertions
 
@@ -182,12 +316,37 @@ n := v.(int)       // panics if wrong
 x, ok := v.(int)   // ok is false if wrong; no panic
 ```
 
-```
-v.(T)
+MEMORY TRACE:
 
-  v holds (dynamic_type, dynamic_value)
-           |
-           +--> assertion succeeds if dynamic_type is T (exact rules below)
+Step 1: `var v any = 42` — `v` is `eface` with dynamic type `int`
+stack:
+  `v` @ 0x7ffcc1c0
+heap:
+  —
+
+──→  type word:  `int`
+──→  data word:  `42`
+
+Step 2: `v.(int)` — extract concrete type matching dynamic type
+stack:
+  result `n` @ 0x7ffcc1d0  ◄── receives unboxed `int`
+heap:
+  —
+
+──→  runtime compares dynamic type to `int`  ◄── match
+──→  copies value bits into `n`
+
+Step 3: `x, ok := v.(int)` — same check, no panic on failure
+stack:
+  `ok` @ 0x7ffcc1e0
+heap:
+  —
+
+──→  if types match: `ok == true`, `x` gets value
+──→  if mismatch: `ok == false`, `x` is zero value of `int`
+
+```
+Aha moment: assertion reads the iface's type word first — it is "unwrap if this is exactly the dynamic type I expect" (or interface-assert variant for interface targets).
 ```
 
 **Asserting to concrete type `T`:** succeeds when the dynamic type is **`T`**, not when it is `*T` unless that is what is stored.
@@ -213,10 +372,35 @@ func Describe(v any) string {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: Enter `Describe(v)` — `v` is `any` / `eface`
+stack:
+  `v` @ 0x7ffcc200
+heap:
+  (depends on caller)
+
+──→  type word:  dynamic concrete type
+──→  data word:  payload
+
+Step 2: `switch x := v.(type)` — bind `x` with concrete type per case
+stack:
+  discriminant reads `v`'s type word once  ◄── compare to `int`, `string`, ...
+heap:
+  same payload
+
+──→  `case int:`    — `x` is `int`, stack slot width = int
+──→  `case string:` — `x` is `string` (ptr+len)
+──→  `default:`    — `x` has static type `interface{}` but holds same pair
+
+Step 3: Method dispatch not involved — this is compile-time table + type equality
+stack:
+  jump to matching case body
+heap:
+  —
+
 ```
-switch v.(type)
-       |
-       +--> compare dynamic type against each case
+Aha moment: type switch is multi-way type assertion — each arm sees `x` as a concrete type, not as `any`.
 ```
 
 > **In plain English:** It is a **sorting station**: each **bin** is a concrete type pattern.
@@ -239,12 +423,27 @@ func (m MyBuf) Read(b []byte) (int, error) { return 0, nil }
 var _ Reader = MyBuf{} // compile-time assertion: MyBuf must satisfy Reader
 ```
 
-```
-No Java-style:
-  class MyBuf implements Reader { ... }
+MEMORY TRACE:
 
-Go-style:
-  type has methods -> automatically usable as Reader
+Step 1: Compile-time only — `var _ Reader = MyBuf{}`
+stack:
+  (package init / unused var — compiler proves assignment legal)
+heap:
+  —
+
+──→  compiler: `MyBuf` method set includes `Read([]byte)(int,error)`  ◄── satisfies `Reader`
+
+Step 2: If you later pass `MyBuf` where `Reader` is expected (runtime pattern)
+stack:
+  caller passes iface `Reader` @ 0x7ffcc220
+heap:
+  `MyBuf` value @ 0xc000016140
+
+──→  type word:  itab for `(MyBuf, Reader)`
+──→  data word:  ◄── points at buf state
+
+```
+Aha moment: `_` assignment is a proof obligation at compile time; runtime iface layout is the same as any other interface pair.
 ```
 
 > **In plain English:** **Behavior is the passport.** Names are not.
@@ -256,11 +455,25 @@ var e error
 // e is nil: no dynamic type, no dynamic value
 ```
 
+MEMORY TRACE:
+
+Step 1: `var e error` — zero value of interface type
+stack:
+  `e` @ 0x7ffcc240   ◄── `error` is an iface (two words)
+heap:
+  —
+
+──→  type word:  nil  ◄── no dynamic type
+──→  data word:  nil  ◄── no dynamic value
+
+Step 2: `e == nil` is true — both halves unset
+stack:
+  comparison sees (nil, nil)
+heap:
+  —
+
 ```
-nil interface value
-+------------------+------------------+
-| nil type         | nil value        |
-+------------------+------------------+
+Aha moment: nil interface means BOTH fields nil — this is the only case `e == nil` for an interface variable.
 ```
 
 > **In plain English:** **Totally empty box:** no sticker, no gadget.
@@ -277,15 +490,33 @@ var e error = p
 println(e == nil) // false
 ```
 
+MEMORY TRACE:
+
+Step 1: `var p *T = nil`
+stack:
+  `p` @ 0x7ffcc260
+heap:
+  —
+
+──→  `p` holds 0x0
+
+Step 2: `var e error = p` — pack into `error` iface
+stack:
+  `e` @ 0x7ffcc270
+heap:
+  —
+
+──→  type word:  *T + `error` itab  ◄── dynamic type PRESENT
+──→  data word:  0x0  ◄── nil pointer payload
+
+Step 3: `e == nil` is false — interface value is non-nil
+stack:
+  runtime compares iface to typed nil: type word ≠ nil
+heap:
+  —
+
 ```
-e after assignment
-+------------------+------------------+
-| dynamic type *T  | dynamic value    |
-|                  | nil *T pointer   |
-+------------------+------------------+
-        |
-        +--> interface value is NON-nil
-             because TYPE half is *T, not "absent"
+Aha moment: typed-nil trap — type set, value nil — the interface is "labeled empty box," not "no box."
 ```
 
 > **In plain English:** You still have a **sticker** that says **`*T`**. That is enough to make the **interface value** non-nil **even if the pointer is nil**.
@@ -300,9 +531,34 @@ x, ok := v.(int)
 // ok == false, x == zero value of int
 ```
 
+MEMORY TRACE:
+
+Step 1: `var v any = "hi"` — dynamic type is `string`
+stack:
+  `v` @ 0x7ffcc280
+heap:
+  bytes @ 0xc000016180
+
+──→  type word:  `string`
+──→  data word:  string header
+
+Step 2: `n := v.(int)` would panic — dynamic type ≠ `int`
+stack:
+  panic unwinds before `n` assigned
+heap:
+  —
+
+──→  single-result form: mismatch ──→ `panic: interface conversion`
+
+Step 3: `x, ok := v.(int)` — safe path
+stack:
+  `x` @ 0x7ffcc290  ◄── zero `int`
+  `ok` @ 0x7ffcc298  ◄── `false`
+heap:
+  —
+
 ```
-v.(T)            ---> panic on mismatch
-v.(T), ok        ---> ok false on mismatch
+Aha moment: comma-ok form never panics; it is the same type-word check without throwing.
 ```
 
 > **In plain English:** **One-return assertion is a bet.** **Two-return assertion is a safe check.**
@@ -319,13 +575,35 @@ func (t *T) M() {}
 var i I = T{} // compile error: T lacks M in value method set
 ```
 
-```
-Value T method set:     (empty here)
-Pointer *T method set: { M }
+MEMORY TRACE:
 
-Interface needs M on the value you assign:
-  T value  -> needs M on T   -> missing
-  &T value -> needs M on *T  -> ok
+Step 1: Method set for value `T` (no `M` on `T`)
+stack:
+  (compile-time symbol tables)
+heap:
+  —
+
+──→  `T` method set:  ∅  (only `*T` has `M`)
+
+Step 2: `var i I = T{}` — compiler must build iface from `T`
+stack:
+  (rejected — no `M` with value receiver)
+heap:
+  —
+
+──→  cannot form itab: `T` does not implement `I`
+
+Step 3: Contrast `var i I = new(T)` or `&T{}` (hypothetical OK)
+stack:
+  `i` would hold `*T` + pointer
+heap:
+  `T` @ 0xc0000161c0
+
+──→  type word:  *T
+──→  data word:  pointer to `T`  ◄── dispatch uses `(*T).M`
+
+```
+Aha moment: method dispatch uses the dynamic type's method table — value vs pointer receiver changes which type can sit in the iface.
 ```
 
 > **In plain English:** **The receiver is part of the method identity.** A value **does not** automatically gain **pointer-only** methods.
@@ -338,11 +616,35 @@ type Reader interface {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `io.Reader` — iface with single `Read` method slot
+stack:
+  (interface descriptor at compile time)
+heap:
+  —
+
+──→  itab layout:  one function pointer slot for `Read`  ◄── minimal surface
+
+Step 2: Concrete type `MyBuf` assigned to `Reader`
+stack:
+  `r` Reader @ 0x7ffcc2a0
+heap:
+  `MyBuf` @ 0xc000016200
+
+──→  type word:  `(MyBuf, io.Reader)` itab
+──→  data word:  ◄── `MyBuf` pointer or value
+
+Step 3: Call `r.Read(b)` — dispatch through itab
+stack:
+  `b` slice header @ 0x7ffcc2b0
+heap:
+  backing array @ 0xc000016220
+
+──→  indirect call: itab.Read → `MyBuf.Read`  ◄── dynamic dispatch
+
 ```
-io.Reader
-+--------+
-| Read   |  <-- one method, enormous ecosystem
-+--------+
+Aha moment: one method in the iface means one slot in the itab — tiny interface, huge fan-in of implementers.
 ```
 
 > **In plain English:** **Small sockets** mean **many devices** can fit. **Giant sockets** mean **almost nobody** matches.
@@ -363,14 +665,33 @@ func (c Cat) Speak() string { return "meow, " + c.name }
 func Announce(s Speaker) { println(s.Speak()) } // Cat is fine: it has Speak() string
 ```
 
+MEMORY TRACE:
+
+Step 1: `Cat` value receiver `Speak` — satisfies `Speaker`
+stack:
+  (compile-time method set check)
+heap:
+  —
+
+──→  `Cat` method set includes `Speak() string`
+
+Step 2: Caller passes `Cat{name:"Felix"}` into `Announce` (pattern same as `Dog`)
+stack:
+  `s` Speaker @ 0x7ffcc300
+heap:
+  Cat @ 0xc000016280
+
+──→  type word:  itab for `(Cat, Speaker)`
+──→  data word:  ◄── points at Cat (value or ptr per ABI)
+
+Step 3: `s.Speak()` — dispatch to `Cat.Speak`
+stack:
+  return `"meow, " + name` via value receiver
+heap:
+  same Cat
+
 ```
-Speaker
-+--------+
-| Speak  |
-+--------+
-    ^
-    |
- Cat implements Speak on value receiver
+Aha moment: same iface `Speaker`; dynamic type is now `Cat`, not `Dog` — the itab is keyed by concrete type.
 ```
 
 ### The `error` interface in practice
@@ -388,8 +709,34 @@ func validate(field string) error {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `return ValidationError{Field: "name"}` — concrete value becomes `error`
+stack:
+  `validate` return slot `error` @ 0x7ffcc320
+heap:
+  ValidationError @ 0xc0000162a0   ◄── `Field: "name"`
+
+──→  type word:  itab for `(ValidationError, error)`
+──→  data word:  ◄── points at struct value (`ValidationError` uses value receiver `Error`)
+
+Step 2: `return nil` on success path — nil interface
+stack:
+  return slot cleared to (nil, nil)
+heap:
+  —
+
+──→  type word:  nil
+──→  data word:  nil
+
+Step 3: Caller `err := validate("")` — holds non-nil iface with dynamic type `ValidationError`
+stack:
+  caller `err` @ 0x7ffcc340
+heap:
+  same ValidationError @ 0xc0000162a0
+
 ```
-ValidationError.Error() string  =>  value satisfies error  =>  can return as error
+Aha moment: same function return type `error`; success vs failure differs only by whether both iface words are nil.
 ```
 
 ### The nil interface trap (step-through)
@@ -415,20 +762,35 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `maybeErr(false)` — `p` stays typed nil
+stack:
+  `maybeErr` frame: `p` @ 0x7ffcc360  ◄── `*MyError` = nil
+heap:
+  —
+
+──→  `p` stores 0x0
+
+Step 2: `return p` — compiler wraps in `error` iface (exit path)
+stack:
+  result `error` @ 0x7ffcc380
+heap:
+  —
+
+──→  type word:  *MyError / error itab  ◄── non-nil
+──→  data word:  0x0  ◄── nil *MyError
+
+Step 3: `main`: `err := maybeErr(false)` then `err == nil`
+stack:
+  `err` @ 0x7ffcc3a0  ◄── copy of iface from return
+heap:
+  —
+
+──→  comparison: type word ≠ nil  ◄── **`false`**
+
 ```
-When fail == false:
-
-p is a nil *MyError
-
-return p  wraps p in error interface:
-
-+------------------+------------------+
-| dynamic type *MyError | nil *MyError |
-+------------------+------------------+
-
-err == nil checks the whole interface value:
-  type half is non-nil (*MyError metadata exists)
-  => err is NOT a nil interface
+Aha moment: returning a bare `*MyError` variable that is nil still installs the *MyError descriptor — callers must get `(nil,nil)` via `return nil` on success.
 ```
 
 **Fix:** return **`nil` in the success path** instead of returning a **typed nil pointer** through `error`:
@@ -442,8 +804,33 @@ func maybeErrFixed(fail bool) error {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: Success path `return nil` — untyped nil becomes nil `error`
+stack:
+  `maybeErrFixed` return slot @ 0x7ffcc3c0
+heap:
+  —
+
+──→  type word:  nil
+──→  data word:  nil
+
+Step 2: Caller `err := maybeErrFixed(false)`
+stack:
+  `err` @ 0x7ffcc3e0  ◄── (nil, nil)
+heap:
+  —
+
+──→  `err == nil`  ◄── **`true`**
+
+Step 3: Failure path still returns `&MyError{...}` — non-nil iface
+stack:
+  return slot holds (*MyError, ptr to struct)
+heap:
+  MyError @ 0xc0000162c0
+
 ```
-return nil  =>  (nil type, nil value)  =>  err == nil is true
+Aha moment: `nil` in a return typed as `error` is the true empty interface — no dynamic type is installed.
 ```
 
 ### Type assertion with comma-ok
@@ -455,8 +842,34 @@ if n, ok := v.(int); ok {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `var v any = 7` — `eface` with dynamic `int`
+stack:
+  `v` @ 0x7ffcc400
+heap:
+  —
+
+──→  type word:  `int`
+──→  data word:  `7`
+
+Step 2: `n, ok := v.(int)` — type word matches
+stack:
+  `n` @ 0x7ffcc410  ◄── `7`
+  `ok` @ 0x7ffcc418  ◄── `true`
+heap:
+  —
+
+──→  extract concrete `int` into `n`
+
+Step 3: Branch runs — `n*2` uses unboxed int
+stack:
+  temporary `14` for `println`
+heap:
+  —
+
 ```
-v.(int), ok  ->  dynamic int  ->  ok true, n == 7
+Aha moment: comma-ok assertion is a cheap type-word compare plus a copy of the data word when shapes match.
 ```
 
 ### Type switch
@@ -476,8 +889,33 @@ func Format(v any) string {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `Format(v)` — `v` is `any`
+stack:
+  `v` @ 0x7ffcc420
+heap:
+  (caller-dependent)
+
+──→  type word / data word of argument
+
+Step 2: `switch t := v.(type)` — each case binds `t` with concrete static type
+stack:
+  `case int:`    — `t` is `int` @ 0x7ffcc430
+  `case string:` — `t` is `string` (wider slot)
+heap:
+  payload for string case @ 0xc0000162e0
+
+──→  compare dynamic type to case types top-to-bottom
+
+Step 3: `default` — `t` is still `interface{}` / `any` with same pair
+stack:
+  `%T` formatting reads type from type word
+heap:
+  —
+
 ```
-v.(type)  ->  dispatch by dynamic type: int / string / default
+Aha moment: type switch is the safe multi-way form of assertion — one dynamic lookup, many arms.
 ```
 
 ---
@@ -506,6 +944,35 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+Step 1: `var pt *T = nil`
+stack:
+  `pt` @ 0x7ffcc440
+heap:
+  —
+
+──→  `pt` = 0x0
+
+Step 2: `var i I = pt` — iface gets dynamic type `*T`
+stack:
+  `i` @ 0x7ffcc450
+heap:
+  —
+
+──→  type word:  *T / itab for `I`  ◄── set
+──→  data word:  0x0  ◄── nil pointer
+
+Step 3: `i == nil` — must be nil iface (both words nil)
+stack:
+  comparison fails: type word non-nil
+heap:
+  —
+
+```
+Aha moment: `pt` and `i` "look" nil at the pointer level, but `i` carries type metadata — prints `false`.
+```
+
 > [!success]- Answer
 > It prints **`false`**.
 >
@@ -527,6 +994,35 @@ func Do(enabled bool) error {
 	}
 	return err
 }
+```
+
+MEMORY TRACE:
+
+Step 1: `Do(false)` — `err` stays nil `*AppError`
+stack:
+  `Do` frame: `err` @ 0x7ffcc460  ◄── typed nil pointer
+heap:
+  —
+
+──→  `err` = (*AppError)(nil)
+
+Step 2: `return err` — wrap in `error` iface
+stack:
+  return slot `error` @ 0x7ffcc470
+heap:
+  —
+
+──→  type word:  *AppError / error itab  ◄── non-nil
+──→  data word:  0x0
+
+Step 3: Caller sees non-nil `error` even though "no failure"
+stack:
+  caller's `err` compares `!= nil`  ◄── **bug**
+heap:
+  —
+
+```
+Aha moment: same typed-nil-through-`error` pattern — the fix is `return nil` when there is no real `*AppError` to return.
 ```
 
 > [!success]- Answer

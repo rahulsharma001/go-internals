@@ -145,11 +145,10 @@ Step 3: concurrent mark — mutator resumes with write barrier on; marker scans 
 
 Step 4: short STW — finalize marking/sweep handoff (details in T24); mutator pauses again briefly.
 
-TIMELINE (not to scale)
-
-app:  ████ run ████ run ████ run ████
-gc:       ^STW^   concurrent mark    ^STW^
-          short                  short
+Step 5: TIMELINE (not to scale) — mutator runs in long stretches; GC inserts brief STW at phase edges.
+  stack/heap:  app  ████ run ████ run ████ run ████
+  gc phases:        ^STW^   concurrent mark    ^STW^
+                    short                  short
 ```
 
 ### 4.4 Concurrent marking and the write barrier
@@ -173,10 +172,10 @@ Step 3 WITHOUT barrier (broken invariant): marker believes “all live refs from
 Step 4 WITH write barrier: on B.next = W, runtime shades W (GREY) or logs edge so marker revisits.
   heap after barrier:  W=grey (or enqueued for scan) ◄── W cannot be swept while reachable
 
-WRITE BARRIER IDEA (CORRECT OUTCOME)
+Step 5: correct outcome — store records the BLACK──→WHITE edge so W is not lost to the sweeper.
+  heap:  on B.next = W, runtime notes the edge or repaints bookkeeping ◄── tri-color invariant restored
 
-On B.next = W, runtime notes the edge
-or repaints bookkeeping so W is not lost.
+(aha: barrier turns a dangerous concurrent store into a safe enqueue/shade so marking catches W before sweep.)
 ```
 
 Details of barrier algorithms and tri-color invariants live in [[T24 Garbage Collector Deep Dive]].
@@ -226,11 +225,16 @@ Each iteration: new object → more bytes to track → more marking/sweep work e
 ### GC runs concurrently with your program (mostly)
 
 ```
-YOUR CPU TIME BUDGET
+MEMORY TRACE: mutator vs GC CPU (concurrent cycle — conceptual timeline)
+Step 1: P runs your goroutine — mutator executes on stack; heap updates interleave with app logic.
+  stack:  active frames @0x7fff_2000   heap:  objects allocated/mutated @0x1c000_…
 
-your code:     ████████████████████
-GC helpers:    ▓▓  ▓▓▓   ▓▓    ▓▓▓▓
-               background assist + dedicated workers
+Step 2: GC assist / dedicated workers run in parallel — same OS process, different time slices.
+  your code:     ████████████████████  ◄── mutator threads
+  GC helpers:    ▓▓  ▓▓▓   ▓▓    ▓▓▓▓  ◄── mark/sweep assist + workers
+
+Step 3: no extra heap objects from “background” alone — cost is CPU cycles + barrier work on pointer writes.
+  (aha: concurrent GC reduces STW wall time but does not remove CPU spent tracing; it overlaps with your budget.)
 ```
 
 > **In plain English:** The janitor mostly works alongside you, not only when you sleep. That reduces pause times but does not erase CPU cost.
@@ -280,10 +284,11 @@ Step 1: upperASCII + WriteByte — no new heap string per iteration (conceptuall
 Step 2: fewer distinct heap objects survive each iteration.
   (aha: lowering allocation rate throttles how often the pacer starts / assists GC.)
 
-ALLOCATION RATE
+Step 3: allocation rate vs pacer — high churn creates many short-lived WHITE objects between cycles.
+  heap:  high rate ◄── * * * * * * * * (many fresh objects per window)   ◄── GC cycles crowd the timeline
 
-high:  * * * * * * * *   → GC cycles crowd the timeline
-low:   *     *           → GC breathes
+Step 4: reuse/low churn — fewer new objects; marker sees smaller nursery of garbage between runs.
+  heap:  low rate ◄── *     * (occasional growth)   ◄── GC “breathes”; less assist per unit of app work
 ```
 
 > **In plain English:** If you stop generating disposable objects, the janitor visits less often.
@@ -291,16 +296,19 @@ low:   *     *           → GC breathes
 ### Stack allocations are free from the GC’s perspective
 
 ```
-STACK FRAME (conceptual)
+MEMORY TRACE: stack frame vs GC (non-escaping locals)
+Step 1: call enters — frame laid out contiguously on goroutine stack (high → low addresses conceptual).
+  stack @0x7fff_ff00:  return addr
+  stack @0x7fff_fef8:  local int (scalar, not a GC scan slot)
+  stack @0x7fff_fef0:  local *T ──→ heap @0x1c000_5000 (if it points out)
 
-high address
-┌──────────────┐
-│ return addr  │
-├──────────────┤
-│ local int    │  not a GC scan target
-│ local *T     │  might point into heap; still rooted via stack while live
-└──────────────┘
-low address
+Step 2: while frame is live, pointer slots in the frame are roots; scalars are not traced as heap objects.
+  stack:  *T slot is a root edge to heap @0x1c000_5000   heap:  object @0x1c000_5000 reachable while frame active
+
+Step 3: call returns — entire frame popped; stack slots disappear without sweep (no heap object for the int).
+  stack:  frame reclaimed by stack pointer adjustment   heap:  former *T target may become garbage if no other roots
+
+(aha: locals that never escape have no heap allocation — the GC does not “sweep” the stack; the stack unwinds for free.)
 ```
 
 > **In plain English:** Locals that do not escape live and die with the call frame. The GC is not maintaining a separate heap object for them.
@@ -308,10 +316,17 @@ low address
 ### Pointers from heap to heap increase GC graph work and barrier traffic
 
 ```
-HEAP GRAPH DENSITY
+MEMORY TRACE: heap graph density vs mark/barrier work
+Step 1: sparse graph — few outgoing pointers per object; marker visits fewer edges from each BLACK node.
+  heap:  A @0x1c000_6000 ──ptr──→ B @0x1c000_6040   (frontier drains quickly)
 
-sparse:   A──►B                    fewer edges to scan
-dense:    A──►B──►C──►D──►E──►...   more scanning + more mutation events
+Step 2: dense chain — each object points to the next; scan work grows with chain length.
+  heap:  A ──→ B ──→ C ──→ D ──→ E ──→ …   ◄── each GREY→BLACK step scans another outgoing ptr
+
+Step 3: mutator updates pointers on hot edges — write barrier fires per store; denser graphs mean more mutation sites.
+  stack:  mutator stores into heap fields   heap:  each ptr write ◄── potential barrier + shading
+
+(aha: wider/deeper pointer graphs mean more mark work per cycle and more barrier traffic during concurrent marking.)
 ```
 
 > **In plain English:** A bushy pointer graph is a bigger maze for the janitor, and every pointer write is a place the barrier must be careful.
@@ -370,8 +385,32 @@ func main() {
 ASCII:
 
 ```
-heavy:     row objects:  [####][####][####]...
-reuseBuffer: one buffer [~~~~~~~~] reused
+MEMORY TRACE: heavy(n) — fresh heap backing per row (high allocation / GC pressure)
+Step 1: outer slice allocated — `out` is a [][]int; stack holds slice header; heap holds row pointer table.
+  stack @frame:  out.ptr ──→ heap @0x1c000_7000 (backing: n slice headers for rows)
+  heap @0x1c000_7000:  metadata for `out`’s backing array (n entries)
+
+Step 2: iteration i — `row := make([]int, 100)` allocates NEW [100]int on heap each time.
+  heap @0x1c000_8000+i*stride:  backing array for row i   stack:  row.ptr ──→ that backing
+
+Step 3: `out[i] = row` — each row backing stays reachable via `out` until `heavy` returns.
+  heap:  out[i] ──→ row’s backing @0x1c000_8000+…   (n distinct live backings for n rows)
+
+Step 4: after `return out`, all n inner backings + outer structure remain live — large retained set.
+  (aha: one inner `make` per row multiplies heap objects and future mark/sweep work.)
+
+MEMORY TRACE: reuseBuffer(n) — single backing reused (lower pressure)
+Step 1: once — `buf := make([]int, 100)` one heap backing; stack holds `buf` header for all iterations.
+  stack @frame:  buf.ptr ──→ heap @0x1c000_9000 ([100]int)   heap:  single backing @0x1c000_9000
+
+Step 2: iteration i — same backing overwritten in place; no new inner array per i.
+  heap @0x1c000_9000:  elements mutated in place   stack:  buf.ptr still ──→ @0x1c000_9000
+
+Step 3: `sum` on stack; no slice-of-rows graph — fewer distinct heap objects than `heavy`.
+  (aha: one reused buffer cuts allocation rate and shrinks what the marker traces each cycle.)
+
+Step 4: compare — `heavy` creates O(n) fresh inner arrays; `reuseBuffer` holds O(1) inner backing.
+  heap:  heavy ◄── n fresh [100]int   reuseBuffer ◄── one [100]int   ◄── pacer sees lower churn in reuse pattern
 ```
 
 ### Reading GC stats with `runtime.ReadMemStats`
@@ -398,9 +437,18 @@ func main() {
 ASCII:
 
 ```
-MemStats snapshot is a photograph, not a movie
+MEMORY TRACE: runtime.ReadMemStats(&m) — one snapshot in time
+Step 1: caller allocates `m runtime.MemStats` (typically on stack; large value struct).
+  stack @0x7fff_3000:  m (struct)   &m ──→ passed to runtime
 
-camera click → one struct filled with counters
+Step 2: runtime fills fields from internal accounting — point-in-time copy into `m`.
+  heap:  (unchanged by this call’s purpose)   runtime:  HeapAlloc, NumGC, … → m’s fields
+
+Step 3: after return, `m` reflects counters at the snapshot instant — not a live stream.
+  stack:  m.HeapAlloc, m.NumGC populated   (aha: one ReadMemStats = one “photograph”; repeat to see a movie.)
+
+Step 4: later mutator allocations update runtime’s global stats; your `m` stays stale until next read.
+  heap:  program may allocate elsewhere   stack:  your m ◄── frozen picture from Step 2
 ```
 
 ### Escape analysis: stack vs heap
@@ -445,9 +493,28 @@ heapBig: moved to heap: escapes to heap
 ASCII after the commands concept:
 
 ```
-compiler sees: "does pointer outlive stack frame?"
-yes → heap
-no  → stack / registers
+MEMORY TRACE: escape analysis — stackInt() (no escape)
+Step 1: `stackInt` frame — `n := 42` in stack slot or register; `identity(n)` passes by value.
+  stack @frame:  n = 42   (scalar)   heap:  (no box for n)
+
+Step 2: `identity` returns int — no pointer to `n` outlives the callee; storage dies with frame unwind.
+  stack:  frames pop   heap:  nothing allocated for `n`
+
+Step 3: GC view — no heap object for `n`; no root edge needed for this path.
+  (aha: no address taken / no return of *n → value stays stack/register — no GC object.)
+
+MEMORY TRACE: escape analysis — heapBig() (address escapes to caller)
+Step 1: BEFORE — `x := big{1,2,3}` could live on stack if only used inside `heapBig`.
+  stack @frame:  x {a,b,c} (candidate)   heap:  (no x yet)
+
+Step 2: `return &x` — pointer must survive after return; stack slot would be invalid after pop.
+  stack:  &x after return ◄── illegal if x were stack-only   ◄── next call would reuse that memory
+
+Step 3: AFTER compiler — `x` moved to heap @0x1c000_a000; returned *big points there.
+  stack @caller:  result.ptr ──→ heap @0x1c000_a000 (big{1,2,3})   heap:  fields live in heap object
+
+Step 4: GC — caller’s pointer is a root; object traced until unreachable.
+  (aha: escape = pointer outlives frame → heap allocation + mark/sweep participation.)
 ```
 
 ---

@@ -714,6 +714,28 @@ func main() {
 }
 ```
 
+MEMORY TRACE:
+
+```
+Step 1: `x := 1` — allocate `x`; literal `func(){ fmt.Println(x) }` closes over `x`.
+stack:
+  main @ 0x7ffeac00
+    x @ 0x7ffeac08  ──→  1
+heap:
+  (if x escapes) x_heap @ 0xc0001400a0  ◄──  1
+  funcval_f @ 0xc000140100
+    code_ptr  ──→  Println(x)
+    env_ptr   ──→  &x_heap @ 0xc0001400a0  ◄──  closure holds pointer to `x`
+Step 2: `f :=` assigns function value to variable `f`.
+stack:
+  f @ 0x7ffeac18  ──→  funcval_f @ 0xc000140100
+Step 3: `x = 2` mutates the **same** captured storage (not a snapshot from step 1).
+heap:
+  x_heap @ 0xc0001400a0  ──→  2  ◄──  same cell as step 1
+Step 4: `f()` runs; closure loads `x` through env_ptr → prints current value 2.
+**Aha:** Capture is by reference — `f` sees live `x`, so output is `2`, not `1`.
+```
+
 > [!success]- Answer
 > It prints `2`.
 >
@@ -742,6 +764,27 @@ func main() {
 	}
 	wg.Wait()
 }
+```
+
+MEMORY TRACE:
+
+```
+Step 1: One loop variable `i` for `i := 0; i < 3; i++` (behavior before Go 1.22 fix).
+stack:
+  main @ 0x7ffead00
+    i @ 0x7ffead08  ──→  0 → 1 → 2 → 3
+heap:
+  i_shared @ 0xc0001500a0  ◄──  single cell all goroutines observe when they capture `i`
+Step 2: Three `go func(){ defer Done(); Println(i) }()` — each closure’s env_ptr → &i_shared.
+heap:
+  g0.closure @ 0xc000151000  env_ptr ──→  &i_shared @ 0xc0001500a0
+  g1.closure @ 0xc000151040  env_ptr ──→  &i_shared @ 0xc0001500a0
+  g2.closure @ 0xc000151080  env_ptr ──→  &i_shared @ 0xc0001500a0
+Step 3: Loop completes; `i_shared` is 3; goroutines run and read through shared pointer.
+heap:
+  i_shared @ 0xc0001500a0  ──→  3
+Step 4: Typical output: three lines of `3` — not `0 1 2`.
+**Aha:** All goroutines share one variable; each sees the final value unless you copy per goroutine (parameter or `i := i`).
 ```
 
 > [!success]- Answer

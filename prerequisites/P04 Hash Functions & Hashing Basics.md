@@ -28,26 +28,37 @@ MEMORY TRACE:
 
 Step 1: key literal "go" lives in the program (read-only data @0x10_4000)
   stack: (no local vars yet for this story)
-  conceptual: KEY @0x10_4000 ──→ bytes: [0x67, 0x6F]  ("g","o")
+  heap: (map root appears in Step 4)
+  shared memory: KEY @0x10_4000 ──→ bytes: [0x67, 0x6F]  ("g","o")
 
-Step 2: HASH FUNCTION(&key) ──→ huge integer H (illustrative @cpu: mix registers)
+Step 2: key ──→ hash(seed, key) ──→ H (fixed-width integer)
+  stack: (ephemeral mixer / return registers)
+  heap: (none for hash computation itself)
+  shared memory: same bytes @0x10_4000 fed into runtime hash with map seed
   H = 0x9F2E_4B1C_77A3_....   (fixed-width word; many bits; same key ⇒ same H for same seed)
 
-Step 3: derive BUCKET INDEX i — toy power-of-two: bucket = H % numBuckets  ==  H & (numBuckets-1)
+Step 3: number H ──→ bucket index i — toy power-of-two: bucket = H % numBuckets  ==  H & (numBuckets-1)
+  stack: i = 3 (illustrative local)
+  heap: (bucket array pointer loaded next)
+  shared memory: (unchanged)
   mask example: numBuckets=8 ──→ i = H % 8 = H & 0x7  ──→  i = 3
   ◄── "which row of drawers" is just an integer in [0, buckets-1]
 
 Step 4: follow pointer from map root to bucket array
+  stack: (iterator / index i)
   heap:
     hmap ──→ [ count | B | hash0 | buckets ──→ [bucket0][bucket1]...[bucket_i]... ]
+  shared memory: (read-only key data still @0x10_4000 for comparisons later)
   bucket_i @0xC0_0000 ──→ first bucket in chain for index i
 
 Step 5: inside bucket i (8 cells + overflow pointer — conceptual layout)
-  bucket @0xC0_0000:
+  heap: bucket @0xC0_0000:
     tophash: [0x..|0x..|_|_|_|_|_|_]   ◄── quick filter bytes from hash
     keys:    [k0 | k1 | _ | _ | _ | _ | _ | _]
     values:  [v0 | v1 | _ | _ | _ | _ | _ | _]
     overflow ──→ nil  (or ──→ next bucket @0xC0_0080 if chain continues)
+  stack: (slot index while scanning)
+  shared memory: key material for k0,k1 may point into string backing / scalar storage
 ```
 
 Collision in one picture:
@@ -57,25 +68,34 @@ MEMORY TRACE:
 
 Step 1: KEY "go" — shared memory @0x10_4100 ──→ hash(seed, "go") ──→ H_go = 0x...B10110110
   stack: (ephemeral) H_go in register / temp
-  bucket index: i_go = H_go % N = 6   ◄── illustrative N = 16 buckets
+  heap: (target bucket not yet shown)
+  shared memory: "go" bytes @0x10_4100
+  bucket index: i_go = H_go % N = 6   ◄── illustrative N = 16 buckets (hash → number → bucket = hash % numBuckets)
 
 Step 2: KEY "no" — shared memory @0x10_4200 ──→ hash(seed, "no") ──→ H_no = 0x...C00110110
-  i_no = H_no % N = 6   ◄── AHA: distinct keys, same bucket ⇒ COLLISION (chained / same drawer)
+  stack: H_no, i_no = H_no % N = 6
+  heap: (same bucket index as Step 1)
+  shared memory: "no" bytes @0x10_4200
+  i_no = 6   ◄── AHA: distinct keys, same bucket ⇒ COLLISION (chained / same drawer)
 
 Step 3: BEFORE insert "no" — only "go" in bucket chain head @ index 6
+  stack: (insert path holds slot search cursor)
   heap: buckets[6] @0xC0_0600
     tophash: [0xB1|_|_|_|_|_|_|_]
     keys:    ["go"|_|_|_|_|_|_|_]
     values:  [1   |_|_|_|_|_|_|_]
     overflow* ──→ nil
+  shared memory: string data for "go"
 
 Step 4: AFTER insert "no" — same bucket index; in-bucket scan finds empty cell slot 1
+  stack: (lookup will recompute i=6, then scan)
   heap: buckets[6] @0xC0_0600
     tophash: [0xB1|0xC0|_|_|_|_|_|_]
     keys:    ["go"|"no"|_|_|_|_|_|_]
     values:  [1   |2   |_|_|_|_|_|_]
     overflow* ──→ nil
-  ◄── aha: both keys share i=6; lookup hashes to bucket 6 then compares keys in keys[]/values[]
+  shared memory: "go" and "no" backing bytes
+  ◄── aha: both keys share i=6; lookup hashes to bucket 6 then compares keys in keys[]/values[] (tophash filters first)
 ```
 
 > **In plain English:** Collisions are not disasters. They mean “same drawer.” The map’s job is to make each drawer **small** and **searchable** so checking the drawer stays cheap.
@@ -112,16 +132,24 @@ MEMORY TRACE:
 Step 1: key A — comparable scalar / bit pattern in memory
   shared memory: key A word @0x20_0000 ──→ ...0000001000...
   stack: (none for this static story)
+  heap: (none)
 
 Step 2: key A ──→ hash(seed, A) ──→ H_A
   heap: (none; result lives in register / stack temp)
+  shared memory: same @0x20_0000
+  stack: H_A temp
   cpu: H_A @conceptual ──→ ...1110100110...
 
 Step 3: key B — flip one low bit vs A
   shared memory: key B @0x20_0004 ──→ ...0000001001...
+  stack: (none)
+  heap: (none)
   ◄── AHA: single-bit input tweak
 
 Step 4: key B ──→ hash(seed, B) ──→ H_B  (many bits differ from H_A)
+  shared memory: @0x20_0004
+  stack: H_B temp
+  heap: (none)
   cpu: H_B ──→ ...0011011001...
   ◄── avalanche: H_A vs H_B not "locally similar" ⇒ bucket = H % numBuckets scatters under small key edits
 ```
@@ -140,21 +168,32 @@ Each bucket holds **multiple entries**. If a bucket fills, you add **overflow st
 MEMORY TRACE:
 
 Step 1: KEY "a" @0x10_5000 ──→ hash(seed,"a") ──→ H_a ──→ bucket = H_a % N ──→ i = 3
+  stack: H_a, index i=3 (temps)
+  heap: buckets[] root (insert will touch buckets[3])
+  shared memory: "a" bytes @0x10_5000
+
 Step 2: insert "b","c" in same bucket i = 3 (toy: first bucket not yet full)
+  stack: slot cursor 0..2
   heap: buckets[3] head @0xC0_0300
     tophash: [t_a|t_b|t_c|_|_|_|_|_]
     keys:    ["a"|"b"|"c"|_|_|_|_|_]
     values:  [va|vb|vc|_|_|_|_|_|_]
     overflow* ──→ nil
+  shared memory: string / key bytes for "b","c"
 
 Step 3: insert "d" — all 8 cells in head bucket occupied ◄── chain extends
+  stack: allocate overflow, relink
   heap: head.overflow @0xC0_0300 ──→ overflow bucket @0xC0_0380
     overflow tophash: [t_d|t_e|_|_|_|_|_|_]
     overflow keys:    ["d"|"e"|_|_|_|_|_|_]
     overflow values:  [vd|ve|_|_|_|_|_|_]
     overflow.overflow* ──→ nil
+  shared memory: keys "d","e"
 
 Step 4: lookup "e" — hash(seed,"e") ──→ i = 3 ──→ scan head tophash/keys @0xC0_0300 ──→ follow overflow* ──→ find "e" @0xC0_0380
+  stack: probe index within bucket chain
+  heap: head + overflow as above
+  shared memory: "e" for final key compare
   ◄── aha: same bucket index, multiple buckets linked; collision resolution by chaining
 ```
 
@@ -166,17 +205,25 @@ Every entry lives **in the table array itself**. On collision, you **probe** for
 MEMORY TRACE:
 
 Step 1: hash(seed, KEY) ──→ H ──→ j0 = H % numBuckets = 3
+  stack: H, j0=3
   heap: open-address table slots [0..N-1] @0xC0_4000 (each slot: key+value+meta)
+  shared memory: KEY material @0x10_6500
 
 Step 2: probe j0 = 3 — slot OCCUPIED (different key)
   stack: probe trail [3]
+  heap: slot[3] holds other entry
+  shared memory: (compare fails — not our key)
   ◄── collision at home index
 
 Step 3: linear probe ──→ j1 = 4 — OCCUPIED
+  stack: probe trail [3,4]
   heap: slots[4] @0xC0_4010 full
+  shared memory: (other key)
 
 Step 4: probe ──→ j2 = 5 — EMPTY @0xC0_4018
+  stack: chosen index j2=5
   heap: INSERT key/value here
+  shared memory: KEY stored into slot
   ◄── aha: stored index ≠ j0; lookup must repeat same probe sequence until match or empty
 ```
 
@@ -190,13 +237,25 @@ Interview-safe one-liner:
 MEMORY TRACE:
 
 Step 1: KEY bytes @0x10_6000 ──→ runtime hash(seed, key) ──→ H @cpu (wide integer)
+  stack: spill temps for mixer
+  heap: (hash alone doesn’t allocate)
+  shared memory: key bytes @0x10_6000
+
 Step 2: H ──→ bucket index i via mask/shift for current 2^B size (Go: not “only H % N” in source, but same idea: reduce H to an index)
+  stack: i in register
   heap: hmap @0xC0_7000 ──→ buckets* ──→ array of bucket structs
+  shared memory: (unchanged)
 
 Step 3: bucket i @0xC0_7i00 — internal arena: tophash[8] + keys[8] + values[8]
+  stack: cell offset 0..7 while scanning
+  heap: bucket struct layout as above
+  shared memory: keys may reference string/data backing
   ◄── small fixed cell count per bucket (8 in current implementations)
 
 Step 4: in-bucket placement / scan (deterministic local order); on full bucket ──→ overflow* ──→ next bucket @0xC0_7i80
+  stack: follow overflow pointer
+  heap: chained overflow bucket @0xC0_7i80
+  shared memory: (overflow keys)
   ◄── aha: bucket-level chaining + bounded in-bucket search = Go’s mental model for interviews
 ```
 
@@ -209,9 +268,13 @@ MEMORY TRACE:
 
 Step 1: read live entry count and bucket count from map bookkeeping
   stack: load_factor ≈ number_of_entries / number_of_buckets  ◄── textbook sketch
+  heap: hmap fields hold count, B, buckets*
+  shared memory: (n/a — metadata in heap)
 
 Step 2: high load factor ──→ more keys per bucket on average ──→ longer in-bucket fill + overflow chains
+  stack: (scheduler / grow decision uses averages)
   heap: conceptual pressure on buckets[0..N-1] @0xC0_8000
+  shared memory: (entries referenced from bucket cells)
 ```
 
 High load factor means **more collisions** and **longer chains** unless you resize.
@@ -226,20 +289,31 @@ ASCII before and after growth:
 MEMORY TRACE:
 
 Step 1: BEFORE growth — crowded (toy numbers match section prose)
+  stack: (bookkeeping reads count, B)
   heap: numBuckets = 4, bucket array @0xC0_A000
+  shared memory: keys/values reachable from old buckets only
   entries = 22  ──→ avg ≈ 22 / 4 ≈ 5.5 entries per bucket (illustrative; real Go uses ~6.5 threshold and finer counts)
   ◄── long chains / full buckets more likely
 
 Step 2: threshold crossed — Go allocates larger bucket table (size grows by increasing B; count ≈ 2^B buckets)
-  heap: NEW bucket array @0xC0_B000 with numBuckets = 8  ◄── doubling width (conceptual)
+  stack: grow / evac control flow
+  heap: NEW bucket array @0xC0_B000 with numBuckets = 8  ◄── load factor improved by doubling buckets (conceptual)
+  shared memory: (keys stable during rehash)
 
 Step 3: same entries = 22 — avg ≈ 22 / 8 ≈ 2.75 per bucket after spread
+  stack: per-entry rehash temps
+  heap: entries migrate from @0xC0_A000 layout into @0xC0_B000 cells
+  shared memory: each key’s bytes unchanged; only bucket index changes
   each (key,value): hash(seed,key) ──→ H ──→ new_index = H % 8 (toy) / mask for new 2^B  ◄── rehash into wider table
 
 Step 4: incremental evac completes — old @0xC0_A000 retired
+  stack: (iterator / concurrent map rules still apply in real runtime)
+  heap: only @0xC0_B000 bucket table valid
+  shared memory: (unchanged)
   ◄── aha: addresses from before grow are stale; unsafe pointer games see wrong buckets
-This toy average is only a sketch. Real growth decisions use finer internal bookkeeping.
 ```
+
+This toy average is only a sketch. Real growth decisions use finer internal bookkeeping.
 
 Growth **rehashes** entries into a bigger bucket array. Pointers to map internals can make old addresses stale; that is why unsafe games around maps are dangerous.
 
@@ -343,8 +417,34 @@ func main() {
 ASCII mapping:
 
 ```
-"go" --> toy hash h --> h mod 8 --> bucket index
-"no" --> toy hash h2 --> h2 mod 8 --> maybe same as "go"
+MEMORY TRACE:
+
+Step 1: call toyHash("go", 8) — string data @0x10_7000 ('g'=0x67,'o'=0x6F)
+  stack: frame toyHash — s string header (ptr,len) ──→ 0x10_7000, len=2; buckets=8; h=0
+  heap: (string bytes live in read-only / string backing; ptr in header points @0x10_7000)
+  shared memory: @0x10_7000 ──→ [0x67, 0x6F]
+
+Step 2: loop i=0 — h = 0*31 + int('g') = 103
+  stack: h = 103 (accumulator in toyHash frame)
+  heap: (unchanged)
+  shared memory: (string bytes as above)
+
+Step 3: loop i=1 — h = 103*31 + int('o') = 3304
+  stack: h = 3304
+  heap: (unchanged)
+  shared memory: (unchanged)
+
+Step 4: return ((3304 % 8) + 8) % 8 = 0  ◄── toy bucket index for "go" (key → h → h % buckets → index)
+  stack: return value 0 to main’s print path
+  heap: (unchanged)
+
+Step 5: call toyHash("no", 8) — @0x10_7010 ('n'=0x6E,'o'=0x6F)
+  stack: h: 0→110→3521; return 3521 % 8 = 1
+  shared memory: @0x10_7010 ──→ [0x6E, 0x6F]
+
+Step 6: compare indices — 0 vs 1 (this run: different buckets). If h2 % 8 == h % 8, both keys land in same bucket ◄── collision case for this pedagogical hash
+  stack: (two return values consumed by fmt.Println)
+  heap: (no map; hash is pure arithmetic)
 ```
 
 ### Collision demonstration with ASCII
@@ -352,18 +452,30 @@ ASCII mapping:
 Assume buckets = 4.
 
 ```
-toyHash("ab", 4) -> 1
-toyHash("cd", 4) -> 1   (collision at bucket 1)
+MEMORY TRACE:
 
-bucket 1 chain or cells:
-  entry1: "ab" -> 10
-  entry2: "cd" -> 20
-```
+Step 1: toyHash("ab", 4) — 'a','b' ──→ h = 3105 ──→ bucket = 3105 % 4 = 1
+  stack: h=3105; buckets=4
+  shared memory: "ab" bytes @0x10_7100
+  heap: (toy table not allocated yet)
 
-Lookup path:
+Step 2: toyHash("cd", 4) — 'c','d' ──→ h = 3169 ──→ bucket = 3169 % 4 = 1
+  stack: h=3169; bucket index 1
+  shared memory: "cd" bytes @0x10_7110
+  ◄── AHA: distinct keys, same bucket index ⇒ collision
 
-```
-key "cd" --> hash --> bucket 1 --> scan bucket 1 --> find "cd"
+Step 3: toy map bucket 1 @0xC0_1000 (conceptual two-slot story)
+  heap:
+    tophash: [t_ab|t_cd]
+    keys:    ["ab"|"cd"]
+    values:  [10|20]
+    overflow* ──→ nil
+  stack: (lookup will hold running index / hash scratch)
+
+Step 4: lookup "cd" — hash("cd") ──→ bucket 1 ──→ scan keys[] — compare "cd" — return 20
+  stack: return value 20
+  heap: bucket 1 unchanged
+  ◄── aha: chain or parallel arrays; equality disambiguates colliding keys
 ```
 
 ### Why slices cannot be map keys
@@ -382,6 +494,24 @@ Compiler error you should expect:
 
 ```
 invalid map key type []int
+```
+
+```
+MEMORY TRACE:
+
+Step 1: hypothetical map[[]int]int — key type is slice header (ptr,len,cap) @stack 0xE0_0010
+  stack: would hold slice triples as keys
+  heap: (no hmap — type invalid)
+  shared memory: (n/a at compile fail)
+  ◄── comparability required for map keys; []int is not comparable in Go
+
+Step 2: type checker rejects before any heap hmap — no bucket array allocated
+  stack: compile error; no runtime frame
+  heap: (none for this declaration)
+
+Step 3: why slice header is the wrong equality object — two headers @0xE0_0020 vs @0xE0_0030 can point at same backing array @0xC0_2000 with different len
+  heap: backing array @0xC0_2000 shared by two different (ptr,len,cap) views
+  ◄── aha: map needs stable key identity; slice “value” is a triple, not deep array contents — slices can’t be map keys
 ```
 
 Structs inherit the same rule when a field is not comparable:
@@ -404,13 +534,22 @@ Expected failure:
 invalid map key type S
 ```
 
-ASCII reason:
-
 ```
-slice header = (ptr, len, cap)
-              ^
-              two slices can point at same data; header compare is the wrong model
-              language forbids the footgun
+MEMORY TRACE:
+
+Step 1: struct S layout — field X is []int; inner slice header embedded in S @0xE0_0040
+  stack: local S would carry nested slice header (ptr,len,cap) inside struct bytes
+  heap: (backing array of X could live here if constructed)
+  shared memory: (n/a for type check)
+
+Step 2: map[S]string — key type S must be fully comparable; comparability does not propagate if any field fails
+  stack: (type checker only)
+  heap: (no map allocated)
+  ◄── AHA: one []int field poisons whole struct for map keys (same slice rule)
+
+Step 3: compiler error before runtime — no hash(seed,S) / bucket placement ever runs
+  heap: (no hmap for invalid key type)
+  stack: (no runnable main frame past type error)
 ```
 
 ---
@@ -434,6 +573,36 @@ func main() {
 }
 ```
 
+```
+MEMORY TRACE:
+
+Step 1: m := map[string]int{} — runtime allocates empty hmap @0xC0_3000, buckets* may be nil/small
+  stack: m map header (ptr to hmap) @0xE0_00F0
+  heap: hmap @0xC0_3000 — count=0, buckets* small or lazy
+  shared memory: (no keys yet)
+
+Step 2: m["a"] = 1 — hash(seed,"a") ──→ H ──→ bucket i — place in cell: tophash/keys/values updated; count++
+  stack: temporaries for hash + index
+  heap: bucket @0xC0_3100 gains slot: tophash[k], keys[k]="a", values[k]=1
+  shared memory: "a" @0x10_7200
+
+Step 3: m["b"] = 2 — hash(seed,"b") ──→ H' ──→ bucket i' — second cell (same or different bucket vs "a")
+  stack: same pattern as Step 2
+  heap: another slot filled; count=2
+  shared memory: "b" @0x10_7202
+
+Step 4: x := m["a"] — hash(seed,"a") ──→ same i as insert ──→ scan tophash/keys ──→ key equal "a" ──→ x = 1
+  stack: x = 1 @0xE0_0100
+  heap: unchanged
+  shared memory: "a" for compare
+
+Step 5: y := m["missing"] — hash(seed,"missing") ──→ bucket ──→ scan: no equal key ──→ y = 0 (zero value)
+  stack: y = 0 @0xE0_0108
+  heap: unchanged (no insert)
+  shared memory: "missing" literal @0x10_7210
+  ◄── aha: missing key returns value-type zero; no panic
+```
+
 > [!success]- Answer
 > Prints `1 0`.
 >
@@ -454,6 +623,26 @@ func main() {
 	}
 	fmt.Println(len(m))
 }
+```
+
+```
+MEMORY TRACE:
+
+Step 1: keys := [][]int{...} — outer slice header @0xE0_0200; elements point at rows @0xC0_4000, @0xC0_4040
+  stack: keys (ptr,len,cap) @0xE0_0200
+  heap: backing arrays for {1,2} and {3,4}
+  shared memory: (n/a)
+
+Step 2: m := map[[]int]string{} — key type []int (non-comparable)
+  stack: (no valid map value — compile fails)
+  heap: (no hmap constructed)
+  shared memory: (n/a)
+  ◄── compile error: []int not comparable — compiler stops; len(m) never reached
+
+Step 3: (if it compiled) k from range — each k is slice header ──→ hash(seed, ptr,len,cap) ──→ bucket index; deep array equality not used
+  stack: loop var k per iteration
+  heap: would store entries keyed by header bits — wrong model vs “same elements”
+  ◄── aha: language forbids []int keys; slices can’t be map keys
 ```
 
 > [!success]- Answer
