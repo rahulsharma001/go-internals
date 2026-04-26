@@ -26,9 +26,10 @@
 ## How to Use This File
 
 1. **Morning (15-20 min):** Open [[Daily Revision]], scroll top to bottom, do blurt checks
-2. **Study session (1-1.5 hrs):** Come here, find your current week, click the next unchecked topic link
-3. **Evening (15-20 min):** Do the week's "Interview Action" and try the self-test questions out loud
-4. **After each topic:** Tick the checkbox here, then move to the next one tomorrow
+2. **Study session (1-1.5 hrs):** Come here, find your current week. Complete all **Prerequisites** first (short P-notes, ~15-25 min each). Then start the main **Topics**.
+3. **Before each main topic:** Check which P-notes it needs (shown after `--`). If unchecked, do those first.
+4. **Evening (15-20 min):** Do the week's "Interview Action" and try the self-test questions out loud
+5. **After each prerequisite or topic:** Tick the checkbox here, then move to the next one
 
 ---
 
@@ -49,16 +50,25 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Goal:** Fill the remaining foundation gaps so every later topic has solid ground to stand on.
 
+**Prerequisites (complete these first):**
+
+- [ ] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
+- [ ] [[prerequisites/P02 Methods & Receivers]] (~25 min)
+- [ ] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
+- [ ] [[prerequisites/P04 Hash Functions & Hashing Basics]] (~15 min)
+- [ ] [[prerequisites/P05 Interfaces Basics]] (~20 min)
+- [ ] [[prerequisites/P06 Function Call Stack]] (~15 min)
+
 **Topics:**
 
-- [ ] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs)
-- [ ] [[T08 Map Internals]] (~2 hrs)
-- [ ] [[T09 Error Handling Patterns]] (~1.5 hrs)
-- [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs)
-- [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs)
-- [ ] [[T12 Interface Design Principles]] (~1.5 hrs)
+- [ ] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
+- [ ] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
+- [ ] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
+- [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
+- [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05
+- [ ] [[T12 Interface Design Principles]] (~1.5 hrs) -- needs T11
 
-**Estimated total:** ~10 hrs across 14 days (~45 min/day study)
+**Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
 
 **Interview Action:**
 - Update resume with Go-specific bullet points
@@ -79,17 +89,24 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Goal:** This is the most tested area in Go interviews. Master the primitives.
 
+**Prerequisites (complete these first):**
+
+- [ ] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
+- [ ] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
+
+> P03 (Mutex basics) and P06 (Call Stack) were completed in Week 1-2.
+
 **Topics:**
 
-- [ ] [[T13 Goroutine Internals]] (~2 hrs)
-- [ ] [[T14 GMP Scheduler]] (~2 hrs)
+- [ ] [[T13 Goroutine Internals]] (~2 hrs) -- needs P06, P07
+- [ ] [[T14 GMP Scheduler]] (~2 hrs) -- needs P08
 - [ ] [[T15 Channel Internals]] (~2 hrs)
 - [ ] [[T16 Buffered vs Unbuffered Channels]] (~1 hrs)
 - [ ] [[T17 Select Statement Internals]] (~1.5 hrs)
-- [ ] [[T18 Mutex & RWMutex Internals]] (~1.5 hrs)
+- [ ] [[T18 Mutex & RWMutex Internals]] (~1.5 hrs) -- needs P03
 - [ ] [[T19 Context Package Internals]] (~1.5 hrs)
 
-**Estimated total:** ~11.5 hrs across 14 days (~50 min/day study)
+**Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
 
 **Interview Action:**
 - Give 2-3 interviews (these are calibration rounds, not your best shots)
@@ -110,16 +127,22 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Goal:** Move from knowing primitives to applying them. Plus GC knowledge for the "production experience" signal.
 
+**Prerequisites (complete these first):**
+
+- [ ] [[prerequisites/P09 GC Basics & Why It Matters]] (~20 min)
+
+> All other prerequisites were completed in earlier weeks.
+
 **Topics:**
 
 - [ ] [[T20 Worker Pool Pattern]] (~1.5 hrs)
 - [ ] [[T21 Fan-Out Fan-In Pattern]] (~1.5 hrs)
 - [ ] [[T22 Graceful Shutdown]] (~1.5 hrs)
 - [ ] [[T23 Goroutine Leak Prevention]] (~1.5 hrs)
-- [ ] [[T24 Garbage Collector Deep Dive]] (~2 hrs)
+- [ ] [[T24 Garbage Collector Deep Dive]] (~2 hrs) -- needs P09
 - [ ] [[T25 GC Tuning (GOGC & GOMEMLIMIT)]] (~1.5 hrs)
 
-**Estimated total:** ~9.5 hrs across 14 days (~40 min/day study)
+**Estimated total:** ~9.8 hrs across 14 days (~42 min/day study, includes prerequisites)
 
 **Interview Action:**
 - Give 3-4 interviews (you should be noticeably better now)
