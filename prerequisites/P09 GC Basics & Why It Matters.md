@@ -26,23 +26,21 @@ For interviews, the line that lands: **fewer heap allocations usually mean less 
 Expand the janitor story. Your program builds a web of objects on the **heap**. Some objects are **anchored** by **roots**: places the runtime knows your execution might read from without chasing other pointers first. The GC’s job is to discover the **reachable** subgraph from those roots. Anything not proved reachable is **garbage**.
 
 ```
-HEAP (objects are boxes, arrows are pointers)
+MEMORY TRACE:
+Step 1: roots are known starting points (stack slots, globals, registers at safepoints).
+  stack @0x7fff_1000:  local p ──→ heap @0x1c000_0000 (object A)
+  globals @0x55aa_2000: g ──→ heap @0x1c000_0040 (object B)
 
-  roots (conceptual anchors)
-  ┌─────────┐     ┌─────────┐
-  │ stack   │     │ globals │
-  └───┬─────┘     └────┬────┘
-      │                │
-      ▼                ▼
-   ┌──────┐         ┌──────┐
-   │  A   │────────►│  B   │
-   └──┬───┘         └──┬───┘
-      │                │
-      │                ▼
-      │            ┌──────┐      ┌──────┐
-      └───────────►│  C   │      │  X   │  ◄── no path from any root
-                   └──────┘      └──────┘
-                   REACHABLE      GARBAGE (candidate for sweep)
+Step 2: heap objects form a pointer graph from those roots.
+  heap @0x1c000_0000 (A) ──field──→ heap @0x1c000_0040 (B)
+  heap @0x1c000_0040 (B) ──field──→ heap @0x1c000_0080 (C)
+  heap @0x1c000_00c0 (X) ◄── no incoming path from any root in Step 1–2
+
+Step 3: transitive closure from roots visits {A, B, C}; X is never enqueued.
+  reachable:  A ──→ B ──→ C
+  garbage:    X   (candidate for sweep)
+
+(aha: reachability is graph reachability from roots; “orphan” heap objects are not roots by themselves.)
 ```
 
 **Tri-color marking** is a bookkeeping trick while the janitor works. Each heap object is mentally painted:
@@ -54,14 +52,26 @@ BLACK  = reachable and fully scanned      (all outgoing pointers processed)
 ```
 
 ```
-Progress picture (simplified):
+MEMORY TRACE: tri-color during marking (same objects as above; colors are GC bookkeeping)
+Step 1: all heap objects start WHITE (unproven).
+  heap:  A=white  B=white  C=white  X=white
 
-  WHITE        GREY         BLACK
-  ─────        ────         ─────
-   ?            scan me      done
+Step 2: roots seed the frontier — roots’ targets become GREY.
+  stack/globals ──→ enqueue GREY: {A, B}   (order conceptual)
+  heap:  A=grey  B=grey  C=white  X=white
 
-  The GC drains GREY until empty.
-  Anything still WHITE at the end is garbage.
+Step 3: scan GREY — follow outgoing pointers; first-seen targets turn GREY; finished nodes turn BLACK.
+  scan A: no new edges ──→ A=black
+  scan B: discovers C ──→ C=grey, then scan C ──→ C=black; B=black
+  heap:  A=black  B=black  C=black  X=white
+
+Step 4: GREY empty; remaining WHITE is unreachable.
+  heap:  X=white ◄── never reached from roots
+
+(aha: “still white at end” means no path from roots existed during this cycle — safe to recycle X.)
+
+The GC drains GREY until empty.
+Anything still WHITE at the end is garbage.
 ```
 
 > **In plain English:** White means “I have not vouched for this yet.” Grey means “I know you exist; I still need to follow your arrows.” Black means “I know you exist and I already followed your arrows.” If the GC finishes and something is still white, your program cannot reach it anymore, so it can be recycled.
@@ -81,12 +91,20 @@ Typical root families:
 - **Registers** that temporarily hold pointers at safepoints
 
 ```
-MARKING AS BFS/DFS (conceptual)
+MEMORY TRACE: mark phase (BFS/DFS — conceptual queue/stack)
+Step 1: collect roots — every pointer live in goroutine stacks, globals, registers @ safepoint.
+  stack @0x7fff_1000:  &A ──→ heap @0x1c000_0000
+  globals @0x55aa_2000: &G ──→ heap @0x1c000_0100
 
-roots ──► enqueue GREY
-GREY  ──► scan pointers
-          ├─► first time seeing target? paint GREY, enqueue
-          └─► when all outgoing pointers scanned, paint BLACK
+Step 2: GREY frontier — each root’s object is reachable but not fully scanned.
+  frontier (grey):  [ A, G ]   (order depends on traversal)
+
+Step 3: pop GREY node, scan its outgoing pointers — each unseen target becomes GREY.
+  scan A:  A ──ptr──→ B   (B first seen) ──► enqueue B as GREY
+  heap marks:  A=grey→black (when A’s fields done), B=grey, …
+
+Step 4: repeat until frontier empty — all reachable nodes end BLACK.
+  (aha: marking is just graph traversal from roots; anything never visited is not reachable.)
 ```
 
 ### 4.2 Sweep phase: recycle the rest
@@ -94,11 +112,18 @@ GREY  ──► scan pointers
 After marking, **sweep** walks allocator structures and returns unmarked white memory to free lists or similar mechanisms so future allocations can reuse it.
 
 ```
-BEFORE SWEEP                AFTER SWEEP
-─────────────               ─────────────
+MEMORY TRACE: sweep phase (after marking, X stayed WHITE)
+Step 1: BEFORE SWEEP — allocator still holds dead object X’s span metadata.
+  heap reachable (BLACK):  A ──→ B ──→ C
+  heap garbage (WHITE):    X @0x1c000_00c0   ◄── no root path
 
-[A]-[B]-[C]   [X]           [A]-[B]-[C]   ( )
-reachable     garbage                     X reclaimed
+Step 2: sweep walks allocator structures; unmarked objects return to free lists.
+  sweep visits X @0x1c000_00c0 ──→ memory returned to allocator pool
+
+Step 3: AFTER SWEEP — logical program graph unchanged for live data; X’s slot reusable.
+  heap:  A ──→ B ──→ C     (X’s storage eligible for next allocation)
+
+(aha: sweep does not “delete pointers”; it recycles memory backing objects proven unreachable.)
 ```
 
 ### 4.3 Stop-the-world (STW)
@@ -108,6 +133,18 @@ reachable     garbage                     X reclaimed
 Go’s GC is famous for **short STW**, not zero STW. Treat STW as real, measurable, and something you design around.
 
 ```
+MEMORY TRACE: STW vs concurrent marking (logical mutator view)
+Step 1: mutator running — stacks and heap mutate freely between GC cycles.
+  stack: goroutine frames active   heap: objects allocated/mutated
+
+Step 2: short STW — all Ps pause; roots scanned precisely; GC phase transition.
+  (aha: even “concurrent” GC needs brief STW windows for correctness/barrier handoffs.)
+
+Step 3: concurrent mark — mutator resumes with write barrier on; marker scans heap in parallel.
+  stack/heap: mutator updates pointers ◄──► barrier records shade/references
+
+Step 4: short STW — finalize marking/sweep handoff (details in T24); mutator pauses again briefly.
+
 TIMELINE (not to scale)
 
 app:  ████ run ████ run ████ run ████
@@ -122,11 +159,19 @@ Modern Go does **much of marking concurrently** while your goroutines run. That 
 The **write barrier** is instrumentation on pointer writes. It records just enough information so the GC cannot “miss” a newly created edge from black objects to white objects. You can treat it as **a tiny tax on pointer updates** that buys correctness during concurrent marking.
 
 ```
-WITHOUT BARRIER STORY (WRONG OUTCOME)
+MEMORY TRACE: write barrier during concurrent marking
+Step 1: marker has finished scanning B — B is BLACK (all outgoing edges were GREY/BLACK when scanned).
+  heap:  B=black @0x1c000_0040   field next was nil (or old target already non-white)
 
-GC thinks it scanned BLACK node B fully.
-Your code later does: B.next = W   (W was WHITE)
-If GC does not notice, W might be swept while still reachable.
+Step 2: mutator runs concurrently — stores new pointer into BLACK object.
+  stack:  tmp = &W @0x1c000_0200 (W still WHITE — not yet reached by marker)
+  heap:   B.next ──store──→ W   (new edge BLACK ──→ WHITE)
+
+Step 3 WITHOUT barrier (broken invariant): marker believes “all live refs from B” already processed.
+  (aha: W could stay WHITE and be swept while still reachable from B — use-after-free class bug.)
+
+Step 4 WITH write barrier: on B.next = W, runtime shades W (GREY) or logs edge so marker revisits.
+  heap after barrier:  W=grey (or enqueued for scan) ◄── W cannot be swept while reachable
 
 WRITE BARRIER IDEA (CORRECT OUTCOME)
 
@@ -153,6 +198,25 @@ for i := 0; i < N; i++ {
     b := make([]byte, 1024) // heap object each time
     _ = b
 }
+
+Each iteration: new object → more bytes to track → more marking/sweep work eventually
+```
+
+```
+MEMORY TRACE: per-iteration heap allocation (GC pressure)
+Step 1: enter iteration i — stack frame holds loop variable i, local b (slot empty).
+  stack @frame+0x10:  i = 0..N-1
+  stack @frame+0x20:  b (slice header, not yet filled)
+
+Step 2: make([]byte, 1024) — new backing array on heap; slice header on stack points to it.
+  heap @0x1c000_1000+i*0x400:  [1024]byte backing array (new object every i)
+  stack @frame+0x20:  b.ptr ──→ heap backing @0x1c000_1000+…   b.len=1024 b.cap=1024
+
+Step 3: previous iteration’s b is dead if not saved — old backing becomes garbage unless rooted elsewhere.
+  heap: older backings WHITE after last reference drops ◄── more objects to mark/sweep later
+
+Step 4: N iterations ⇒ N distinct heap objects (high allocation rate).
+  (aha: each new backing raises live/total heap bytes and the GC’s future work — pacing fires more often under pressure.)
 
 Each iteration: new object → more bytes to track → more marking/sweep work eventually
 ```
@@ -197,9 +261,25 @@ for _, s := range parts {
 }
 ```
 
-ASCII after the conceptual code:
-
 ```
+MEMORY TRACE: BAD pattern — per-iteration transient string on heap
+Step 1: for each s, strings.ToUpper allocates a new string; data lives on heap.
+  stack:  s (string header) points to parts[i] backing
+  heap:   NEW string @0x1c000_2000 — ToUpper copies bytes here
+
+Step 2: sb.WriteString copies again into Builder’s growing buffer — double traffic.
+  heap:  Builder.buf may reallocate several times ◄── each growth can abandon old backing arrays
+
+Step 3: after iteration, temporary ToUpper string becomes garbage unless retained.
+  heap:  many short-lived WHITE objects between cycles ◄── high GC pressure
+
+MEMORY TRACE: BETTER pattern — bytes flow into Builder without per-part string object
+Step 1: upperASCII + WriteByte — no new heap string per iteration (conceptually stack/registers only).
+  stack:  byte scratch from s[i]   heap:  only Builder’s internal buf grows
+
+Step 2: fewer distinct heap objects survive each iteration.
+  (aha: lowering allocation rate throttles how often the pacer starts / assists GC.)
+
 ALLOCATION RATE
 
 high:  * * * * * * * *   → GC cycles crowd the timeline

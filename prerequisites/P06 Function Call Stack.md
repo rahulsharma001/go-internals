@@ -26,27 +26,70 @@ The **call stack** is a last-in-first-out pile of **stack frames**. Each frame b
 **Three nested calls, then unwind with defers:**
 
 ```
-CALLING DOWN (push frames):
+MEMORY TRACE:
 
-  frame for C  ← top, C is running
-  frame for B
-  frame for A
-  frame for main
-```
+Step 1: main() calls A() — push A's frame
+  call stack:
+    ┌─────────────────────────────┐  ◄── top (current)  SP ≈ 0x7fff_c0a0
+    │ A() frame                    │
+    │   return addr: main +0x18     │ ──→ after A returns
+    │   locals: (A's)              │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    │   return addr: runtime       │
+    └─────────────────────────────┘
 
-```
-INSIDE C, BEFORE RETURN:
+Step 2: A() calls B() — push B
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_c040
+    │ B() frame                    │
+    │   return addr: A +0x24        │ ──→ after B returns
+    ├─────────────────────────────┤
+    │ A() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-  C's locals live only in C's frame
-  defers registered in C wait in a LIFO list attached to C's frame
-```
+Step 3: B() calls C() — C is running
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_bfe0
+    │ C() frame                    │
+    │   return addr: B +0x30        │ ──→ after C returns
+    ├─────────────────────────────┤
+    │ B() frame                    │
+    ├─────────────────────────────┤
+    │ A() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-```
-AFTER C RETURNS (pop C, resume B):
+Step 4: INSIDE C, before return — locals and defer list on C's frame only
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ C() frame                    │
+    │   locals: only visible here  │
+    │   defer stack (LIFO):        │
+    │     [defer₁][defer₂]…        │ ◄── last registered runs first at exit
+    │   return addr: B +0x30        │
+    ├─────────────────────────────┤
+    │ B() frame                    │
+    ├─────────────────────────────┤
+    │ A() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-  frame for B  ← top
-  frame for A
-  frame for main
+Step 5: C returns — C's frame popped; B resumes
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  C's frame gone; C's locals gone
+    │ B() frame                    │
+    ├─────────────────────────────┤
+    │ A() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
+
+  **Aha:** Only the top frame is “live” for your variables; popping C is what makes C’s locals disappear for good.
 ```
 
 **Defer fits LIFO:**
@@ -62,12 +105,31 @@ func outer() {
 Execution order: body prints, then second defer, then first defer. The **last** `defer` you write is the **first** to run at return time.
 
 ```
-defer list for outer's frame (conceptual):
+MEMORY TRACE (defer stack lives inside outer's frame):
 
-  push: defer A  →  [A]
-  push: defer B  →  [A, B]   // B is on the "top"
+Step 1: Enter outer() — frame pushed; defer A registered
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ outer() frame                │
+    │   defer stack (LIFO):        │
+    │     bottom ──→ [ A ] ◄── top │
+    │   return addr: caller        │
+    └─────────────────────────────┘
 
-at return, run top-first  →  B runs, then A
+Step 2: Register defer B — pushed on defer stack (on top of A)
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ outer() frame                │
+    │   defer stack (LIFO):        │
+    │     bottom ──→ [ A ][ B ] ◄── top │  ◄── B runs first at exit
+    │   return addr: caller        │
+    └─────────────────────────────┘
+
+Step 3: Run body — fmt.Println("body")
+
+Step 4: Function exit — unwind defers top-first: B runs, then A, then frame pops
+
+  **Aha:** Defer is a stack attached to the frame, not a queue — LIFO matches “last chore registered, first done at cleanup.”
 ```
 
 > **In plain English:** Defers are not a queue at the deli counter. They are a stack of chores you assigned yourself. The last chore you wrote down is the first one you actually do when you clean up and leave the room.
@@ -98,14 +160,23 @@ func add(a, b int) int {
 ```
 
 ```
-frame for add while running:
+MEMORY TRACE:
 
-  +------------------+
-  | return address   |  → back into caller
-  | a, b  (params)   |
-  | sum   (local)    |
-  | slot for result  |
-  +------------------+
+Step 1: Caller invokes add(a, b) — callee frame allocated at SP ≈ 0x7fff_d100
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ add() frame                  │
+    │   return addr: caller +0x1C   │ ──→ instruction after call
+    │   params: a, b               │
+    │   local: sum = a + b         │
+    │   result slot: int (to caller)│
+    ├─────────────────────────────┤
+    │ caller frame                 │
+    └─────────────────────────────┘
+
+Step 2: add returns sum — value written to result slot; frame popped; caller resumes
+
+  **Aha:** Params, locals, return address, and result space are one bundle — the frame — tied to this one invocation.
 ```
 
 ### 4.2 Push on call, pop on return
@@ -123,25 +194,43 @@ func main() { f() }
 ```
 
 ```
-main calls f:
+MEMORY TRACE:
 
-  [main][f]
+Step 1: main() calls f() — push f's frame
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_e080
+    │ f() frame                    │
+    │   return addr: main +0x14     │ ──→ after f returns
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    │   return addr: runtime       │
+    └─────────────────────────────┘
 
-f calls g:
+Step 2: f() calls g() — push g
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_e020
+    │ g() frame                    │
+    │   return addr: f +0x0C        │ ──→ after g returns
+    ├─────────────────────────────┤
+    │ f() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-  [main][f][g]
+Step 3: g() returns — pop g; resume f
+    ┌─────────────────────────────┐  ◄── top
+    │ f() frame                    │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-g returns:
+Step 4: f() returns — pop f; resume main
+    ┌─────────────────────────────┐  ◄── top
+    │ main() frame                 │
+    └─────────────────────────────┘
 
-  [main][f]
+Step 5: main() returns — stack empty for this goroutine's root return path
 
-f returns:
-
-  [main]
-
-main eventually returns:
-
-  []
+  **Aha:** Nesting depth equals frame count; every return peels exactly one frame — strict LIFO.
 ```
 
 ### 4.3 Locals and parameters live in the frame
@@ -170,12 +259,23 @@ func bump(x int) int {
 While `bump` runs, `x` and `y` are tied to `bump`'s frame. When `bump` returns, that frame conceptually vanishes. Holding a pointer to `y` after return would be a bug; Go's escape analysis and types usually prevent that at compile time.
 
 ```
-frame for bump:
+MEMORY TRACE:
 
-  x
-  y
-  return address
-  result slot
+Step 1: bump(x) running — e.g. caller passed x = 7, frame at SP ≈ 0x7fff_f060
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ bump() frame                 │
+    │   return addr: caller +0x20   │ ──→ after bump returns
+    │   param: x = 7               │
+    │   local: y = x + 1  (= 8)    │
+    │   result slot: int           │
+    ├─────────────────────────────┤
+    │ caller frame                 │
+    └─────────────────────────────┘
+
+Step 2: bump returns y — result slot = 8; frame popped; x and y no longer exist as stack locals
+
+  **Aha:** `y` only “exists” while this frame exists; no hidden second life on the stack after pop.
 ```
 
 ### 4.4 Return path and named return values
@@ -193,12 +293,24 @@ func split(sum int) (x, y int) {
 Conceptually, `x` and `y` are not ephemeral names invented only at the `return` statement. They are real slots the caller will read after this function completes.
 
 ```
-frame for split:
+MEMORY TRACE:
 
-  sum
-  x  (named result, lives whole function)
-  y  (named result, lives whole function)
-  defers can see x, y
+Step 1: split(sum) entered — named results are frame locals from the first instruction (zero-initialized)
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_9040
+    │ split() frame                │
+    │   return addr: caller +0x28   │ ──→ after split returns
+    │   param: sum                 │
+    │   named results (caller slots):│
+    │     x = 0, y = 0  ──→ live whole function │
+    │   defer list: (any defers see x, y)      │
+    ├─────────────────────────────┤
+    │ caller frame                 │
+    └─────────────────────────────┘
+
+Step 2: Body assigns x, y; bare `return` copies final x,y to outgoing result protocol; defer may still mutate x,y before caller reads
+
+  **Aha:** Named results are not “created at return” — they are real variables in the frame, which is why defer can rewrite what the caller gets.
 ```
 
 That is why a `defer` can assign to named results and change what the caller receives.
@@ -217,17 +329,31 @@ func b() { }
 Each `b()` is a **new** frame, even though the function code is shared.
 
 ```
-first b():
+MEMORY TRACE:
 
-  [a][b]
+Step 1: a() calls first b() — new frame for this invocation
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_8100
+    │ b() frame  (call #1)       │
+    │   return addr: a +0x10        │ ──→ between the two b() calls
+    ├─────────────────────────────┤
+    │ a() frame                    │
+    └─────────────────────────────┘
 
-back to a:
+Step 2: first b() returns — that frame popped
+    ┌─────────────────────────────┐  ◄── top
+    │ a() frame                    │
+    └─────────────────────────────┘
 
-  [a]
+Step 3: a() calls second b() — fresh b frame (different locals lifetime from call #1)
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_8100  (new frame, same depth)
+    │ b() frame  (call #2)       │
+    │   return addr: a +0x1C        │ ──→ after second b returns
+    ├─────────────────────────────┤
+    │ a() frame                    │
+    └─────────────────────────────┘
 
-second b():
-
-  [a][b]
+  **Aha:** Same function text, different frame each time — two calls ⇒ two workspaces, not one reused bowl.
 ```
 
 > **In plain English:** Reusing the same recipe does not reuse the same mixing bowl mid-bake. Each call gets its own workspace.
@@ -248,13 +374,25 @@ The address of `v` outlives the call. The compiler **escapes** `v` to the heap s
 **Mental picture after return:**
 
 ```
-before return from g:
+MEMORY TRACE (pattern applies to safeEscape once return runs; v itself may live on heap if escaped):
 
-  ... [g-frame with locals]
+Step 1: While g() [or any callee] is still executing
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ g() frame                    │
+    │   locals: …                  │
+    │   return addr: caller +0x??   │
+    ├─────────────────────────────┤
+    │ … caller chain …             │
+    └─────────────────────────────┘
 
-after return:
+Step 2: After g() returns — g's frame popped
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ caller frame                 │  ◄── g's locals are gone; stack storage reused
+    └─────────────────────────────┘
 
-  g-frame reclaimed; those locals are not yours anymore
+  **Aha:** “After return” means the frame is gone — stack locals are not yours anymore unless the compiler moved them (escape).
 ```
 
 > **In plain English:** When you leave a hotel room, you do not get to keep using the nightstand drawer. The next guest might overwrite it.
@@ -278,13 +416,23 @@ defer
 The deferred call executes as part of the **function exit sequence**, still in the context of `demo`'s frame.
 
 ```
-timeline for demo():
+MEMORY TRACE:
 
-  enter demo → push frame
-  register defer
-  run body
-  run deferred calls (LIFO among defers)
-  finish return protocol → pop frame
+Step 1: Enter demo() — frame at SP ≈ 0x7fff_7000
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ demo() frame                 │
+    │   return addr: caller        │
+    │   defer stack: [ println defer ] │
+    └─────────────────────────────┘
+
+Step 2: Run body — fmt.Println("body") while frame still active
+
+Step 3: Exit sequence — run deferred calls (LIFO), still in demo's frame; then return protocol
+
+Step 4: Pop demo's frame — defers done; locals gone
+
+  **Aha:** Defer runs after the body but before the frame is fully torn down — same frame, later phase.
 ```
 
 > **In plain English:** You finish your homework first. Then you do the chores you pinned to the door on the way in. Then you actually leave the house.
@@ -301,12 +449,24 @@ func trick() (n int) {
 What the caller receives is **2**, not **1**. The bare `return 1` assigns to `n`. The deferred closure runs afterward and increments `n`.
 
 ```
-order:
+MEMORY TRACE:
 
-  n starts at 0
-  return 1  →  n = 1
-  defer runs →  n = 2
-  caller reads n → 2
+Step 1: Enter trick() — named result n in frame (0)
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ trick() frame                │
+    │   return addr: caller +0x40   │
+    │   named result: n = 0        │ ◄── slot caller will read
+    │   defer stack: [ closure: n++ ] │
+    └─────────────────────────────┘
+
+Step 2: `return 1` — assigns 1 into named slot n (n = 1)
+
+Step 3: Defer runs — closure increments n in same frame (n = 2)
+
+Step 4: Return completes — caller receives n = 2; then frame pops
+
+  **Aha:** The “envelope” n lives in the frame; defer mutates it after the return expression assigned into it but before the caller truly gets control.
 ```
 
 > **In plain English:** The envelope is labeled before you walk out. A defer can still scribble on the label before you hand it over.
@@ -327,10 +487,21 @@ func main() {
 ```
 
 ```
-goroutine G1 stack:     goroutine G2 stack:
+MEMORY TRACE:
 
-  ...                     ...
-  [work frame id=1]       [work frame id=2]
+Step 1: G1 runs work(1), G2 runs work(2) — separate stacks, same function text
+  goroutine G1 stack (base ≈ 0xc000000000):     goroutine G2 stack (base ≈ 0xc000001000):
+    ┌─────────────────────────┐                  ┌─────────────────────────┐
+    │ work() frame            │ ◄── top          │ work() frame            │ ◄── top
+    │   param: id = 1         │                  │   param: id = 2         │
+    │   return addr: G1 sched │                  │   return addr: G2 sched │
+    └─────────────────────────┘                  └─────────────────────────┘
+
+Step 2: New goroutine — tiny initial stack (e.g. ~2 KiB); depth stays small until recursion/deep calls
+
+Step 3: Stack growth — runtime allocates larger block (e.g. 0xc000002000..), copies live frames, fixes internal pointers; old stack abandoned
+
+  **Aha:** Stacks don't share memory between goroutines; growth is copy/relocate, not unbounded in place.
 ```
 
 > **In plain English:** Two cooks can follow the same recipe at the same time. Each one still needs a separate cutting board.
@@ -350,9 +521,26 @@ func main() {
 Runtime error: stack overflow.
 
 ```
-conceptual:
+MEMORY TRACE:
 
-  [blow][blow][blow]... until no room left
+Step 1: blow() calls blow() — each call pushes a new frame, no return ever unwinds
+  call stack (conceptual addresses climbing SP):
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_0100
+    │ blow() frame  depth N      │
+    │   return addr: blow +0x08   │ ──→ immediate re-call
+    ├─────────────────────────────┤
+    │ blow() frame  depth N-1    │
+    ├─────────────────────────────┤
+    │ … more blow frames …       │
+    ├─────────────────────────────┤
+    │ blow() frame  depth 1      │
+    ├─────────────────────────────┤
+    │ main() frame               │
+    └─────────────────────────────┘
+
+Step 2: Stack limit — no room for another frame; runtime aborts (stack overflow)
+
+  **Aha:** Recursion without a base case is pure push — frames pile up until the goroutine stack cap is hit.
 ```
 
 > **In plain English:** You keep opening new Russian nesting dolls forever. Eventually the table is not big enough.
@@ -382,12 +570,28 @@ func main() {
 While `fmt.Println` inside `c` runs:
 
 ```
-top → bottom:
+MEMORY TRACE:
 
-  [c's frame]
-  [b's frame]
-  [a's frame]
-  [main's frame]
+Step 1: Inside c() while fmt.Println runs — deepest callee on top
+  call stack (top ◄── current SP ≈ 0x7fff_a200):
+    ┌─────────────────────────────┐  ◄── top
+    │ fmt.Println frame (callee)   │  (or runtime/print path)
+    │   return addr: c +0x??        │ ──→ back into c
+    ├─────────────────────────────┤
+    │ c() frame                    │
+    │   return addr: b +0x??        │ ──→ after c returns
+    ├─────────────────────────────┤
+    │ b() frame                    │
+    │   return addr: a +0x??        │
+    ├─────────────────────────────┤
+    │ a() frame                    │
+    │   return addr: main +0x??     │
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    │   locals: (after "in main")  │
+    └─────────────────────────────┘
+
+  **Aha:** The function printing "in c" is not floating alone — the whole chain of frames still exists underneath.
 ```
 
 ### Defer order explained via stack
@@ -406,11 +610,38 @@ func main() {
 ```
 
 ```
-defer stack after three defers:
+MEMORY TRACE:
 
-  bottom: third registered
-          second
-  top:    first registered   ← runs first at exit
+Step 1: Enter main — first defer registered (third runs first among defers)
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_b000
+    │ main() frame                 │
+    │   defer stack: [ D3 ]        │  ◄── D3 = third registered
+    │   return addr: runtime       │
+    └─────────────────────────────┘
+
+Step 2: Second defer — D2 pushed on top of D3
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ main() frame                 │
+    │   defer stack: [ D3 ][ D2 ]  │  ◄── D2 on top
+    │   return addr: runtime       │
+    └─────────────────────────────┘
+
+Step 3: Third defer — D1 on top (first registered string runs last among defers)
+  call stack:
+    ┌─────────────────────────────┐  ◄── top
+    │ main() frame                 │
+    │   defer stack:               │
+    │     bottom ──→ [ D3 ][ D2 ][ D1 ] ◄── top
+    │   return addr: runtime       │
+    └─────────────────────────────┘
+
+Step 4: Run body — fmt.Println("main body")
+
+Step 5: Exit — unwind LIFO: run D1, then D2, then D3; then pop main's frame
+
+  **Aha:** Registration order builds bottom→top; exit order peels top→bottom — last registered defer runs first.
 ```
 
 ### Named return modified by defer
@@ -434,12 +665,26 @@ func main() {
 ```
 
 ```
-sum timeline:
+MEMORY TRACE:
 
-  after assignment: 5
-  at return assign: still 5 into named sum
-  defer: sum = 5 + 10 → 15
-  caller sees: 15
+Step 1: Enter total() — named sum in frame; defer registered
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_c100
+    │ total() frame                │
+    │   return addr: main +0x??     │
+    │   named result: sum = 0      │ ◄── caller-visible slot
+    │   defer stack: [ closure: sum += 10 ] │
+    └─────────────────────────────┘
+
+Step 2: sum = 5 — named slot updated in frame
+
+Step 3: return sum — assigns 5 into named sum (still 5); defer runs next
+
+Step 4: Defer — sum += 10 → sum = 15 in same frame
+
+Step 5: Return completes — caller reads 15; frame pops
+
+  **Aha:** Named `sum` never left the frame; defer ran after the return expression but still saw the same slot.
 ```
 
 ### Stack overflow
@@ -457,9 +702,34 @@ func main() {
 ```
 
 ```
-each call adds a frame without ever returning:
+MEMORY TRACE:
 
-  [recurse][recurse][recurse]...
+Step 1: main calls recurse(0) — first frame
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_d200
+    │ recurse(n) frame             │
+    │   param: n = 0               │
+    │   return addr: main +0x??     │ ──→ never reached
+    ├─────────────────────────────┤
+    │ main() frame                 │
+    └─────────────────────────────┘
+
+Step 2: recurse returns recurse(n+1) — each call pushes another frame before any return unwinds
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  param n = K
+    │ recurse frame               │
+    │   return addr: recurse +0x?  │ ──→ parent recurse (still waiting)
+    ├─────────────────────────────┤
+    │ … K more recurse frames …    │
+    ├─────────────────────────────┤
+    │ recurse(0)                  │
+    ├─────────────────────────────┤
+    │ main()                      │
+    └─────────────────────────────┘
+
+Step 3: Stack overflow — unbounded growth, no pop; runtime stops the goroutine
+
+  **Aha:** Tail-call shape in source does not magically recycle the frame here — each call is a new push until the cap.
 ```
 
 ---
@@ -560,8 +830,21 @@ i++
 The `fmt.Println` closure captures the value of `i` at defer registration time for this form. Interviewers love variants with `defer func() { fmt.Println(i) }()` where the closure sees the **variable** later.
 
 ```
-register defer: evaluate arguments now
-later at return: run the call
+MEMORY TRACE:
+
+Step 1: i = 0 — defer fmt.Println(i) executes: arguments evaluated **now** (i is 0); defer record pushed
+  call stack:
+    ┌─────────────────────────────┐  ◄── top  SP ≈ 0x7fff_e300
+    │ enclosing frame              │
+    │   local: i = 0               │
+    │   defer stack: [ Println(0) ]  │  ◄── value 0 captured in defer record
+    └─────────────────────────────┘
+
+Step 2: i++ — local i becomes 1; defer record still holds **0**
+
+Step 3: Function exit — deferred Println runs with saved arg 0 → prints 0; then frame pops
+
+  **Aha:** For `defer f(args)`, args are fixed at registration; only `defer func(){ ... i ... }` sees the variable later.
 ```
 
 **Named return confusion.** Mixing bare `return` and expressions, or multiple returns with defers that assign to named results, produces puzzles. Draw the **single** named slots in the frame.

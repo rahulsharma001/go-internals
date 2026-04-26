@@ -47,11 +47,23 @@ func main() {
 ```
 
 ```
-  time →
-  G1:  read counter (= 5)
-  G2:           read counter (= 5)
-  G1:  write 6
-  G2:                    write 6   ← both thought "next is 6"; one update lost
+MEMORY TRACE:
+
+Step 1: var counter int
+  shared memory:
+    counter ──→ [ 0 ]  at addr 0xC000
+
+Step 2: goroutine G1 reads counter, goroutine G2 reads counter (both see 5 before either writes)
+  goroutine G1:  reads 0xC000 → gets 5
+  goroutine G2:  reads 0xC000 → gets 5   ◄── BOTH read 5; ++ is read/add/write, not one atomic step
+
+Step 3: both compute 5 + 1 = 6 and write back
+  shared memory:
+    counter ──→ [ 6 ]  ◄── should be 7; LOST UPDATE (one bump vanished)
+
+Step 4: pattern repeats under scheduling → fmt.Println(counter) often < 1000
+  shared memory:
+    counter ──→ [ nondeterministic ]  ◄── final value = last write wins, not true sum
 ```
 
 > **In plain English:** Two people both read "5" on a whiteboard, both write "6", and nobody writes "7". You expected a thousand bumps; you got lost updates.
@@ -72,13 +84,27 @@ func inc() {
 ```
 
 ```
-  G1: Lock acquired
-  G1: read/write counter
-  G1: Unlock
-            G2: Lock acquired
-            G2: read/write counter
-            G2: Unlock
-  ... strict turns at the whiteboard ...
+MEMORY TRACE:
+
+Step 1: var counter int, var mu sync.Mutex
+  shared memory:
+    counter ──→ [ 0 ]  at addr 0xC000
+    mu (lock word / state) ──→ [ unlocked ]  at addr 0xC010
+
+Step 2: G1 calls mu.Lock()
+  shared memory:
+    mu ──→ [ locked, owner G1 ]
+  goroutine G2:  mu.Lock() ──→ blocks in scheduler wait queue   ◄── mutual exclusion
+
+Step 3: G1 runs counter++ then mu.Unlock()
+  shared memory:
+    counter ──→ [ 1 ]
+    mu ──→ [ unlocked ]
+
+Step 4: G2 wakes, Lock, increments, Unlock — strict turns for every inc()
+  ...
+  final after 1000 completions:
+    counter ──→ [ 1000 ]  at addr 0xC000   ◄── matches number of serialized critical sections
 ```
 
 > **In plain English:** Only one goroutine may touch the counter at a time. The rest wait at the door. The final value matches the number of completed increments.
@@ -99,16 +125,27 @@ mu.Unlock()
 ```
 
 ```
-     [ mu: free ]
-          |
-   G1 Lock()
-          v
-     [ mu: held by G1 ]
-   G2 Lock() ──blocks──> (waiting)
-          |
-   G1 Unlock()
-          v
-     [ mu: free ]  ──> G2 wakes, Lock(), proceeds
+MEMORY TRACE:
+
+Step 1: before Lock — balance update is the critical section
+  shared memory:
+    mu ──→ [ unlocked ]  at addr 0xC010
+    balance ──→ [ ... ]  at addr 0xC100
+
+Step 2: G1 executes mu.Lock()
+  shared memory:
+    mu ──→ [ locked, owner G1 ]
+  stack (G1):  about to run balance += amount   ◄── only G1 inside critical section
+
+Step 3: G2 executes mu.Lock() while G1 holds
+  shared memory:
+    mu ──→ [ locked, owner G1 ]
+  goroutine G2:  parked ◄── cannot observe or mutate balance until Unlock
+
+Step 4: G1 executes mu.Unlock()
+  shared memory:
+    mu ──→ [ unlocked ]
+  goroutine G2:  Lock() succeeds, enters critical section   ◄── handoff; total order on balance
 ```
 
 > **In plain English:** `Lock()` is "my turn or I wait." `Unlock()` is "next." Anything that must not run two at a time goes between them.
@@ -129,11 +166,22 @@ func transfer(from, to *Account, amount int) {
 ```
 
 ```
-  enter function
-  Lock()
-  defer registered: Unlock at return
-  ... work ...
-  return triggers deferred Unlock
+MEMORY TRACE:
+
+Step 1: enter transfer, mu.Lock()
+  stack (transfer):
+    defer stack ──→ [ mu.Unlock scheduled ]
+  shared memory:
+    mu ──→ [ locked ]  at addr 0xC010
+
+Step 2: body runs (from.balance, to.balance, early return paths)
+  stack:
+    defer Unlock still pending   ◄── not run until function actually returns
+
+Step 3: return (including if from.balance < amount)
+  stack:  deferred mu.Unlock() runs
+  shared memory:
+    mu ──→ [ unlocked ]  ◄── mutex released on every exit path; no forgotten Unlock
 ```
 
 > **In plain English:** Every return path, including errors and panics after `Lock()`, still runs deferred calls. You avoid forgetting `Unlock()` on an early `return`.
@@ -163,15 +211,30 @@ func Write(key string, v int) {
 ```
 
 ```
-  Readers (RLock):
-    R R R R   ← all concurrent
+MEMORY TRACE:
 
-  Writer (Lock):
-    W  blocks everyone until done
+Step 1: var data map[string]int, var rw sync.RWMutex
+  heap:
+    map header / buckets for data ──→ [ ... ]  at addr 0xD000
+  shared memory:
+    rw (reader/writer state) ──→ [ no writer, readers: 0 ]  at addr 0xC020
 
-  Timeline:
-    R R R | W | R R
-          ^ exclusive slot
+Step 2: G1..G4 call Read → rw.RLock()
+  shared memory:
+    rw ──→ [ no writer, readers: 4 ]   ◄── many readers overlap; all read same map snapshot rules
+
+Step 3: writer calls Write → rw.Lock() while readers still hold RLock
+  goroutine GW:  blocks until last RUnlock completes   ◄── writer exclusive; no concurrent map mutation
+
+Step 4: GW mutates data[key], then Unlock()
+  heap:
+    0xD000 ──→ updated entry for key
+  shared memory:
+    rw ──→ [ unlocked for write path ]
+
+Step 5: new Read callers RLock again while no writer holds Lock
+  shared memory:
+    rw ──→ [ readers: N ]   ◄── read crowd resumes; writer slot was exclusive
 ```
 
 > **In plain English:** Either a crowd may **look** together, or **one** person may **change** the room. Not both at once.
@@ -195,9 +258,20 @@ func bad() {
 ```
 
 ```
-  bad():
-    Lock ──> held
-    return ──> mutex still held forever for this path
+MEMORY TRACE:
+
+Step 1: mu.Lock()
+  stack (bad):
+    about to check err
+  shared memory:
+    mu ──→ [ locked ]  at addr 0xC010
+
+Step 2: if err != nil { return } — early exit without Unlock on this path
+  shared memory:
+    mu ──→ [ locked ]   ◄── still held; lock leaked for this goroutine's logical scope
+
+Step 3: later: same mu used elsewhere, or second call to bad()
+  goroutine:  mu.Lock() ──→ blocks forever (or program stuck)   ◄── classic forgotten Unlock / deadlock
 ```
 
 ```go
@@ -228,11 +302,27 @@ func Broken(c SafeCounter) { // receives a COPY
 ```
 
 ```
-  caller's SafeCounter     copy inside Broken()
-  ┌──────────────┐         ┌──────────────┐
-  │ mu  (real)   │         │ mu  (copy)   │  ← different locks!
-  │ value: 0     │         │ value: 1     │
-  └──────────────┘         └──────────────┘
+MEMORY TRACE:
+
+Step 1: caller holds one SafeCounter value (by-value variable in caller frame)
+  stack (caller):
+    SafeCounter at addr 0xE000 ──→  mu at 0xE008, value at 0xE028
+  shared memory:
+    mu @0xE008 ──→ [ unlocked ]
+    value @0xE028 ──→ [ 0 ]
+
+Step 2: Broken(c SafeCounter) receives a struct copy — new stack slot
+  stack (Broken):
+    copy SafeCounter at addr 0xE100 ──→  mu_copy at 0xE108, value_copy at 0xE128
+
+Step 3: c.mu.Lock() locks only the copy's mutex
+  shared memory:
+    mu_copy @0xE108 ──→ [ locked ]
+    mu @0xE008 ──→ [ unlocked ]   ◄── TWO independent lock words; "real" mutex never held
+
+Step 4: c.value++ updates copy; defer unlocks mu_copy only
+  value_copy @0xE128 ──→ [ 1 ]
+  value @0xE028 ──→ [ 0 ]   ◄── caller unchanged; false sense of safety
 ```
 
 > **In plain English:** Copying duplicates the lock. Two locks protect two different imaginary bathrooms. The real counter is unprotected.
@@ -253,7 +343,20 @@ func (c *SafeCounter) Inc() {
 ```
 
 ```
-  *SafeCounter ──> one struct in memory, one mu, one truth
+MEMORY TRACE:
+
+Step 1: one object (e.g. &SafeCounter{}) allocated — single layout
+  heap:
+    *SafeCounter at 0xF000 ──→  mu at 0xF008, value at 0xF028
+
+Step 2: (c *SafeCounter) Inc() — receiver is pointer, not a copy
+  stack (Inc):
+    c ──→ 0xF000   ◄── all calls share this address; one mu, one value field
+
+Step 3: c.mu.Lock(); c.value++; defer Unlock
+  shared memory:
+    mu @0xF008 ──→ [ locked ] then [ unlocked ]
+    value @0xF028 ──→ increments visible to every holder of *SafeCounter   ◄── one truth
 ```
 
 > **In plain English:** Methods that mutate shared state should take a **pointer receiver** so there is only one `sync.Mutex` in the program for that object.
@@ -266,10 +369,24 @@ func (c *SafeCounter) Inc() {
 ```
 
 ```
-  R R R R   OK
-  R W       W waits for R's to finish
-  W R       R waits for W
-  W W       second W waits
+MEMORY TRACE:
+
+Step 1: R R R R — only RLock holders
+  shared memory:
+    rw ──→ [ readers: 4, writer: none ]   ◄── OK concurrent reads
+
+Step 2: R then W — writer tries Lock while readers active
+  shared memory:
+    rw ──→ [ readers: >0 ]
+  goroutine W:  blocked until reader count drops to 0   ◄── W waits for R's to finish
+
+Step 3: W then R — new reader tries RLock during write Lock
+  shared memory:
+    rw ──→ [ writer held ]
+  goroutine R_new:  RLock blocks ◄── R waits for W
+
+Step 4: W W — second writer tries Lock while first still holds
+  goroutine W2:  blocked ◄── second W waits behind exclusive writer
 ```
 
 > **In plain English:** Readers may pack the balcony. When a writer enters, the balcony clears.
@@ -286,8 +403,22 @@ func oops(mu *sync.Mutex) {
 ```
 
 ```
-  G1: Lock (count 1)
-  G1: Lock (wants 2nd lock on same mutex) ──> waits on itself
+MEMORY TRACE:
+
+Step 1: first mu.Lock() in oops
+  shared memory:
+    mu ──→ [ locked by G1 ]  at addr 0xC010
+  stack (G1):  inside oops, first critical section entered
+
+Step 2: second mu.Lock() same goroutine, same mutex (sync.Mutex is not reentrant)
+  shared memory:
+    mu ──→ [ still locked by G1 ]
+  goroutine G1:  second Lock() ──→ blocks waiting for Unlock   ◄── but G1 is the one who must Unlock
+
+Step 3: no progress — first Unlock never reached
+  shared memory:
+    mu ──→ [ locked by G1 ]
+  goroutine G1:  self-wait   ◄── permanent deadlock; program hangs
 ```
 
 > **In plain English:** You hold the only key and you are waiting for yourself to hand it over. The program hangs.
@@ -333,11 +464,22 @@ func main() {
 ```
 
 ```
-  sample stdout: 7234  ← varies; not 10000
+MEMORY TRACE:
 
-  snapshot A: two goroutines both load n=100
-  snapshot B: both store n=101
-  snapshot C: expected +2, got +1 — repeat thousands of times
+Step 1: var n int in main
+  shared memory:
+    n ──→ [ 0 ]  at addr 0xC000
+
+Step 2: two workers interleave — both read same n before either writes (e.g. both see 100)
+  goroutine A:  reads 0xC000 → gets 100
+  goroutine B:  reads 0xC000 → gets 100   ◄── BOTH read 100; n++ races
+
+Step 3: both compute 100 + 1 = 101 and store
+  shared memory:
+    n ──→ [ 101 ]  ◄── should be 102; LOST UPDATE (× many interleavings)
+
+Step 4: wg.Wait(); fmt.Println(n)
+  sample stdout: 7234 (varies; not 10000)   ◄── non-deterministic final sum
 ```
 
 ### 6.2 Same logic with `sync.Mutex` — correct output
@@ -374,8 +516,26 @@ func main() {
 ```
 
 ```
-  each n++ runs under the lock — serialized updates
-  final n equals number of completed critical sections
+MEMORY TRACE:
+
+Step 1: var n int, var mu sync.Mutex
+  shared memory:
+    n ──→ [ 0 ]  at addr 0xC000
+    mu ──→ [ unlocked ]  at addr 0xC010
+
+Step 2: worker goroutine calls mu.Lock() — only one holds lock at a time
+  shared memory:
+    mu ──→ [ locked, owner Gk ]
+  other workers:  Lock() ──→ block until Unlock   ◄── n++ never overlaps
+
+Step 3: critical section n++; mu.Unlock()
+  shared memory:
+    n ──→ strictly +1 per completed Lock/Unlock pair
+    mu ──→ [ unlocked ] then next worker proceeds
+
+Step 4: after 10000 serialized increments, fmt.Println(n)
+  shared memory:
+    n ──→ [ 10000 ]  at addr 0xC000   ◄── matches 10000 completed critical sections (stdout: 10000)
 ```
 
 ### 6.3 `sync.RWMutex` for concurrent reads
@@ -404,9 +564,29 @@ func (p *PhoneBook) Set(name, number string) {
 ```
 
 ```
-  Get Get Get Get  ← overlapping RLocks
-       Set         ← exclusive; waits for readers
-  Get              ← waits for writer
+MEMORY TRACE:
+
+Step 1: *PhoneBook — p.mu and p.data on one object (e.g. heap 0xB000)
+  heap:
+    PhoneBook at 0xB000 ──→  mu at 0xB008, map data at 0xB020
+  shared memory:
+    p.mu ──→ [ readers: 0, no writer ]  at addr 0xB008
+
+Step 2: four goroutines Get → RLock
+  shared memory:
+    p.mu ──→ [ readers: 4 ]   ◄── overlapping reads; return p.data[name] under shared lock
+
+Step 3: Set calls Lock while readers still active
+  goroutine writer:  blocks until all RUnlock   ◄── exclusive mutation of map
+
+Step 4: writer updates p.data, Unlock()
+  heap:
+    map at 0xB020 ──→ new key/value visible
+  shared memory:
+    p.mu ──→ [ writer released ]
+
+Step 5: new Get after write — RLock may proceed
+  goroutine reader:  if writer holds Lock, RLock blocks ◄── readers wait for exclusive writer
 ```
 
 ### 6.4 Copy trap in action
@@ -438,8 +618,27 @@ func main() {
 ```
 
 ```
-  main's bag.coins: 0 ───────────────────> still 0
-  addByValue's copy.coins: 1 ────────────> discarded
+MEMORY TRACE:
+
+Step 1: main — var bag Bag on stack
+  stack (main):
+    bag at addr 0xA000 ──→  mu at 0xA008, coins at 0xA018
+  shared memory:
+    coins @0xA018 ──→ [ 0 ]
+
+Step 2: addByValue(bag) passes Bag by value — copy in callee frame
+  stack (addByValue):
+    b at addr 0xA100 ──→  mu_copy at 0xA108, coins_copy at 0xA118
+
+Step 3: b.mu.Lock(); b.coins++ on the copy only
+  shared memory:
+    mu_copy ──→ [ locked ] @0xA108
+    coins_copy @0xA118 ──→ [ 1 ]
+    coins @0xA018 ──→ [ 0 ]   ◄── main's bag never incremented
+
+Step 4: function returns — copy discarded; Unlock released copy's mutex only
+  stack (main):
+    bag.coins still [ 0 ]   ◄── fmt.Println(bag.coins) → 0
 ```
 
 ---
@@ -473,6 +672,26 @@ func main() {
 }
 ```
 
+```
+MEMORY TRACE:
+
+Step 1: var x int
+  shared memory:
+    x ──→ [ 0 ]  at addr 0xC000
+
+Step 2: 50 goroutines each run 1000× x++; two interleave on one load/store pair
+  goroutine G1:  reads 0xC000 → gets k
+  goroutine G2:  reads 0xC000 → gets k   ◄── BOTH read k; lost updates across inner loop
+
+Step 3: both write k+1
+  shared memory:
+    x ──→ [ k+1 ]  ◄── expected +2 from this pair, got +1; repeats often
+
+Step 4: after wg.Wait(), fmt.Println(x)
+  shared memory:
+    x ──→ [ value < 50000, nondeterministic ]   ◄── no mutex; not 50000
+```
+
 > [!success]- Answer
 > The program prints a **number less than** `50000` and **not deterministic**. Many increments race on `x`. There is no mutex. Exact value varies run to run.
 
@@ -489,6 +708,29 @@ func (s Stats) RecordHit() {
     defer s.mu.Unlock()
     s.hits++
 }
+```
+
+```
+MEMORY TRACE:
+
+Step 1: first RecordHit — value receiver copies Stats into callee frame
+  stack (caller #1):
+    Stats at 0xE000 ──→  mu at 0xE008, hits at 0xE018
+  stack (RecordHit callee #1):
+    copy Stats at 0xE100 ──→  mu' at 0xE108, hits' at 0xE118
+
+Step 2: s.mu.Lock() on copy #1; s.hits++
+  mu' @0xE108 ──→ [ locked ]
+  hits' @0xE118 ──→ [ 1 ]
+  hits @0xE018 ──→ [ 0 ]   ◄── original Stats in caller untouched
+
+Step 3: second RecordHit — brand-new copy, different mu address 0xE208
+  shared memory:
+    mu'' @0xE208 ──→ [ locked ] independently
+  caller's real mu @0xE008 ──→ [ unlocked ]   ◄── each call locks a different mutex; original hits never updated on the shared Stats value
+
+Step 4: logical invariant broken — "protected" field is not serialized under one lock
+  hits @0xE018 ──→ [ still 0 or racy ]   ◄── interview trap: value receiver + Mutex
 ```
 
 > [!success]- Answer

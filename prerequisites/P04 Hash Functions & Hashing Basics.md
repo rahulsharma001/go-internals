@@ -24,29 +24,58 @@ A **hash function** turns a key of arbitrary size into a fixed-size integer in a
 Expand the catalog picture. The **key** is the book title. The **hash** is the computed drawer hint. The **bucket** is the physical drawer. The **bucket index** picks which drawer row you open first. If two keys hint at the same drawer, you still find the right card because the drawer holds **multiple entries** organized so you can scan the small pile.
 
 ```
-KEY "go" -----> HASH FUNCTION -----> huge integer H
-                                         |
-                                         | keep low bits / mask
-                                         v
-                               BUCKET INDEX i  (which row of drawers)
-                                         |
-                                         v
-                 +-----------------------+-----------------------+
-                 |  BUCKET i             |  overflow chain     |
-                 |  [k0,v0][k1,v1]...    |----> next bucket    |
-                 +-----------------------+-----------------------+
+MEMORY TRACE:
+
+Step 1: key literal "go" lives in the program (read-only data @0x10_4000)
+  stack: (no local vars yet for this story)
+  conceptual: KEY @0x10_4000 ──→ bytes: [0x67, 0x6F]  ("g","o")
+
+Step 2: HASH FUNCTION(&key) ──→ huge integer H (illustrative @cpu: mix registers)
+  H = 0x9F2E_4B1C_77A3_....   (fixed-width word; many bits; same key ⇒ same H for same seed)
+
+Step 3: derive BUCKET INDEX i — toy power-of-two: bucket = H % numBuckets  ==  H & (numBuckets-1)
+  mask example: numBuckets=8 ──→ i = H % 8 = H & 0x7  ──→  i = 3
+  ◄── "which row of drawers" is just an integer in [0, buckets-1]
+
+Step 4: follow pointer from map root to bucket array
+  heap:
+    hmap ──→ [ count | B | hash0 | buckets ──→ [bucket0][bucket1]...[bucket_i]... ]
+  bucket_i @0xC0_0000 ──→ first bucket in chain for index i
+
+Step 5: inside bucket i (8 cells + overflow pointer — conceptual layout)
+  bucket @0xC0_0000:
+    tophash: [0x..|0x..|_|_|_|_|_|_]   ◄── quick filter bytes from hash
+    keys:    [k0 | k1 | _ | _ | _ | _ | _ | _]
+    values:  [v0 | v1 | _ | _ | _ | _ | _ | _]
+    overflow ──→ nil  (or ──→ next bucket @0xC0_0080 if chain continues)
 ```
 
 Collision in one picture:
 
 ```
-KEY "go"  --hash-->  ...10110110...  --index-->  bucket 6
-KEY "no"  --hash-->  ...00110110...  --index-->  bucket 6   (same bucket: collision)
+MEMORY TRACE:
 
-Inside bucket 6 (conceptual):
-  slot0: "go" -> 1
-  slot1: "no" -> 2
-  slot2: empty
+Step 1: KEY "go" — shared memory @0x10_4100 ──→ hash(seed, "go") ──→ H_go = 0x...B10110110
+  stack: (ephemeral) H_go in register / temp
+  bucket index: i_go = H_go % N = 6   ◄── illustrative N = 16 buckets
+
+Step 2: KEY "no" — shared memory @0x10_4200 ──→ hash(seed, "no") ──→ H_no = 0x...C00110110
+  i_no = H_no % N = 6   ◄── AHA: distinct keys, same bucket ⇒ COLLISION (chained / same drawer)
+
+Step 3: BEFORE insert "no" — only "go" in bucket chain head @ index 6
+  heap: buckets[6] @0xC0_0600
+    tophash: [0xB1|_|_|_|_|_|_|_]
+    keys:    ["go"|_|_|_|_|_|_|_]
+    values:  [1   |_|_|_|_|_|_|_]
+    overflow* ──→ nil
+
+Step 4: AFTER insert "no" — same bucket index; in-bucket scan finds empty cell slot 1
+  heap: buckets[6] @0xC0_0600
+    tophash: [0xB1|0xC0|_|_|_|_|_|_]
+    keys:    ["go"|"no"|_|_|_|_|_|_]
+    values:  [1   |2   |_|_|_|_|_|_]
+    overflow* ──→ nil
+  ◄── aha: both keys share i=6; lookup hashes to bucket 6 then compares keys in keys[]/values[]
 ```
 
 > **In plain English:** Collisions are not disasters. They mean “same drawer.” The map’s job is to make each drawer **small** and **searchable** so checking the drawer stays cheap.
@@ -78,9 +107,23 @@ A tiny change in the key should change many bits of the hash output. If neighbor
 ASCII intuition for avalanche:
 
 ```
-key A:  ...0000001000...  -->  hash: ...1110100110...
-key B:  ...0000001001...  -->  hash: ...0011011001...
-              ^one bit flip          many bits flip
+MEMORY TRACE:
+
+Step 1: key A — comparable scalar / bit pattern in memory
+  shared memory: key A word @0x20_0000 ──→ ...0000001000...
+  stack: (none for this static story)
+
+Step 2: key A ──→ hash(seed, A) ──→ H_A
+  heap: (none; result lives in register / stack temp)
+  cpu: H_A @conceptual ──→ ...1110100110...
+
+Step 3: key B — flip one low bit vs A
+  shared memory: key B @0x20_0004 ──→ ...0000001001...
+  ◄── AHA: single-bit input tweak
+
+Step 4: key B ──→ hash(seed, B) ──→ H_B  (many bits differ from H_A)
+  cpu: H_B ──→ ...0011011001...
+  ◄── avalanche: H_A vs H_B not "locally similar" ⇒ bucket = H % numBuckets scatters under small key edits
 ```
 
 ### 4.2 Collisions: inevitable, designed for
@@ -94,7 +137,25 @@ A hash maps a **large** key space into a **smaller** index space. **Pigeonhole p
 Each bucket holds **multiple entries**. If a bucket fills, you add **overflow storage** linked from the first bucket. Think “drawer got full, attach a **satellite drawer**.”
 
 ```
-bucket 3:  [a][b][c] ---> overflow ---> [d][e]
+MEMORY TRACE:
+
+Step 1: KEY "a" @0x10_5000 ──→ hash(seed,"a") ──→ H_a ──→ bucket = H_a % N ──→ i = 3
+Step 2: insert "b","c" in same bucket i = 3 (toy: first bucket not yet full)
+  heap: buckets[3] head @0xC0_0300
+    tophash: [t_a|t_b|t_c|_|_|_|_|_]
+    keys:    ["a"|"b"|"c"|_|_|_|_|_]
+    values:  [va|vb|vc|_|_|_|_|_|_]
+    overflow* ──→ nil
+
+Step 3: insert "d" — all 8 cells in head bucket occupied ◄── chain extends
+  heap: head.overflow @0xC0_0300 ──→ overflow bucket @0xC0_0380
+    overflow tophash: [t_d|t_e|_|_|_|_|_|_]
+    overflow keys:    ["d"|"e"|_|_|_|_|_|_]
+    overflow values:  [vd|ve|_|_|_|_|_|_]
+    overflow.overflow* ──→ nil
+
+Step 4: lookup "e" — hash(seed,"e") ──→ i = 3 ──→ scan head tophash/keys @0xC0_0300 ──→ follow overflow* ──→ find "e" @0xC0_0380
+  ◄── aha: same bucket index, multiple buckets linked; collision resolution by chaining
 ```
 
 **Open addressing**
@@ -102,9 +163,21 @@ bucket 3:  [a][b][c] ---> overflow ---> [d][e]
 Every entry lives **in the table array itself**. On collision, you **probe** for another empty cell using a rule such as linear probing, quadratic probing, or double hashing.
 
 ```
-try index 3: occupied
-try index 4: occupied
-try index 5: empty  <-- insert here
+MEMORY TRACE:
+
+Step 1: hash(seed, KEY) ──→ H ──→ j0 = H % numBuckets = 3
+  heap: open-address table slots [0..N-1] @0xC0_4000 (each slot: key+value+meta)
+
+Step 2: probe j0 = 3 — slot OCCUPIED (different key)
+  stack: probe trail [3]
+  ◄── collision at home index
+
+Step 3: linear probe ──→ j1 = 4 — OCCUPIED
+  heap: slots[4] @0xC0_4010 full
+
+Step 4: probe ──→ j2 = 5 — EMPTY @0xC0_4018
+  heap: INSERT key/value here
+  ◄── aha: stored index ≠ j0; lookup must repeat same probe sequence until match or empty
 ```
 
 **What Go does**
@@ -114,7 +187,17 @@ Go’s map is **not** “one slot per key with probing across the whole table”
 Interview-safe one-liner:
 
 ```
-hash --> pick bucket --> small fixed arena (bucket) --> overflow chain if needed
+MEMORY TRACE:
+
+Step 1: KEY bytes @0x10_6000 ──→ runtime hash(seed, key) ──→ H @cpu (wide integer)
+Step 2: H ──→ bucket index i via mask/shift for current 2^B size (Go: not “only H % N” in source, but same idea: reduce H to an index)
+  heap: hmap @0xC0_7000 ──→ buckets* ──→ array of bucket structs
+
+Step 3: bucket i @0xC0_7i00 — internal arena: tophash[8] + keys[8] + values[8]
+  ◄── small fixed cell count per bucket (8 in current implementations)
+
+Step 4: in-bucket placement / scan (deterministic local order); on full bucket ──→ overflow* ──→ next bucket @0xC0_7i80
+  ◄── aha: bucket-level chaining + bounded in-bucket search = Go’s mental model for interviews
 ```
 
 ### 4.4 Load factor: fullness vs growth
@@ -122,7 +205,13 @@ hash --> pick bucket --> small fixed arena (bucket) --> overflow chain if needed
 **Load factor** means “how crowded the table is.” One common textbook definition:
 
 ```
-load factor = number_of_entries / number_of_buckets
+MEMORY TRACE:
+
+Step 1: read live entry count and bucket count from map bookkeeping
+  stack: load_factor ≈ number_of_entries / number_of_buckets  ◄── textbook sketch
+
+Step 2: high load factor ──→ more keys per bucket on average ──→ longer in-bucket fill + overflow chains
+  heap: conceptual pressure on buckets[0..N-1] @0xC0_8000
 ```
 
 High load factor means **more collisions** and **longer chains** unless you resize.
@@ -134,16 +223,22 @@ Go grows the map when the **average entries per bucket** crosses about **6.5**. 
 ASCII before and after growth:
 
 ```
-Before growth, crowded:
-buckets: 4
-entries: 22
-avg per bucket ~ 5.5
-This toy average is only a sketch. Real growth decisions use finer internal bookkeeping.
+MEMORY TRACE:
 
-After growth, roomier:
-buckets: 8
-entries: 22
-avg per bucket ~ 2.75
+Step 1: BEFORE growth — crowded (toy numbers match section prose)
+  heap: numBuckets = 4, bucket array @0xC0_A000
+  entries = 22  ──→ avg ≈ 22 / 4 ≈ 5.5 entries per bucket (illustrative; real Go uses ~6.5 threshold and finer counts)
+  ◄── long chains / full buckets more likely
+
+Step 2: threshold crossed — Go allocates larger bucket table (size grows by increasing B; count ≈ 2^B buckets)
+  heap: NEW bucket array @0xC0_B000 with numBuckets = 8  ◄── doubling width (conceptual)
+
+Step 3: same entries = 22 — avg ≈ 22 / 8 ≈ 2.75 per bucket after spread
+  each (key,value): hash(seed,key) ──→ H ──→ new_index = H % 8 (toy) / mask for new 2^B  ◄── rehash into wider table
+
+Step 4: incremental evac completes — old @0xC0_A000 retired
+  ◄── aha: addresses from before grow are stale; unsafe pointer games see wrong buckets
+This toy average is only a sketch. Real growth decisions use finer internal bookkeeping.
 ```
 
 Growth **rehashes** entries into a bigger bucket array. Pointers to map internals can make old addresses stale; that is why unsafe games around maps are dangerous.
