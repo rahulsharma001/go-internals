@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P01 Structs & Struct Memory Layout.md",
+                "file": "prerequisites/P04 Hash Functions & Hashing Basics.md",
                 "mode": "source",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P01 Structs & Struct Memory Layout"
+              "title": "P04 Hash Functions & Hashing Basics"
             }
           }
         ]
@@ -196,6 +196,8 @@
   },
   "active": "a4b7fd6f5ba91587",
   "lastOpenFiles": [
+    "prerequisites/P05 Interfaces Basics.md",
+    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
     "Study Plan.md",
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
@@ -203,8 +205,6 @@
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites/P06 Function Call Stack.md",
-    "prerequisites/P05 Interfaces Basics.md",
-    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "prerequisites/P02 Methods & Receivers.md",
     "prerequisites",
