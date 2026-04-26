@@ -50,7 +50,7 @@ Think of a map as a filing cabinet with numbered drawers (buckets).
 5. When all 8 slots are full, you tape an overflow tray to the drawer
 
 ```
-map["/api/users"] → hash = 0xA3F7...42
+hits["/api/users"]++  →  map[string]int  →  hash = 0xA3F7...42
 
 Low bits (42 in binary) → bucket #2
 Top 8 bits (0xA3) → tophash filter
@@ -59,7 +59,7 @@ Bucket #2:
 ┌──────────────────────────────────────────────────┐
 │ tophash: [0xA3][0x5B][0x12][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ] │
 │ keys:    [/api/users][/api/orders][/health][ - ][ - ][ - ][ - ][ - ] │
-│ values:  [*Session][*Session][*Session][ - ][ - ][ - ][ - ][ - ] │
+│ values:  [ 120 ][ 87 ][ 4000 ][ - ][ - ][ - ][ - ][ - ] │
 │ overflow: nil                                          │
 └──────────────────────────────────────────────────┘
 
@@ -67,7 +67,7 @@ Lookup "/api/users":
   1. Hash → bucket #2
   2. Scan tophash for 0xA3 → match at slot 0
   3. Compare full key "/api/users" == "/api/users" → match
-  4. Return value at slot 0 → *Session for that route's metrics or handler state
+  4. Return value at slot 0 → 120 (request count for that route)
 ```
 
 > **In plain English:** Imagine a library with numbered shelves. Each shelf has 8 book slots. To find a book, you hash its title to get a shelf number, then scan labels on that shelf. If the shelf is full, check the overflow cart next to it.
@@ -77,6 +77,8 @@ Lookup "/api/users":
 Picture a toy HTTP server: every request goroutine writes into the same `map[string]*Session` without a lock. That is not a theoretical race — it is `fatal error: concurrent map writes` in production.
 
 ```go
+type Session struct{ UserID int }
+
 func main() {
     sessions := make(map[string]*Session)
 
@@ -388,9 +390,17 @@ v2, ok2 := flags["beta_api"] // v2 = false, ok2 = false → key missing
 ### Example 1: Safe Concurrent Map Access (session or metrics store)
 
 ```go
+type Session struct {
+    UserID int
+}
+
 type SessionStore struct {
     mu   sync.RWMutex
     data map[string]*Session
+}
+
+func NewSessionStore() *SessionStore {
+    return &SessionStore{data: make(map[string]*Session)}
 }
 
 func (s *SessionStore) Get(sessionID string) (*Session, bool) {
@@ -420,6 +430,8 @@ For **feature flags** loaded once at startup and read on every request, the same
 ### Example 2: Map with Struct Values (the copy-edit-write pattern)
 
 ```go
+type OrderID string
+
 type OrderSummary struct {
     LineItems int
     TotalCents int64
@@ -451,6 +463,9 @@ Step 3: cache["ord-1001"] = sum
 ### Example 3: Map Size Hint for Performance
 
 ```go
+type OrderID string
+type Order struct { /* line items, totals, etc. */ }
+
 // Without hint: map grows multiple times as entries are added
 orders := make(map[OrderID]*Order)
 

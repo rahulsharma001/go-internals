@@ -89,7 +89,7 @@ Passing by value is handing someone a photocopy — they can scribble on it all 
 ```go
 type User struct {
     Name  string
-    Email string // used in later examples — imagine it filled after signup
+    Email string
 }
 
 func setAdmin(u User) {

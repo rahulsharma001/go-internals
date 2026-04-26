@@ -22,7 +22,7 @@ In Go, **`error` is a built-in interface** with a single method: `Error() string
 
 You handle failure by writing **`if err != nil`** and branching. The happy path keeps reading straight down. The failure path short-circuits with `return` or `continue`.
 
-> **In plain English:** In some languages, errors are like air horns that go off in another room. In Go, errors are a slip of paper you hand to the next person. That person must read the slip. If they ignore it, the mistake stays.
+In some languages, errors are like air horns that go off in another room. In Go, errors are a slip of paper you hand to the next person. That person must read the slip. If they ignore it, the mistake stays.
 
 ---
 
@@ -30,7 +30,7 @@ You handle failure by writing **`if err != nil`** and branching. The happy path 
 
 **Go treats errors as ordinary values that flow through your code.** The philosophy: be explicit, fail fast, and carry enough context to debug. **The interview gold** is the trio **sentinel errors**, **custom error types**, and **wrapping with `%w`**, then unwrapping with **`errors.Is`** and **`errors.As`**. If you can explain that chain clearly, you have shown senior-level Go.
 
-> **In plain English:** You do not hope someone notices a flashing light. You pass a labeled note: what broke, and where, in order.
+You do not hope someone notices a flashing light. You pass a labeled note: what broke, and where, in order.
 
 ---
 
@@ -45,7 +45,7 @@ Imagine a real letter. Each function that fails puts that letter into a new enve
 
 Plain `==` only compares the **outer** envelope, not the letter hidden inside after wrapping. That is the trap.
 
-> **In plain English:** `==` sees only the last envelope. `Is` and `As` are willing to open every layer to find the original note or the right kind of case file.
+`==` sees only the last envelope. `Is` and `As` are willing to open every layer to find the original note or the right kind of case file.
 
 ### Mistake That Teaches You: `==` After Wrapping
 
@@ -61,26 +61,10 @@ import (
 func main() {
 	var ErrNotFound = errors.New("not found")
 	wrapped := fmt.Errorf("lookup user: %w", ErrNotFound)
-	fmt.Println(wrapped == ErrNotFound)        // false — compares outer value only
+	fmt.Println(wrapped == ErrNotFound)         // false — compares outer value only
 	fmt.Println(errors.Is(wrapped, ErrNotFound)) // true — follows unwrap chain
 	_ = os.ErrNotExist
 }
-```
-
-```
-UNWRAP CHAIN (conceptual):
-
-  ErrNotFound  (inner letter)
-        ▲
-        │  Unwrap()
-        │
-  *fmt.wrapError{ msg: "lookup user: ...", err: → ErrNotFound }
-
-  wrapped == ErrNotFound
-  └── compares pointer/value identity of the OUTER box → false  <-- wrong check
-
-  errors.Is(wrapped, ErrNotFound)
-  └── open outer → compare inner to ErrNotFound → true
 ```
 
 **Why it breaks:** Wrapping builds a new error value. That value is not equal to the original sentinel. The chain of `Unwrap()` calls is what links them. `errors.Is` walks that chain. `==` does not.
@@ -89,7 +73,7 @@ UNWRAP CHAIN (conceptual):
 
 ## 4. How It Actually Works (Internals) [INTERMEDIATE → ADVANCED]
 
-> **In plain English:** The standard library stores errors as small objects. Some are simple strings. Some are boxes that hold another error inside. Helpers know how to open the boxes in order.
+Small values, sometimes with an inner `error` linked by `Unwrap()`.
 
 ### 4.1 The `error` Interface (Just `Error() string`)
 
@@ -100,13 +84,9 @@ type error interface {
 }
 ```
 
-```
-ANY VALUE THAT HAS Error() string  →  can live in a variable of type `error`
-```
-
 `string` and `*MyError` are different types, but if both implement `Error() string`, both satisfy `error`.
 
-> **In plain English:** "Error" here means "I can print a one-line message." The language does not care what struct you used to build that line.
+"Error" here means "I can print a one-line message." The language does not care what struct you used to build that line.
 
 ### 4.2 Sentinel Errors — `errors.New` and `*errorString`
 
@@ -116,16 +96,9 @@ var ErrNotFound = errors.New("not found")
 
 `errors.New` allocates a private pointer type in the standard library, often shown in docs as **`errorString`**. The pointer identity matters: two `errors.New("same")` calls give two **different** sentinels.
 
-```
-errors.New("not found")
-  →  pointer to small struct  *errorString{ s: "not found" }
+Two calls to `errors.New("x")` yield **different pointers**, so **`==`** between them is **false**.
 
-  ErrNotFoundA := errors.New("x")
-  ErrNotFoundB := errors.New("x")
-  ErrNotFoundA == ErrNotFoundB  →  false  (different pointers)
-```
-
-> **In plain English:** A sentinel is a pre-printed form with a unique serial number. Two forms can say the same words but still be two different papers.
+A sentinel is a pre-printed form with a unique serial number. Two forms can say the same words but still be two different papers.
 
 ### 4.3 Error Wrapping — `fmt.Errorf` with `%w` and `*fmt.wrapError`
 
@@ -136,13 +109,7 @@ wrapped := fmt.Errorf("load config: %w", err) // build link to `err`
 
 The **`%w` verb** creates a value that usually implements **`Unwrap() error`**. The concrete type is often documented as **`wrapError`**. The **`%v` verb** only formats text. It does not attach an unwrap target.
 
-```
-fmt.Errorf("ctx: %w", inner)
-  →  *wrapError { msg: "ctx: ...", err: → inner }
-       └── Unwrap() returns inner
-```
-
-> **In plain English:** `%w` is a window in the new envelope. Helpers can look through the window at the old letter. `%v` is a photocopy of the text on the new envelope only — the window is missing.
+`%w` is a window in the new envelope. Helpers can look through the window at the old letter. `%v` is a photocopy of the text on the new envelope only — the window is missing.
 
 ### 4.4 The Unwrap Chain — `errors.Is` and `errors.As` Walk the Chain
 
@@ -156,17 +123,7 @@ errors.As(err, &ve)     // find first error assignable to *ValidationError, set 
 
 **`errors.As`** tries type assertion at each level of the chain until one matches, then populates the pointer you passed.
 
-```
-err chain:  A wraps B wraps C
-
-errors.Is(err, C):
-  A → Unwrap → B → Unwrap → C  →  match  ✓
-
-errors.As(&ptr, T):
-  try A, try B, try C  →  first *T  →  ptr = that value
-```
-
-> **In plain English:** `Is` asks "is this the same bad news, even through several retellings?" `As` asks "does any layer use our company's form?"
+`Is` asks "is this the same bad news, even through several retellings?" `As` asks "does any layer use our company's form?"
 
 ### 4.5 Custom Error Types — `Error()` and Optional `Unwrap()`
 
@@ -185,7 +142,7 @@ func (e *ValidationError) Unwrap() error { return e.cause } // if you store one
 
 If your type can wrap, implement **`Unwrap`**. Callers can then use **`errors.Is` / `errors.As` through your type.
 
-> **In plain English:** A custom type is a company-branded case folder. It has extra fields. The folder can still enclose an older letter if you add an inner slot.
+A custom type is a company-branded case folder. It has extra fields. The folder can still enclose an older letter if you add an inner slot.
 
 ---
 
@@ -196,43 +153,142 @@ If your type can wrap, implement **`Unwrap`**. Callers can then use **`errors.Is
 ```go
 f, err := os.Open("cfg.json")
 if err != nil { // do this FIRST
-		return err
-	}
-	defer f.Close()
-	// only now safe to read from `f`
+	return err
+}
+defer f.Close()
+// only now safe to read from `f`
 ```
 
-```
-order of operations:
-
-1) call os.Open
-2) err != nil?  ──yes──▶ return (never touch f)
-   │
-   └──no──▶ use f
-```
-
-> **In plain English:** You do not start reading a book before checking someone actually handed you a book. The handle might be empty.
+You do not start reading a book before checking someone actually handed you a book. The handle might be empty.
 
 ### Rule 2: Wrap Errors at Abstraction Boundaries with `%w`
 
+This is the backbone pattern: low-level storage speaks `database/sql`, domain code speaks your sentinels and messages.
+
 ```go
+var ErrUserNotFound = errors.New("user not found")
+
+func dbGet(id int) error {
+	// pretend: QueryRow.Scan fails with sql.ErrNoRows when missing
+	return sql.ErrNoRows
+}
+
 func LoadUser(id int) error {
-	_, err := dbGet(id) // low-level: sql.ErrNoRows maybe
+	_, err := dbGet(id)
 	if err != nil {
-		return fmt.Errorf("load user %d: %w", id, err) // domain context + link
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("load user %d: %w", id, ErrUserNotFound)
+		}
+		return fmt.Errorf("load user %d: %w", id, err)
 	}
 	return nil
 }
 ```
 
-```
-[ domain layer ]  "load user 42" + window to inner
-        │
-        ▼
-[ storage layer ]  sql.ErrNoRows
+The moving truck writes your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
+
+### Rule 2b: Map Errors to HTTP at the Edge (Handler), Not in the Repo
+
+The **repository** should not import `net/http`. The **handler** (or a thin `api` package) decides status codes from error shape:
+
+- **`sql.ErrNoRows`** or **`errors.Is(err, ErrUserNotFound)`** → **404 Not Found** (resource missing).
+- **`ValidationError`** (or **`errors.As` into your validation type)** → **400 Bad Request** (client sent bad input).
+- **Auth failures you classify** → **401 / 403** depending on your model.
+- **Everything else** in a public API → **500 Internal Server Error** (log the real chain; return a safe message).
+
+See **§6 — Handler sketch** for a concrete `switch` on **`errors.Is` / `errors.As`**. That keeps "what happened in the database" separate from "what the client is allowed to know."
+
+### Rule 2c: Middleware — Log Once, Attach Request Context, Then Wrap
+
+A common pattern: generate a **request ID**, put it in **`context`**, and when something fails deep in the stack, wrap so operators can grep logs.
+
+```go
+type ctxKey string
+
+const reqIDKey ctxKey = "request_id"
+
+func WithRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := r.Header.Get("X-Request-ID")
+		if id == "" {
+			id = "gen-" + shortID() // your UUID / snowflake / whatever
+		}
+		ctx := context.WithValue(r.Context(), reqIDKey, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func RequestIDFrom(ctx context.Context) string {
+	id, _ := ctx.Value(reqIDKey).(string)
+	return id
+}
+
+func wrapReq(ctx context.Context, msg string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s (req_id=%s): %w", msg, RequestIDFrom(ctx), err)
+}
 ```
 
-> **In plain English:** The moving truck writes your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
+Deep code does `return wrapReq(ctx, "load user", err)` so the unwrap chain is still intact for `errors.Is` / `errors.As`, but logs and dashboards have a correlation handle.
+
+### Rule 2d: Retryable vs Non-Retryable
+
+Not every failure deserves a retry loop.
+
+- **Retry:** transient network blips, **deadline exceeded** on an upstream you trust, **503** with **`Retry-After`**, optional **idempotency key** on writes.
+- **Do not retry:** **validation errors**, **4xx** you caused, **business rule violations**, **duplicate key** you cannot fix by hammering the same payload.
+
+One light pattern is a **marker interface or sentinel** the retry middleware understands:
+
+```go
+var ErrRetryable = errors.New("retryable")
+
+type TemporaryError struct{ Cause error }
+
+func (e *TemporaryError) Error() string { return "temporary: " + e.Cause.Error() }
+func (e *TemporaryError) Unwrap() error { return e.Cause }
+
+// Wrap: fmt.Errorf("call payments: %w", &TemporaryError{Cause: ctx.Err()})
+```
+
+The **retry policy** checks `errors.Is(err, ErrRetryable)` or **`errors.As` into `*TemporaryError`**; the **handler** still maps "gave up after retries" to **502/504** as appropriate.
+
+### Rule 2e: Error Boundary — `*RepoError` Inside, `*APIError` at the Edge
+
+Inside `internal/userrepo`, return errors that make sense for **your team**: operation name, maybe store-specific codes. At the **HTTP boundary**, convert to something safe for **users and frontends**.
+
+```go
+// internal/userrepo
+type RepoError struct {
+	Op   string
+	Err  error
+}
+
+func (e *RepoError) Error() string { return e.Op + ": " + e.Err.Error() }
+func (e *RepoError) Unwrap() error { return e.Err }
+
+// api layer
+type APIError struct {
+	Status  int    // HTTP status
+	Public  string // safe for JSON body
+	Cause   error  // for logs only
+}
+
+func (e *APIError) Error() string { return e.Public }
+func (e *APIError) Unwrap() error { return e.Cause }
+
+func MapRepoToAPI(err error) *APIError {
+	var re *RepoError
+	if errors.As(err, &re) && errors.Is(re.Err, sql.ErrNoRows) {
+		return &APIError{http.StatusNotFound, "not found", err}
+	}
+	return &APIError{http.StatusInternalServerError, "internal error", err}
+}
+```
+
+The **public** string is boring on purpose; **Cause** still unwraps for structured logs.
 
 ### Rule 3: Use `errors.Is` for Sentinels, `errors.As` for Type Extraction
 
@@ -246,14 +302,7 @@ if errors.As(err, &v) {
 }
 ```
 
-```
-Is:     "any layer == this sentinel?"
-
-As:     "any layer is this type?"
-        └── fill pointer so you can read .Field
-```
-
-> **In plain English:** `Is` checks for a known stamp. `As` looks for a specific folder shape and hands you the folder so you can open the extra tabs.
+`Is` checks for a known stamp. `As` looks for a specific folder shape and hands you the folder so you can open the extra tabs.
 
 ### Rule 4: Do Not Wrap Twice with the Same Context
 
@@ -261,27 +310,19 @@ As:     "any layer is this type?"
 
 ```go
 if err != nil {
-		return fmt.Errorf("service: %w", fmt.Errorf("service: %w", err)) // repeated label
-	}
+	return fmt.Errorf("service: %w", fmt.Errorf("service: %w", err)) // repeated label
+}
 ```
 
 **Better — one wrap at this layer:**
 
 ```go
 if err != nil {
-		return fmt.Errorf("service: %w", err)
-	}
+	return fmt.Errorf("service: %w", err)
+}
 ```
 
-```
-BAD:
-  "service:" → "service:" → real problem     (noisy, redundant)
-
-GOOD:
-  "service:" → real problem
-```
-
-> **In plain English:** You do not put two identical address labels on the same box. One clear label is enough.
+You do not put two identical address labels on the same box. One clear label is enough.
 
 ### Rule 5: Return `nil` for Success; Avoid the Typed Nil Interface Trap
 
@@ -293,30 +334,60 @@ func (e *AppError) Error() string { return e.msg }
 func f() *AppError { return nil }
 
 func g() error {
-		return f() // BUG: interface = (type *AppError, data nil) — not equal to untyped nil `error`
-	}
+	return f() // BUG: interface = (type *AppError, data nil) — not equal to untyped nil `error`
+}
 ```
 
 **Fix: convert through `error` the safe way, or return only `error` with an explicit `nil`:**
 
 ```go
 func gOK() error {
-		var p *AppError = f() // f returns nil *AppError
-		if p != nil {
-				return p
-		}
-		return nil // untyped nil → real nil `error` interface
+	var p *AppError = f() // f returns nil *AppError
+	if p != nil {
+		return p
 	}
+	return nil // untyped nil → real nil `error` interface
+}
 ```
 
 Or avoid returning a **concrete** pointer-typed function into an **`error` result** without that guard. The underlying issue is: an `interface` value is a **pair** of dynamic type and data. A nil pointer with a named type is still a non-nil **interface** value.
 
-```
-typed *AppError with value nil  →  interface value ( *AppError , nil )  —  not nil
-untyped nil assigned to `error`  →  interface value ( nil , nil )     —  nil
+A labeled empty tray is not "no tray." The label *AppError is still there. A truly empty hand — no type label — is what `nil` means for `error`.
+
+### Rule 6: The `(*User, *NotFoundError)` Shape — `nil, nil` vs `error`
+
+Some teams return **data + typed error pointer** so callers can branch without losing type information:
+
+```go
+type NotFoundError struct{ Resource string }
+
+func (e *NotFoundError) Error() string {
+	return e.Resource + " not found"
+}
+
+func getUser(id string) (*User, *NotFoundError) {
+	if id == "" {
+		return nil, &NotFoundError{Resource: "user"}
+	}
+	return &User{Name: "Ada"}, nil
+}
 ```
 
-> **In plain English:** A labeled empty tray is not "no tray." The label *AppError is still there. A truly empty hand — no type label — is what `nil` means for `error`.
+When nothing is wrong, the second value is **`nil` of type `*NotFoundError`**. That is fine **until** someone promotes it to **`error`** without thinking:
+
+```go
+func LoadForAPI(id string) (*User, error) {
+	u, nf := getUser(id)
+	return u, nf // nf is nil *NotFoundError → non-nil `error` interface!
+}
+
+func main() {
+	_, err := LoadForAPI("valid-id")
+	fmt.Println(err != nil) // true — BUG: success looks like failure
+}
+```
+
+**Fix:** only put a real `error` in the second position when it is non-nil, or change `getUser` to return `(*User, error)` and use **`var err error`** / **`return nil, nil`** through a single `error` typed return.
 
 ---
 
@@ -328,14 +399,8 @@ untyped nil assigned to `error`  →  interface value ( nil , nil )     —  nil
 var ErrUserNotFound = errors.New("user not found")
 
 func FindUser(id int) error {
-		return ErrUserNotFound
+	return ErrUserNotFound
 }
-```
-
-```
-ErrUserNotFound  →  *errorString{ "user not found" }
-
-Compare with:  errors.Is(err, ErrUserNotFound)  // after any wrap
 ```
 
 **Trap — compare with `==` after wrap:**
@@ -353,18 +418,11 @@ type ValidationError struct {
 }
 
 func (e *ValidationError) Error() string {
-		return e.Field + ": " + e.Msg
+	return e.Field + ": " + e.Msg
 }
 
 // usage
 return &ValidationError{Field: "email", Msg: "invalid"}
-```
-
-```
-stack:
-  err  ──▶  *ValidationError{ Field: "email", ... }
-                      │
-errors.As(err, &ve)  ─┘  fills ve
 ```
 
 ### Error Wrapping Chain and Unwrapping
@@ -377,25 +435,34 @@ layer2 := fmt.Errorf("bootstrap: %w", layer1)
 errors.Is(layer2, os.ErrNotExist) // true
 ```
 
+### Handler Sketch: `svc.GetUser` → Status Code
+
+```go
+func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id") // 1.22+; or mux.Vars, etc.
+	user, err := h.svc.GetUser(r.Context(), id)
+	if err != nil {
+		h.handleErr(w, err)
+		return
+	}
+	json.NewEncoder(w).Encode(user)
+}
+
+func (h *Handler) handleErr(w http.ResponseWriter, err error) {
+	var ve *ValidationError
+	switch {
+	case errors.Is(err, ErrUserNotFound) || errors.Is(err, sql.ErrNoRows):
+		http.Error(w, "not found", http.StatusNotFound)
+	case errors.As(err, &ve):
+		http.Error(w, ve.Error(), http.StatusBadRequest)
+	default:
+		h.log.Error("request failed", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+	}
+}
 ```
-layer2  ──Unwrap──▶  layer1  ──Unwrap──▶  root  (os.ErrNotExist)
-```
 
-**Step through:**
-
-```
-Step 1: root = os.ErrNotExist
-  root is sentinel pointer
-
-Step 2: layer1 = fmt.Errorf(..., %w, root)
-  *wrapError → Unwrap() → root
-
-Step 3: layer2 = fmt.Errorf(..., %w, layer1)
-  *wrapError → Unwrap() → layer1
-
-Step 4: errors.Is(layer2, os.ErrNotExist)
-  walk Unwrap until match → true
-```
+Your service should **`fmt.Errorf("get user: %w", err)`** and map **`sql.ErrNoRows` → `ErrUserNotFound`** so the handler can use **`errors.Is(err, ErrUserNotFound)`** only — then **`database/sql`** never lands in HTTP packages. The **`sql.ErrNoRows`** branch above is for small services where that tradeoff is acceptable.
 
 ---
 
@@ -403,7 +470,16 @@ Step 4: errors.Is(layer2, os.ErrNotExist)
 
 All runnable in [Go Playground](https://go.dev/play/).
 
-### Tier 1: Predict the Output (2 min)
+### Tier 1: Handler wiring (3 min)
+
+Your handler calls `user, err := svc.GetUser(ctx, id)`. `GetUser` wraps repo errors with `%w`. The repo returns **`sql.ErrNoRows`** when the row is missing.
+
+Write the `if err != nil` block that sets **404** for missing users, **400** if `errors.As` finds your **`ValidationError`**, and **500** otherwise — without importing `database/sql` in the handler package (you may use **`errors.Is(err, ErrUserNotFound)`** if the service maps `ErrNoRows` to **`ErrUserNotFound`** before returning).
+
+> [!success]- Answer
+> Map **`sql.ErrNoRows`** to **`ErrUserNotFound`** in the **service** so the handler never imports **`database/sql`**. Then: **`errors.Is` → 404**, **`errors.As` into `ValidationError` → 400**, **else → 500** (after logging).
+
+### Tier 2: Predict the Output (2 min)
 
 ```go
 package main
@@ -412,7 +488,9 @@ import (
 	"errors"
 	"fmt"
 )
+
 var S = errors.New("S")
+
 func main() {
 	e := fmt.Errorf("a: %w", fmt.Errorf("b: %w", S))
 	fmt.Println(e == S)
@@ -422,9 +500,9 @@ func main() {
 **Predict before run:** prints `true` or `false`?
 
 > [!success]- Answer
-> Prints `false`. The `==` operator compares the error value directly. `e` is a wrapped error (type `*fmt.wrapError`), not the sentinel `S` itself. Wrapping creates a new error value. To check if `S` is somewhere in the chain, use `errors.Is(e, S)` which returns `true` by walking the unwrap chain.
+> Prints **`false`**. The `==` operator compares the outer value. `e` is a wrapped error, not the sentinel `S`. Use **`errors.Is(e, S)`** → **`true`**.
 
-### Tier 2: Fix the Bug (5 min)
+### Tier 3: Fix the Bug (5 min)
 
 ```go
 type RepoError struct{ s string }
@@ -443,26 +521,11 @@ func API() error {
 **Goal:** `API()` should return a nil `error` on success. Fix the typed-nil interface issue.
 
 > [!success]- Answer
-> The problem: `maybeFail` returns `*RepoError`. When `ok` is true, it returns `nil` -- but that's a typed nil `*RepoError`, not a nil `error` interface. When `API()` returns it as `error`, the interface has type=`*RepoError`, value=nil -- so `err != nil` is true.
->
-> Fix: change `API()` to check explicitly:
-> ```go
-> func API() error {
->     if err := maybeFail(true); err != nil {
->         return err
->     }
->     return nil  // untyped nil — truly nil error interface
-> }
-> ```
-> Or change `maybeFail` to return `error` instead of `*RepoError`.
+> Typed **`nil` `*RepoError`** in an **`error`** slot is still a **non-nil interface**. Guard with **`if err != nil { return err }; return nil`**, or return **`error`** from **`maybeFail`**.
 
-### Tier 3: Build It (15 min)
+### Tier 4: Build It (15 min)
 
-Build a tiny **validation** package.
-
-- One **custom type** for field errors. Implement `Error()`.
-- A function that returns errors **wrapped** with `fmt.Errorf` and `%w` from an inner failure.
-- A caller that uses **`errors.As`** to pull out your type and read the field name.
+Package with a **validation** type (`Error()` + **`errors.As`**), a **`%w`** wrap from an inner failure, and a handler that returns **400** vs **500**.
 
 > Full solutions with explanations → [[exercises/T09 Error Handling Patterns - Exercises]]
 
@@ -470,70 +533,59 @@ Build a tiny **validation** package.
 
 ## 7. Edge Cases & Gotchas
 
-| Symptom | Why | Fix |
-|--------|-----|-----|
-| `err == target` is false, but the inner cause is `target` | Wrapping **replaces** the outer value | Use **`errors.Is(err, target)`** |
-| `if err == nil` after `return` from helper, but error is not "really" nil | **Typed nil** in an interface | Return **`nil` without** a typed nil in the interface, or return **`error` interface** and set `var err error` then `return err` |
-| `fmt.Errorf("x: %v", e)` and `errors.Is` fails | `%v` does not implement unwrap link | Use **`%w`** when the caller must unwrap |
-| `_ = f()` | Error dropped on the floor | Always handle or return; use **`_`** only with a comment when truly intentional |
+**The wrapped sentinel you compare with `==`.** You promoted a note into a new envelope, then you hold the envelope up to the light and wonder why it does not look identical to the original stamp. **`errors.Is`** opens the stack; **`==`** does not.
 
-> **In plain English:** Hiding a note in a new envelope is not the same as throwing the note away. The `%v` printout is the thrown-away copy. The `%w` keeps the chain. Ignoring a return with `_` is signing for a package and leaving it in the rain.
+**The handler that swears `err == nil` but logging still fires.** Somewhere below, a function returned **`nil` `*MyError`** into an **`error` return**. The interface is non-nil even though the pointer inside is. Fix by returning **`var err error`** and assigning only real failures, or by guarding before you **`return err`**.
+
+**The `%v` wrap that breaks the chain.** You printed the inner text on the outside label and threw away the window. **`errors.Is`** cannot see through **`%v`**. If consumers need to unwrap, use **`%w`**.
+
+**The `_ = f()` line in a hot path review.** That is not "clean code." That is dropping a slip on the floor. If you truly ignore an error, leave a comment that names the human who accepted the risk and why — better, handle it.
 
 ---
 
 ## 8. Performance & Tradeoffs
 
-| Topic | What to know |
-|--------|----------------|
-| **Creating errors** | `errors.New` and `fmt.Errorf` allocate. Hot paths may reuse sentinels or pre-built errors instead of `fmt` per call. |
-| **Wrapping** | One `%w` layer adds a small object and a pointer hop. Chains a few levels deep are normal. Very deep custom chains are a smell. |
-| **Sentinel vs custom** | Sentinel: tiny, good for "this exact condition" flags. Custom: when you need fields for APIs or UIs. |
-| **When not to wrap** | If the next layer is already a clear public error and more text adds noise, returning as-is is fine at **stable boundaries** you own. |
+Wrapping with **`%w`** allocates a small wrapper and adds one more pointer hop when you walk the chain. In normal HTTP and service code, that cost is **noise next to I/O**: one database round trip or TLS handshake dominates your latency budget thousands of times over.
+
+What **does** hurt is **logging every unwrap layer on every request**, serializing huge stacks to Splunk, or building giant `fmt.Errorf` strings with expensive `Sprintf` work in a tight loop. Keep wraps **short and structured**; log **once** at the boundary with the **request ID**; let metrics aggregate error codes instead of printing novels.
+
+Sentinels stay cheap — one pointer compare after `Is` walks a short chain. Custom types cost a little more but buy you **`As`** and fields for **400** responses. If a boundary already exposes a stable, meaningful error and another sentence adds nothing, returning as-is is fine.
 
 ---
 
 ## 9. Common Misconceptions
 
-| Misconception | Reality |
-|---------------|--------|
-| "Every `errors.New` string is a unique *type* in the type system" | You get a pointer to **`errorString`**-like values. The **string** is not a distinct Go **named type** per call. **Identity** is by pointer, not by text. |
-| "`panic` is how Go handles expected errors" | **`panic` is for truly exceptional states** and often **bugs** or unrecoverable situations. **Normal failures** are **`error` returns**. |
-| "You should always wrap" | **Wrap to add context** or preserve **`Is`/`As`**. **Duplicating** the same line or **wrapping without added meaning** is noise. |
-| "Comparing with `==` is fine for sentinels" | **Only** if you are sure nothing wrapped the value. In layered code, prefer **`errors.Is`**. |
+**"Every `errors.New("foo")` is its own Go named type."** Nope — you get another pointer to the same **`errorString` idea**. Identity is **pointer equality**, not string equality. Two different calls with the same text are still two different errors.
+
+**"`panic` is how production Go signals 'file not found'."** **`panic`** is for **programmer mistakes** and **unrecoverable** states — or truly rare init failures — not for "user typed bad JSON." Normal control flow returns **`error`**.
+
+**"Always wrap, no matter what."** Wrap when you add **location** or **domain meaning**, or when callers need **`Is`/`As`**. Repeating the word **"service"** five times in the chain is just clutter.
+
+**"`==` is fine; I control the whole repo."** The day someone adds **`fmt.Errorf("...: %w", err)`** above you, **`==`** goes quiet. Default to **`errors.Is`** for sentinels unless you have a **very** local, unexported helper.
 
 ---
 
 ## 10. Related Tooling & Debugging
 
-- **`errcheck`**: find functions whose errors are not handled.
-- **`go vet`**: some checks around suspicious prints and format; combine with `staticcheck` in real projects.
-- **IDE linters** with rules like **errcheck**, **unparam**, and **ineffassign** to catch shadowed or ignored `err` variables.
+`errcheck` is the friend who taps your shoulder when you ignore a return value. **`go vet`** catches a few suspicious patterns; teams usually add **staticcheck** for deeper linting. None of that replaces thinking — it catches the obvious foot-guns so code review can focus on **mapping** and **messages**.
 
-You run **`go vet ./...`** in CI. You add **staticcheck** for deeper patterns on larger teams.
+Run **`go vet ./...`** in CI. Treat ignored errors like failing tests: either handle them or document the rare exceptions.
 
 ---
 
 ## 11. Interview Gold Questions
 
-### Q1: When do you use `errors.Is` vs `errors.As`?
+If someone asks **`Is` vs `As`**, say: **`Is`** hunts for a **value** (often a sentinel) anywhere in the unwrap stack; **`As`** finds the first **typed** shape and fills your pointer so you can read **fields**. Mention **`%w`** or you look like you memorized flash cards.
 
-**Short answer:** **`Is`** matches a **value** in the chain, often a **sentinel** or a comparable target. **`As`** recovers a **concrete type** and fills a **pointer** so you read extra fields. Always mention **unwrapping** and **`%w`**.
+If they ask **`%w` vs `v`**, say **`%w`** keeps the **link** so **`Unwrap` / `Is` / `As`** still work; **`%v`** is a **pretty print** that **cuts** the chain.
 
-**Tradeoff:** If you overuse `As` with a deep hierarchy of types, your API can become brittle. `Is` keeps packages decoupled around **known sentinels**.
-
-### Q2: What does `fmt.Errorf` with `%w` do that `%v` does not?
-
-**Short answer:** **`%w`** records **unwrap** behavior so **`errors.Is` / `errors.As` / `Unwrap` work. **`%v`** embeds text only for the outer error. You should mention an inner linked error such as `wrapError` in spirit — not a plain one-shot string.
-
-### Q3: Explain the "nil error interface" with a pointer type.
-
-**Short answer:** A **`nil` pointer of type `*T` assigned to `error` still carries dynamic type `*T`**, so the **interface is not `nil`**. The fix is to return a **plain `var err error`**, return **`nil` directly**, or avoid returning a **typed** nil through an `error` result without that pitfall. Draw the **(type, data)** pair.
+If they ask the **typed nil** question, draw the **(type, data)** pair in the air: **`nil` `*T` inside `error`** still has type **`T`**, so the interface is **non-nil**. The fix is **explicit `return nil`** as **`error`**, or **`return err` only when `err != nil`**.
 
 ---
 
 ## 12. Final Verbal Answer
 
-**In Go, the `error` interface is a single method, `Error() string` — so errors are just values, not control-flow exceptions. You return them and check `if err != nil`. In production you pick three common patterns: package-level **sentinel errors** for stable comparisons, **custom types** with extra fields, and **wrapping** with `fmt.Errorf` and `%w` to attach context. The standard library's `errors.Is` walks the unwrap chain for comparables like sentinels, and `errors.As` finds a concrete type. Avoid comparing with `==` after wrapping, avoid typed nils when you mean "no error", use `%w` not `%v` when you need unwrap, and do not let linters see ignored errors. That is the whole model.**
+Go's **`error`** is just **`Error() string`**. You **`return`** failures; you **`if err != nil`**; you do not route normal cases through **`panic`**. In real services you **wrap** with **`%w`**, map to **HTTP** at the edge, **log once** with a **request ID**, and use **`Is`/`As`** so **404 / 400 / 500** stay honest. Avoid **`==`** after wraps, avoid **typed nil** surprises when you promote pointers to **`error`**, and treat **retries** as policy — not every error deserves another POST.
 
 ---
 

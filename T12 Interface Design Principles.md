@@ -26,7 +26,7 @@ Complete these before starting this topic:
 
 ## 2. Core Insight (TL;DR)
 
-**Small interfaces, defined by whoever calls the shots.** Keep **one or two methods** in most local interfaces, put the **type** where the need is written, and do not mint an interface in advance for testing or for flexibility before a second real implementation exists. **Interface pollution** is the most common design mistake for people who learned stacks where large **nominal** interfaces and heavy DI wiring are normal. Teams coming from `Java` or C#-style class hierarchies often import the same *shape-first* habit into Go. The symptom is huge provider-owned types that force every test to **fake a whole department** when a **reception desk** was enough. **The fix is the same in production and in tests: narrow the question.**
+**Small interfaces, defined by whoever calls the shots.** Keep **one or two methods** in most local interfaces, put the **type** where the need is written, and do not mint an interface in advance for testing or for flexibility before a second real implementation exists. **Interface pollution** is the most common design mistake for people who learned stacks where large **nominal** interfaces and heavy DI wiring are normal. Teams coming from Java or C#-style class hierarchies often import the same *shape-first* habit into Go. The symptom is huge provider-owned types that force every test to **fake a whole department** when a **reception desk** was enough. **The fix is the same in production and in tests: narrow the question.**
 
 > **In plain English:** A door lock wants **a key with one ridge pattern**. The factory that makes the key does not publish a **master list of 50 ridge jobs** the lock must learn. The lock **declares the ridge pattern** when the lock is installed.
 
@@ -112,20 +112,33 @@ func (f *fakeUsers) Update(ctx context.Context, u user.User) error {
 }
 ```
 
-```
-Before (fat mock):
-  test ⇄  [ 15 method holes you must "plug"  ]
-
-After (consumer 2-method interface at call site):
-  test ⇄  [ Get ][ Update ]  = 2 method holes only
-
-  production *user.Service struct may still have 15 methods
-  the test and handler *declare* the 2-line contract they need
-```
+After the refactor, the test only **plugs two holes**; production’s concrete struct can still ship all fifteen methods — the handler and test just **declare the slice they touch**.
 
 The **concrete** `UserService` in `user` can stay **one** big struct. The **test** and the **HTTP handler** only **import** the **sliver** of behavior they use.
 
 > **In plain English:** A **dishwasher** manual does not list every **wrench** in the city. The manual lists **inlet hose thread** and **voltage slot**. The **wrench set** in your garage is still **huge** — the **dishwasher** just names **the two threads** it **actually screws into**.
+
+### Two more seams you will actually see
+
+**gRPC stubs.** Generated **`FooServer`** / client types list **every** RPC. Server code embeds **`pb.UnimplementedFooServer`** so a new RPC does not brick your build while you implement it one handler at a time. Handlers that **call** gRPC should not import that whole surface: define a **narrow port** beside the caller (for example `CreateHold(ctx, orderID string) (holdID string, err error)`) and let a **small adapter** in `infra/grpc` speak protobuf. Your two-line interface stays stable; the fat stub stays behind one door.
+
+**`time.Now` and `Clock`.** Production wants real wall time; tests want **Tuesday at 3pm** every run. Swap the seam with a **one-method interface** instead of monkey-patching globals:
+
+```go
+type Clock interface {
+	Now() time.Time
+}
+
+type systemClock struct{}
+
+func (systemClock) Now() time.Time { return time.Now() }
+
+type frozenClock struct{ t time.Time }
+
+func (f frozenClock) Now() time.Time { return f.t }
+```
+
+Pass a `Clock` into anything that timestamps orders or tokens. `main` uses `systemClock{}`; tests use `frozenClock{t: fixed}`. Same code path, **no** flaky midnight edge cases. Narrow `Clock` ports show up constantly because **time is never “just a detail.”**
 
 ---
 
@@ -138,26 +151,40 @@ The **concrete** `UserService` in `user` can stay **one** big struct. The **test
 **Public** APIs that **return** a **named struct** make **callers** free to use **concrete** fields and **static** help from the type checker. **Parameters** and **struct fields** that must stay **pluggable** take **the smallest** interface the **callee** uses.
 
 ```go
-type Cache struct{ store map[string]int }
-
-// Return concrete — callers can see Cache is a struct, extend later.
-func NewCache() *Cache {
-	return &Cache{store: make(map[string]int)}
+type Session struct {
+	UserID    int64
+	ExpiresAt time.Time
 }
 
-// Accept io.Writer — the Callee only needs Write.
+// SessionCache is concrete — callers see a named struct, not a mystery bag.
+type SessionCache struct {
+	items map[string]*Session
+}
+
+func NewSessionCache() *SessionCache {
+	return &SessionCache{items: make(map[string]*Session)}
+}
+
+func (c *SessionCache) Get(key string) (*Session, error) {
+	s, ok := c.items[key]
+	if !ok {
+		return nil, fmt.Errorf("session %q not found", key)
+	}
+	return s, nil
+}
+
+func (c *SessionCache) Set(key string, sess *Session) error {
+	if sess == nil {
+		return fmt.Errorf("session is nil")
+	}
+	c.items[key] = sess
+	return nil
+}
+
+// Accept io.Writer — the callee only needs Write.
 type Logger struct{ w io.Writer }
 
 func NewLogger(w io.Writer) *Logger { return &Logger{w: w} }
-```
-
-```
-Constructor returns:
-  *Cache  ──▶  concrete type in caller's hand (fields visible at compile time if exported)
-
-Parameter accepts:
-  w io.Writer  ──▶  any type with Write([]byte)(int,error) matches at compile time
-                 no "implements" line — the method set is the proof
 ```
 
 > **In plain English:** A **carpenter** **hands you a finished chair** to sit in. A **carpenter** also asks only for a **"thing that can drive screws"** from your **junk drawer** — a **screwdriver** or a **power drill** both qualify.
@@ -180,13 +207,7 @@ type Stringer interface {
 }
 ```
 
-```
-Reader:     [ Read ]
-Writer:     [ Write ]
-Stringer:   [ String ]
-
-  interview story:  "I build interfaces like stickers — one verb per sticker"
-```
+Interview story you can steal: **“I build interfaces like stickers — one verb per sticker.”**
 
 > **In plain English:** A **stove knob** is **"hot / off"**. A **separate** knob is **"timer"**. The **kitchen** does not ship one **"mega-knob"** with **dozen** rings unless you are buying a **spaceship** — and even then, **one knob, one job** is easier to fix at 2 a.m.
 
@@ -201,67 +222,62 @@ type ReadWriter interface {
 }
 ```
 
-```
-ReadWriter
-   ┌────────────┐
-   │  Reader   │
-   ├────────────┤
-   │  Writer   │
-   └────────────┘
-
-  concrete *bytes.Buffer:  has Read, Write, -> satisfies ReadWriter
-```
+`*bytes.Buffer` has both `Read` and `Write`, so it satisfies `ReadWriter` without a third invented method list.
 
 > **In plain English:** A **duffel** with **"carry strap"** and **"zip top"** is two **patches** sewn on, not a **mystery bag** you cannot describe without **reading the entire luggage museum**.
 
 ### 4.4 Consumer-defined interfaces (point of use)
 
-**Define the interface in the file that needs it**, or in a **small** test helper file. If **Package A** calls **only** `Log`, the **one-method** `Logger` in **Package A** is the **right** `Logger`. The **huge** logging library does **not** have to own your **3-line** `interface` **unless** the **entire** org shares one **on purpose**.
+**Define the interface in the file that needs it**, or in a **small** test helper file. If **Package A** calls **only** `FindByID` on orders, the **one-method** `orderReader` in **Package A** is the **right** contract. The **Postgres** package does **not** have to own your **3-line** `interface` **unless** the **entire** org shares one **on purpose**.
 
 ```go
 // a/api.go
 package a
 
-import "context"
+import (
+	"context"
+	"example/orders"
+)
 
-// Consumer-owned — names exactly what a.Server needs
-type userLookup interface {
-	ByID(ctx context.Context, id int64) (string, error)
+// Consumer-owned — names exactly what a.Server needs for this route
+type orderReader interface {
+	FindByID(ctx context.Context, id string) (*orders.Order, error)
 }
 
 type Server struct {
-	Users userLookup
+	Orders orderReader
 }
 ```
 
-```
-Producer package "users"  ──concrete *Repo──▶  has many methods
-Consumer package "a"      ──interface userLookup (1 method)──▶  only sees ByID
-```
+The `orders` package can still ship a fat `*PostgresOrderStore`; **this** server only peeks through the `FindByID` keyhole.
 
 > **In plain English:** A **cafe** menu board lists **"oat milk available"** because **this** **cafe** **steams** drinks. The **oat farm** does not ship a **300-page** **"approved cafe manifesto"** to every **corner shop**.
 
 ### 4.5 Dependency injection (DI) via constructor parameters
 
-**DI (dependency injection)** here means you build your struct with values passed in. Often those values are **interfaces** for seams you swap in tests or in config-driven code. A `NewServer(deps...)` that takes `DB` and `Log` as interfaces is normal Go shape. No framework is required. The interface width is still driven by the struct you are constructing, not by every interface in the dependency tree.
+**DI** here means you build your struct with values passed in. Often those values are **interfaces** for seams you swap in tests or in config-driven code. A `NewCheckoutHandler(deps...)` that takes an `OrderStore` is normal Go shape. No framework is required. The interface width is still driven by the struct you are constructing, not by every interface in the dependency tree.
+
+Your **`CheckoutHandler`** needs to **persist orders**. Do **not** pass it `*PostgresOrderStore` as the field type if the handler only calls `Save` and `FindByID`. Pass an **`OrderStore` interface** with exactly those methods. In **`main`**, wire `NewPostgresOrderStore(db)`. In **tests**, pass **`MockOrderStore`** (or a hand-written fake) that implements the same two lines. The handler stays dumb about whether Postgres, SQLite, or an in-memory slice backs the contract.
 
 ```go
-type Store interface {
-	Save(ctx context.Context, k string, v int) error
+type Order struct {
+	ID         string
+	TotalCents int64
 }
 
-type App struct{ s Store }
+// OrderStore is the seam — consumer-named, two methods, backend-shaped.
+type OrderStore interface {
+	Save(ctx context.Context, order *Order) error
+	FindByID(ctx context.Context, id string) (*Order, error)
+}
 
-func NewApp(s Store) *App { return &App{s: s} }
-```
+type CheckoutHandler struct {
+	Orders OrderStore
+}
 
-```
-main / test
-   │
-   ├─▶ concrete *diskStore   ─┐
-   └─▶ fake in-memory        ─┴──▶  both satisfy Store when Save matches
-         │
-         └──▶  NewApp(store)  wraps interface field *inside* App
+func NewCheckoutHandler(store OrderStore) *CheckoutHandler {
+	return &CheckoutHandler{Orders: store}
+}
 ```
 
 > **In plain English:** A **suit** **order form** has **"chest"** and **"inseam"** lines. The **tailor** **does not** measure **shoe size** on the same page — unless **this** order **involves** shoes. **The form** matches **this** **fitting**.
@@ -275,19 +291,13 @@ main / test
 **Why:** Every method in an interface is a promise you must keep. Third parties and mocks pay per method in noise. Each new method you add is another stub line in every fake.
 
 ```go
-// Good local shape: one verb
-type Notifier interface {
-	Notify(ctx context.Context, msg string) error
+// Good local shape: one verb, real backend job
+type WebhookDispatcher interface {
+	Dispatch(ctx context.Context, url string, body []byte) error
 }
 ```
 
-```
-Notifier
-   [ Notify ]
-
-  vs fat local interface
-   [ A ][ B ][ C ][ D ]...  <- each letter is a future mock line item
-```
+One verb on the contract means one stub line in a fake — not a whole alphabet of empty methods.
 
 > **In plain English:** A **thermostat** has **"target temp"** and **"hold"** — it does **not** have **"also reorder furnace filters"** on the same **dial** unless you are building **comedy** hardware.
 
@@ -299,18 +309,12 @@ Notifier
 
 ```go
 // consumer: checkout/service.go
-type payer interface {
-	Charge(ctx context.Context, cents int64) error
+type PaymentCapturer interface {
+	Capture(ctx context.Context, paymentID string, cents int64) error
 }
 ```
 
-```
-checkout owns "payer"
-  callers see:  [ Charge only ]
-
-payments owns BigStripeClient with 20 methods
-  checkout does not re-export all 20 as one interface
-```
+Checkout names **`Capture` only**; the payments package can keep a twenty-method client without exporting that whole surface through checkout.
 
 > **In plain English:** A **table** in a **restaurant** lists **"tap water"** and **"sparkling"** for **this** **meal** — the **bottling plant** is **not** your **dinner** **menu** **author**.
 
@@ -328,16 +332,7 @@ type PriceBook struct{ /* file-backed */ }
 // type priceSource interface { QuoteUSD(code string) (decimal.Decimal, error) }
 ```
 
-```
-today:
-  *PriceBook  (only implementation)
-
-  interface { ... }  with one impl  ->  indirection, no second branch yet
-
-after second impl appears:
-  two concrete types, same small method set
-  -> now an interface is justified at call sites
-```
+**Today** you might only have `*PriceBook` — that is not a crime. **After** a second real implementation shows up, extract the **shared** two-line surface at the call sites.
 
 > **In plain English:** You **do not** buy a **spare** **car** **key** on **day one** of **owning** **one** **car** — you **copy** a **key** the **day** you get a **spouse** who also **drives** **or** the **day** you **lose** one.
 
@@ -355,11 +350,6 @@ func NewReporter(w io.Writer) *Reporter {
 type Reporter struct{ w io.Writer }
 
 func (r *Reporter) Line(s string) { fmt.Fprintln(r.w, s) }
-```
-
-```
-NewReporter returns:  *Reporter  (concrete, stable name)
- NewReporter takes:   io.Writer   (any writer works)
 ```
 
 > **In plain English:** A **cafe** **hands you a branded cup** you can **refill** — the **cafe** still **pours** from **any** **carafe** that **pours** — **glass**, **metal**, **thermal**.
@@ -383,11 +373,7 @@ type ReportJob interface {
 }
 ```
 
-```
-ReportJob = Job + Report  (two stickers, not one unlabeled blob)
-
-  [ Do ]  +  [ Title ]
-```
+`ReportJob` is still **two named stickers** (`Do`, `Title`) — not a mystery blob with seven anonymous verbs.
 
 > **In plain English:** A **camping** **tool** is **knife** **plus** **bottle opener** **plus** **scissors** in **one** **handle** — you still **name** the **parts** you **bought** — you do **not** call it **"black metal mystery"** **unless** you are **hiding** **something**.
 
@@ -401,17 +387,12 @@ ReportJob = Job + Report  (two stickers, not one unlabeled blob)
 
 ```go
 // service_test.go
-type readID interface {
-	ByID(ctx context.Context, id int) (string, error)
+type sessionLoader interface {
+	ByID(ctx context.Context, id string) (*Session, error)
 }
 ```
 
-```
-test-defined readID:  [ ByID only ]
-
-  SUT  ──▶  readId impl (fake)  with one method
-  real DB still has 40 methods; test never mentions them
-```
+The system under test talks to **`ByID` only**; the real session service can keep forty methods the test never imports.
 
 > **In plain English:** A driving exam only checks parallel park and a stop sign on this route. The whole vehicle manual is not the page on the examiner's clipboard.
 
@@ -423,12 +404,7 @@ rw = new(bytes.Buffer) // *bytes.Buffer is both Reader and Writer
 _ = rw
 ```
 
-```
-*bytes.Buffer
-  satisfies Reader  ──Read
-  satisfies Writer  ──Write
-  satisfies ReadWriter  (embedded pair, still two one-method ideas)
-```
+Same buffer, three satisfied interfaces — still built from **one-method** ideas glued together.
 
 > **In plain English:** A **garden** **hose** **both** **sucks** and **blows** **if** the **pump** **supports** it — the **"hose contract"** is still **"fits thread A"** **plus** **"fits thread B"** **on** the **label**, **not** **a** **mystery** **tube**.
 
@@ -497,7 +473,7 @@ type SingleGetter interface{ Get(id int) string }
 
 ### Tier 3: Build it (15 min)
 
-**Design** a **pluggable** **storage** **layer** with an **in-memory** **map** and a **file-backed** **JSON** file. The **app** should **see** a **small** **`Store` interface** with **Get** and **Set**. The **main** should **construct** the **concrete** **type** and **pass** it to **`NewService`**. **Tests** use the **in-memory** **impl** only. **No** **global** **singletons**.
+**Design** a **pluggable** **order** **persistence** **layer** with an **in-memory** **map** and a **Postgres**-backed implementation. The **app** should **see** a **small** **`OrderStore` interface** with **`Save`** and **`FindByID`**. The **`main`** should **construct** the **concrete** **type** and **pass** it to **`NewCheckoutHandler`**. **Tests** use the **in-memory** **impl** only. **No** **global** **singletons**.
 
 > Full solutions with explanations → [[exercises/T12 Interface Design Principles - Exercises]]
 
@@ -505,12 +481,13 @@ type SingleGetter interface{ Get(id int) string }
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What goes wrong | Fix |
-|--------|----------------|-----|
-| Interface pollution | Giant local or exported interface; mocks and adapters multiply | Chisel to one or two methods at use sites; compose the rare union only when needed |
-| Empty interface abuse | `any` everywhere; readers lose the static story | Return concrete types; reserve `any` for real boundaries such as encoding or plugin ABI, not internal helpers |
-| Exporting interfaces early | You freeze a shape before you know the real call patterns | Keep narrow interfaces unexported until repeated call sites prove the same slice of surface |
-| Pointer to interface | `*io.Reader` is almost never what you want; indirection gets fuzzy | Pass `io.Reader` or a concrete pointer; avoid `*SomeInterface` unless a rare API truly requires it |
+**Interface pollution** — You exported a “kitchen sink” contract and now every mock repeats fifteen empty methods. The fix is boring: **chisel** the interface down to what **this** package calls, **compose** rare unions from small pieces, and let the fat concrete type live where it belongs.
+
+**`any` sprawl** — If every helper takes `any`, readers cannot see the story at compile time. **Return concrete types** from your own packages. Keep `any` for real boundaries: JSON decode, plugin edges, generated glue — not for “I was too lazy to name a struct.”
+
+**Exporting interfaces too early** — The moment an interface is public, strangers import it and you freeze a shape you barely understand. Keep **narrow** interfaces **unexported** until several call sites **repeat** the same slice of methods on purpose.
+
+**Pointer to interface** — `*io.Reader` is almost never what you want; you end up explaining your program to the next reader twice. Pass `io.Reader` or a concrete `*bytes.Buffer`. Reach for `*SomeInterface` only when an API you do not control truly demands it.
 
 > **In plain English:** A giant master key ring jangles and tears pockets. A small ring for home and a separate ring for office is boring, and boring is cheaper to lose in a couch cushion hunt.
 
@@ -518,11 +495,11 @@ type SingleGetter interface{ Get(id int) string }
 
 ## 8. Performance & Tradeoffs
 
-| Question | What happens | When it matters |
-|----------|--------------|-----------------|
-| Implicit satisfaction | No `implements` keyword at runtime. The compiler proves method sets match. That proof is static. | Good interview line: structural match is a **compile-time** check, not a ceremony you pay for on every line of code as if you hand-wrote a foreign vtable. |
-| Storing a value in an interface-typed variable | A non-empty interface with methods uses the runtime **iface** pair: two words. The first time a given interface type meets a given concrete type, the runtime may build one **itab** and reuse it. **itab** is the cached interface table from T11. See [[T11 Interface Internals (iface & eface)]]. | Hot loops that re-box concrete values into an interface each iteration can add work. Measure with the **pprof** profiler if you suspect it. |
-| Dynamic dispatch | Calls through an interface use **itab** function slots. | Tight inner loops on one concrete type sometimes keep a concrete type in the API on purpose to help the compiler inline. |
+**Implicit satisfaction** — There is no `implements` keyword at runtime. The compiler proves method sets match once, statically. Good interview line: structural matching is a **compile-time** proof, not a ceremony you re-enact on every call like hand-writing a foreign vtable.
+
+**Storing a value in an interface-typed variable** — A non-empty interface with methods uses the runtime **iface** pair: two words. The first time a given interface type meets a given concrete type, the runtime may build one **itab** and reuse it. **itab** is the cached interface table from T11. See [[T11 Interface Internals (iface & eface)]]. Hot loops that re-box concrete values into an interface each iteration can add work — **pprof** turns that hunch into numbers.
+
+**Dynamic dispatch** — Calls through an interface use **itab** function slots. In a tight inner loop on **one** concrete type, sometimes you keep a concrete type in the API on purpose so the compiler can inline.
 
 **Decision check** — is this line a seam or a guess?
 
@@ -536,33 +513,29 @@ type SingleGetter interface{ Get(id int) string }
 
 ## 9. Common Misconceptions
 
-| Misconception | Reality |
-|---------------|---------|
-| "Go has no polymorphism" | Go has **ad-hoc polymorphism** through small interfaces and structural typing. No class inheritance tree is not the same as no polymorphism. |
-| "SOLID means interfaces on every return" | The **interface segregation** idea in Go usually means **split big files** and **name small behaviors** at the call site, not blanket interface types. |
-| "A bigger interface is more flexible" | A bigger interface locks more callers into one contract. Smaller composed pieces swap more cleanly. |
-| "We can add the interface later for free" | Later still means refactors across call sites. Budget the work honestly. |
+Someone tells you **“Go has no polymorphism.”** That is the **nominal** brain speaking. Go has **ad-hoc polymorphism**: small interfaces, structural typing, swap implementations without a class tree. No inheritance is not the same as no polymorphism — it is **polymorphism without a family crest**.
+
+Someone quotes **SOLID** and hears “interface on every return.” In Go, **interface segregation** usually means **split the fat file** and **name tiny behaviors at the call site**, not **wrap every constructor** in an abstraction you do not need yet.
+
+Someone says **“a bigger interface is more flexible.”** In practice the opposite happens: a wide contract **locks every caller** into the same dozen methods. **Small** pieces **compose**; **big** slabs **don’t**.
+
+Someone promises **“we can add the interface later for free.”** Later still means **touching call sites**, **updating tests**, and **arguing about names**. Budget that work the way you would budget a schema migration — honestly.
 
 ---
 
 ## 10. Related Tooling & Debugging
 
-| Tool | Relevance to interface design |
-|------|------------------------------|
-| `go doc` on a standard interface | See which concrete types in a package document that they satisfy common interfaces. |
-| gopls "find implementations" | Prove a concrete type matches a small local interface you introduced. |
-| staticcheck | Flags some stale or suspicious patterns in older code; rules vary by project lint config. |
-| `go test -bench` with **pprof** | Turn "does this interface boundary in a hot loop cost me" into numbers. |
+Use **`go doc`** on `io.Reader`-style interfaces to see how the stdlib advertises tiny behaviors, **gopls “find implementations”** to prove your test fake matches the two-line port you invented, **staticcheck** for stale patterns (per project config), and **`go test -bench` + pprof** when you suspect interface dispatch in a hot loop. Tools show **shape**; they do not choose your seams for you.
 
 > **In plain English:** A magnifying glass does not fix the faucet. It shows which washer is the wrong size. Tools reveal shape. The design call is still yours.
 
 ---
 
-## 11. Interview Gold Questions
+## 11. Three answers worth memorizing
 
 ### Q1: Why accept interfaces, return concrete structs?
 
-**Nutshell answer:** Return a **stable** concrete name so documentation and static understanding stay easy. Accept the **weakest** interface only at the seam you really swap: time, I/O, storage. Do not thread huge interfaces into every leaf helper.
+**Nutshell answer:** Return a **stable** concrete name so documentation and static understanding stay easy. Accept the **weakest** interface only at the seam you really swap: time, I/O, storage, outbound RPC. Do not thread huge interfaces into every leaf helper.
 
 > **In plain English:** Ship a sealed box with a part number on the side. For loading the truck, accept any box that has a handle.
 
@@ -582,7 +555,7 @@ type SingleGetter interface{ Get(id int) string }
 
 ## 12. Final Verbal Answer
 
-Interfaces in Go are **small** contracts you define **next to the code that needs them**, not a giant table owned by the implementation package. **Structural typing** means satisfaction is **implicit** at compile time. There is no `implements` line. The habit that wins interviews is **accept narrow interfaces, return named structs** so call sites and constructors stay legible. The smell is **interface pollution**: fat types that bloat every mock. The fix is the same every time. **Narrow the method set** to one or two verbs. **Define the interface** where you call those verbs. Compose bigger behavior from small pieces when you must, not from one kitchen-sink type.
+If someone asks me about interface design in Go, I’d tell them the whole thing is about **naming the smallest behavior you actually call** and putting that name **next to the code that calls it**. Interfaces are **not** a hierarchy game — satisfaction is **implicit**, there’s no `implements` line, and the compiler just checks method sets. The habit that keeps codebases sane is **accept narrow interfaces, return concrete structs**, so constructors and call sites stay readable. When tests hurt, it’s almost never “we need a bigger mock framework” — it’s **interface pollution**: a fat contract that makes you stub a whole department. The fix is the same in prod and in tests: **narrow the method set**, often to one or two verbs, and **compose** bigger behavior from small pieces when you truly need more than one sticker.
 
 ---
 
