@@ -7,239 +7,151 @@
 
 ## 1. Concept
 
-A **mutex** is a lock that lets **one** goroutine at a time enter a **critical section** of code that touches **shared memory**.
+A **mutex** is a lock. You use it when **more than one goroutine** might touch the **same memory** (a counter, a map, a pool struct) at the same time.
 
-> **In plain English:** Picture a single bathroom with one lock on the door. If the door is locked, everyone else waits in the hall. When someone leaves, they unlock. Only one person is inside at a time. That is mutual exclusion.
+Picture **one bathroom, one bolt on the door**. If someone is inside, everyone else waits in the hall. When they leave, they unbolt. Only one person is in there at a time. That is what the lock enforces: **only one goroutine at a time** runs the bit of code that updates your shared state.
+
+When you call `mu.Lock()` and later `mu.Unlock()`, the **code in between** is special: **only one goroutine runs it at a time**. If you hear "critical section," that's all it means — **the code between Lock and Unlock**.
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**Shared variables plus concurrent reads and writes without coordination produce races.** The compiler and CPU may reorder work; goroutines interleave unpredictably. **A mutex serializes access** so updates look atomic from the rest of the program. **Pair every `Lock()` with `Unlock()`**, usually via **`defer`**, and **never copy** a `sync.Mutex` or `sync.RWMutex`.
+**Shared fields + concurrent goroutines + no coordination = wrong answers.** Your HTTP handlers might interleave in any order. The compiler and CPU can reorder things. **`sync.Mutex` forces turns**: one goroutine finishes its update before the next one starts.
+
+**Rules that save you:** pair **`Lock()` with `Unlock()`**, almost always with **`defer mu.Unlock()`** right after `Lock()`. **Never copy** a value that embeds `sync.Mutex` or `sync.RWMutex` — the copy gets a **second lock** that does not protect the original data.
 
 ---
 
 ## 3. Mental Model (Lock this in)
 
-The bathroom lock analogy maps cleanly to Go. The **critical section** is the bathroom interior. **`Lock()`** is turning the bolt. **`Unlock()`** is opening it for the next person. If two people "share" the stall without a lock, you get chaos. With a lock, behavior is orderly.
+Your service has a **`RequestCounter`** (hits per path), a **`RateLimiter`** (tokens in a bucket), an in-memory **`Cache`** (map of session or computed data), maybe a **`ConnectionPool`** (idle vs in-use counts). These are all **shared structs**. Every incoming request might spawn or run logic in a goroutine. If two requests bump the same counter or read/write the same map **without** a lock, you get **races**: lost increments, corrupt maps, limits that lie.
 
-Two goroutines, one shared counter, **no mutex**:
+The bathroom maps to Go like this:
 
-```go
-var counter int
+- **`Lock()`** — bolt the door; your goroutine enters the protected bit of code.
+- **`Unlock()`** — open the door; the next waiter can enter.
+- The **protected bit** — only this goroutine runs it until `Unlock()`.
 
-func inc() {
-    counter++ // read, add, write — not one atomic step
-}
-
-func main() {
-    var wg sync.WaitGroup
-    for i := 0; i < 1000; i++ {
-        wg.Add(1)
-        go func() {
-            defer wg.Done()
-            inc()
-        }()
-    }
-    wg.Wait()
-    fmt.Println(counter) // often < 1000 — wrong
-}
-```
-
-```
-MEMORY TRACE:
-
-Step 1: var counter int
-  shared memory:
-    counter ──→ [ 0 ]  at addr 0xC000
-
-Step 2: goroutine G1 reads counter, goroutine G2 reads counter (both see 5 before either writes)
-  goroutine G1:  reads 0xC000 → gets 5
-  goroutine G2:  reads 0xC000 → gets 5   ◄── BOTH read 5; ++ is read/add/write, not one atomic step
-
-Step 3: both compute 5 + 1 = 6 and write back
-  shared memory:
-    counter ──→ [ 6 ]  ◄── should be 7; LOST UPDATE (one bump vanished)
-
-Step 4: pattern repeats under scheduling → fmt.Println(counter) often < 1000
-  shared memory:
-    counter ──→ [ nondeterministic ]  ◄── final value = last write wins, not true sum
-```
-
-> **In plain English:** Two people both read "5" on a whiteboard, both write "6", and nobody writes "7". You expected a thousand bumps; you got lost updates.
-
-**Fix:** one mutex, one critical section around the update.
-
-```go
-var (
-    counter int
-    mu      sync.Mutex
-)
-
-func inc() {
-    mu.Lock()
-    counter++
-    mu.Unlock()
-}
-```
-
-```
-MEMORY TRACE:
-
-Step 1: var counter int, var mu sync.Mutex
-  shared memory:
-    counter ──→ [ 0 ]  at addr 0xC000
-    mu (lock word / state) ──→ [ unlocked ]  at addr 0xC010
-
-Step 2: G1 calls mu.Lock()
-  shared memory:
-    mu ──→ [ locked, owner G1 ]
-  goroutine G2:  mu.Lock() ──→ blocks in scheduler wait queue   ◄── mutual exclusion
-
-Step 3: G1 runs counter++ then mu.Unlock()
-  shared memory:
-    counter ──→ [ 1 ]
-    mu ──→ [ unlocked ]
-
-Step 4: G2 wakes, Lock, increments, Unlock — strict turns for every inc()
-  ...
-  final after 1000 completions:
-    counter ──→ [ 1000 ]  at addr 0xC000   ◄── matches number of serialized critical sections
-```
-
-> **In plain English:** Only one goroutine may touch the counter at a time. The rest wait at the door. The final value matches the number of completed increments.
+Two handlers both doing `count++` on a shared `int` **without** a mutex is like two people both reading the whiteboard, both writing the same wrong total. You **lose** request counts in production; dashboards lie; rate limits slip.
 
 ---
 
 ## 4. How It Works
 
-### 4.1 `sync.Mutex`: `Lock()`, `Unlock()`, critical section
+### 4.1 `sync.Mutex`: `Lock()`, `Unlock()`, and the protected region
 
-`Lock()` blocks until the mutex is free, then marks it owned by the calling goroutine. `Unlock()` releases it. The **critical section** is the code between them.
+`Lock()` waits until no one else holds the mutex, then your goroutine owns it. `Unlock()` releases it. **Everything between them runs alone** — no other goroutine that uses the same `mu` runs that region at the same time.
 
 ```go
-mu.Lock()
-// critical section: only this goroutine may run this code path
-balance += amount
-mu.Unlock()
+type RequestCounter struct {
+    mu    sync.Mutex
+    byPath map[string]int64 // path -> request count
+}
+
+func (c *RequestCounter) Record(path string) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.byPath[path]++
+}
 ```
 
+**Typical failure without a lock:** two goroutines handle `/api/users` at once. Both read the same count, both add one, both write back the same number. **You expected +2; you got +1.** That's a **lost update** on your metrics.
+
 ```
-MEMORY TRACE:
+MEMORY TRACE — race on shared request count (no mutex):
 
-Step 1: before Lock — balance update is the critical section
-  shared memory:
-    mu ──→ [ unlocked ]  at addr 0xC010
-    balance ──→ [ ... ]  at addr 0xC100
+Step 1: shared state for path "/api/users" shows count 100
 
-Step 2: G1 executes mu.Lock()
-  shared memory:
-    mu ──→ [ locked, owner G1 ]
-  stack (G1):  about to run balance += amount   ◄── only G1 inside critical section
+Step 2: goroutine G1 (request A) and G2 (request B) both read count → both see 100
+        ◄── each does read / add 1 / write; those steps are not one atomic instruction
 
-Step 3: G2 executes mu.Lock() while G1 holds
-  shared memory:
-    mu ──→ [ locked, owner G1 ]
-  goroutine G2:  parked ◄── cannot observe or mutate balance until Unlock
+Step 3: both compute 101 and store
+        shared count becomes 101
+        ◄── should be 102; one request never showed up in the counter (lost bump)
 
-Step 4: G1 executes mu.Unlock()
-  shared memory:
-    mu ──→ [ unlocked ]
-  goroutine G2:  Lock() succeeds, enters critical section   ◄── handoff; total order on balance
+Step 4: under real load, scheduling varies → final count wrong and non-deterministic
 ```
 
-> **In plain English:** `Lock()` is "my turn or I wait." `Unlock()` is "next." Anything that must not run two at a time goes between them.
+**Fix:** one `sync.Mutex` on the struct, **`Lock()` / `defer Unlock()`** around the map update. Only one goroutine at a time runs `c.byPath[path]++`.
+
+```
+MEMORY TRACE — same counter with mutex:
+
+Step 1: G1 calls Lock → holds mutex; G2 calls Lock → waits
+
+Step 2: G1 runs c.byPath[path]++, then Unlock
+
+Step 3: G2 wakes, Lock succeeds, increments, Unlock
+        ◄── updates happen in strict order; no two goroutines overlap the protected code
+
+Step 4: after both complete, count reflects both requests (e.g. 100 → 102)
+```
 
 ### 4.2 `defer mu.Unlock()`
 
-```go
-func transfer(from, to *Account, amount int) {
-    mu.Lock()
-    defer mu.Unlock()
+Early `return` must still release the lock. **`defer` runs when the function returns**, including error paths (and after `panic` recovery boundaries — still prefer small critical sections).
 
-    if from.balance < amount {
-        return // defer still runs — mutex released
+```go
+func (lim *RateLimiter) Take() bool {
+    lim.mu.Lock()
+    defer lim.mu.Unlock()
+
+    if lim.tokens <= 0 {
+        return false // defer still unlocks
     }
-    from.balance -= amount
-    to.balance += amount
+    lim.tokens--
+    return true
 }
 ```
 
-```
-MEMORY TRACE:
+Without `defer`, a `return` after `Lock()` **leaves the mutex held**. The next `Take()` blocks forever — classic **self-inflicted deadlock** for that limiter.
 
-Step 1: enter transfer, mu.Lock()
-  stack (transfer):
-    defer stack ──→ [ mu.Unlock scheduled ]
-  shared memory:
-    mu ──→ [ locked ]  at addr 0xC010
-
-Step 2: body runs (from.balance, to.balance, early return paths)
-  stack:
-    defer Unlock still pending   ◄── not run until function actually returns
-
-Step 3: return (including if from.balance < amount)
-  stack:  deferred mu.Unlock() runs
-  shared memory:
-    mu ──→ [ unlocked ]  ◄── mutex released on every exit path; no forgotten Unlock
-```
-
-> **In plain English:** Every return path, including errors and panics after `Lock()`, still runs deferred calls. You avoid forgetting `Unlock()` on an early `return`.
-
-### 4.3 `sync.RWMutex`: many readers **or** one writer
-
-- **`RLock()` / `RUnlock()`:** shared **read** lock. Many goroutines can hold it at once **if nobody holds a write lock**.
-- **`Lock()` / `Unlock()`:** exclusive **write** lock. Like a normal mutex for writers. **Blocks all readers and writers** until released.
+### 4.3 Rate limiter shape (tokens + mutex)
 
 ```go
-var (
-    data map[string]int
-    rw   sync.RWMutex
-)
-
-func Read(key string) int {
-    rw.RLock()
-    defer rw.RUnlock()
-    return data[key]
+type RateLimiter struct {
+    mu     sync.Mutex
+    tokens int // refill logic omitted — focus is concurrent Take/Refill
 }
 
-func Write(key string, v int) {
-    rw.Lock()
-    defer rw.Unlock()
-    data[key] = v
+// Take tries to consume one token; Refill adds tokens — both must lock the same mu.
+```
+
+Many goroutines calling `Take()` for API traffic **must** serialize updates to `tokens`. Same idea as the request counter: **read, decide, write** is multiple steps; without a lock, two callers both think a token exists.
+
+### 4.4 `sync.RWMutex`: many readers **or** one writer
+
+Use this when **lots of HTTP GETs** read a cache and **invalidation or refresh** writes rarely.
+
+- **`RLock()` / `RUnlock()`** — shared read lock. Many goroutines can hold it **if** no writer holds `Lock()`.
+- **`Lock()` / `Unlock()`** — exclusive. **Blocks everyone** until the writer finishes.
+
+```go
+type Cache struct {
+    mu   sync.RWMutex
+    data map[string]string
+}
+
+func (c *Cache) Get(key string) (string, bool) {
+    c.mu.RLock()
+    defer c.mu.RUnlock()
+    v, ok := c.data[key]
+    return v, ok
+}
+
+func (c *Cache) Invalidate(key string) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    delete(c.data, key)
 }
 ```
 
-```
-MEMORY TRACE:
+**When `RWMutex` helps:** read-heavy cache, reads are safe to overlap, writes are infrequent. **When a plain `Mutex` is enough:** writes are common, or the protected code is so tiny that reader lock bookkeeping does not pay off.
 
-Step 1: var data map[string]int, var rw sync.RWMutex
-  heap:
-    map header / buckets for data ──→ [ ... ]  at addr 0xD000
-  shared memory:
-    rw (reader/writer state) ──→ [ no writer, readers: 0 ]  at addr 0xC020
+### 4.5 Connection pool (mental picture)
 
-Step 2: G1..G4 call Read → rw.RLock()
-  shared memory:
-    rw ──→ [ no writer, readers: 4 ]   ◄── many readers overlap; all read same map snapshot rules
-
-Step 3: writer calls Write → rw.Lock() while readers still hold RLock
-  goroutine GW:  blocks until last RUnlock completes   ◄── writer exclusive; no concurrent map mutation
-
-Step 4: GW mutates data[key], then Unlock()
-  heap:
-    0xD000 ──→ updated entry for key
-  shared memory:
-    rw ──→ [ unlocked for write path ]
-
-Step 5: new Read callers RLock again while no writer holds Lock
-  shared memory:
-    rw ──→ [ readers: N ]   ◄── read crowd resumes; writer slot was exclusive
-```
-
-> **In plain English:** Either a crowd may **look** together, or **one** person may **change** the room. Not both at once.
-
-**When to use `RWMutex`:** read-heavy workloads on a shared structure, reads are safe to overlap, writes are rare but must be exclusive. If writes are frequent or the critical section is tiny, a plain `Mutex` may be simpler and fast enough.
+A **`ConnectionPool`** might track `idle` and `active` slices or counts. **`Borrow()`** and **`Return()`** from different request goroutines **must** update those structures under **one mutex**. Otherwise two goroutines might hand out the same connection, or lose one on the free list.
 
 ---
 
@@ -248,196 +160,88 @@ Step 5: new Read callers RLock again while no writer holds Lock
 ### Always pair `Lock()` with `defer Unlock()`
 
 ```go
-func bad() {
+func bad(mu *sync.Mutex) {
     mu.Lock()
     if err != nil {
-        return // BUG: forgot Unlock — deadlock or leak
+        return // BUG: forgot Unlock
     }
     mu.Unlock()
 }
 ```
 
-```
-MEMORY TRACE:
-
-Step 1: mu.Lock()
-  stack (bad):
-    about to check err
-  shared memory:
-    mu ──→ [ locked ]  at addr 0xC010
-
-Step 2: if err != nil { return } — early exit without Unlock on this path
-  shared memory:
-    mu ──→ [ locked ]   ◄── still held; lock leaked for this goroutine's logical scope
-
-Step 3: later: same mu used elsewhere, or second call to bad()
-  goroutine:  mu.Lock() ──→ blocks forever (or program stuck)   ◄── classic forgotten Unlock / deadlock
-```
-
 ```go
-func good() {
+func good(mu *sync.Mutex) {
     mu.Lock()
     defer mu.Unlock()
     if err != nil {
-        return // OK: defer unlocks
+        return // OK
     }
 }
 ```
 
-> **In plain English:** Treat `Lock()` like opening a file: use `defer` to close on every exit.
+Treat `Lock()` like a resource you **always** release on exit — **`defer`** is the usual pattern.
 
 ### Never copy a mutex — the copy trap
 
+If you **pass your cache or counter struct by value** into a handler helper, **the mutex is copied too**. Each copy has **its own lock**. Goroutines lock **different** mutexes. **Your real map or counter is not protected.**
+
 ```go
-type SafeCounter struct {
-    mu    sync.Mutex
-    value int
+type Cache struct {
+    mu   sync.Mutex
+    data map[string]string
 }
 
-func Broken(c SafeCounter) { // receives a COPY
+func brokenRefresh(c Cache) { // BY VALUE — copies mu and map header
     c.mu.Lock()
     defer c.mu.Unlock()
-    c.value++ // increments the COPY's field — caller unchanged
+    c.data["x"] = "y" // mutating the copy's map field — subtle and dangerous
 }
 ```
 
+**Correct:** pointer receiver, pass `*Cache`, one mutex per live object.
+
 ```
-MEMORY TRACE:
+MEMORY TRACE — copy trap:
 
-Step 1: caller holds one SafeCounter value (by-value variable in caller frame)
-  stack (caller):
-    SafeCounter at addr 0xE000 ──→  mu at 0xE008, value at 0xE028
-  shared memory:
-    mu @0xE008 ──→ [ unlocked ]
-    value @0xE028 ──→ [ 0 ]
+Step 1: you have one Cache value in the caller; it holds the real map and one mutex
 
-Step 2: Broken(c SafeCounter) receives a struct copy — new stack slot
-  stack (Broken):
-    copy SafeCounter at addr 0xE100 ──→  mu_copy at 0xE108, value_copy at 0xE128
+Step 2: you pass Cache by value into a function → Go copies the whole struct
+        the copy contains a second mutex word and a copy of the map descriptor
 
-Step 3: c.mu.Lock() locks only the copy's mutex
-  shared memory:
-    mu_copy @0xE108 ──→ [ locked ]
-    mu @0xE008 ──→ [ unlocked ]   ◄── TWO independent lock words; "real" mutex never held
+Step 3: the callee locks the copy's mutex only
+        the original's mutex is never held by that path
 
-Step 4: c.value++ updates copy; defer unlocks mu_copy only
-  value_copy @0xE128 ──→ [ 1 ]
-  value @0xE028 ──→ [ 0 ]   ◄── caller unchanged; false sense of safety
+Step 4: another goroutine can mutate the original cache while the first goroutine
+        thinks it is "safe" — you now have two unrelated locks; shared data is unprotected
 ```
-
-> **In plain English:** Copying duplicates the lock. Two locks protect two different imaginary bathrooms. The real counter is unprotected.
-
-### Mutex must be a pointer field or embedded on a pointer receiver — never pass the struct by value
 
 ```go
-type SafeCounter struct {
-    mu    sync.Mutex
-    value int
-}
-
-func (c *SafeCounter) Inc() {
+func (c *Cache) Refresh(key, val string) {
     c.mu.Lock()
     defer c.mu.Unlock()
-    c.value++
+    c.data[key] = val
 }
 ```
 
-```
-MEMORY TRACE:
+### Pointer receivers for types that embed `sync.Mutex`
 
-Step 1: one object (e.g. &SafeCounter{}) allocated — single layout
-  heap:
-    *SafeCounter at 0xF000 ──→  mu at 0xF008, value at 0xF028
+Methods that mutate shared state should use **`func (c *Cache)`** style **pointer receivers** so every call shares **one** mutex and **one** backing map.
 
-Step 2: (c *SafeCounter) Inc() — receiver is pointer, not a copy
-  stack (Inc):
-    c ──→ 0xF000   ◄── all calls share this address; one mu, one value field
+### Do not `Lock()` twice on the same `sync.Mutex` in one goroutine
 
-Step 3: c.mu.Lock(); c.value++; defer Unlock
-  shared memory:
-    mu @0xF008 ──→ [ locked ] then [ unlocked ]
-    value @0xF028 ──→ increments visible to every holder of *SafeCounter   ◄── one truth
-```
+`sync.Mutex` is **not re-entrant**. Second `Lock()` blocks until `Unlock()`, which you never reach — **deadlock**.
 
-> **In plain English:** Methods that mutate shared state should take a **pointer receiver** so there is only one `sync.Mutex` in the program for that object.
+### Mutex vs channel (quick guide)
 
-### `RWMutex`: multiple `RLock()` concurrent, but `Lock()` is exclusive
-
-```go
-// Many goroutines: rw.RLock() ... RUnlock()  — OK in parallel
-// One goroutine:  rw.Lock() ... Unlock()    — blocks all readers and writers
-```
-
-```
-MEMORY TRACE:
-
-Step 1: R R R R — only RLock holders
-  shared memory:
-    rw ──→ [ readers: 4, writer: none ]   ◄── OK concurrent reads
-
-Step 2: R then W — writer tries Lock while readers active
-  shared memory:
-    rw ──→ [ readers: >0 ]
-  goroutine W:  blocked until reader count drops to 0   ◄── W waits for R's to finish
-
-Step 3: W then R — new reader tries RLock during write Lock
-  shared memory:
-    rw ──→ [ writer held ]
-  goroutine R_new:  RLock blocks ◄── R waits for W
-
-Step 4: W W — second writer tries Lock while first still holds
-  goroutine W2:  blocked ◄── second W waits behind exclusive writer
-```
-
-> **In plain English:** Readers may pack the balcony. When a writer enters, the balcony clears.
-
-### Deadlock: locking twice without unlocking
-
-```go
-func oops(mu *sync.Mutex) {
-    mu.Lock()
-    mu.Lock() // same goroutine, same mutex — blocks forever
-    mu.Unlock()
-    mu.Unlock()
-}
-```
-
-```
-MEMORY TRACE:
-
-Step 1: first mu.Lock() in oops
-  shared memory:
-    mu ──→ [ locked by G1 ]  at addr 0xC010
-  stack (G1):  inside oops, first critical section entered
-
-Step 2: second mu.Lock() same goroutine, same mutex (sync.Mutex is not reentrant)
-  shared memory:
-    mu ──→ [ still locked by G1 ]
-  goroutine G1:  second Lock() ──→ blocks waiting for Unlock   ◄── but G1 is the one who must Unlock
-
-Step 3: no progress — first Unlock never reached
-  shared memory:
-    mu ──→ [ locked by G1 ]
-  goroutine G1:  self-wait   ◄── permanent deadlock; program hangs
-```
-
-> **In plain English:** You hold the only key and you are waiting for yourself to hand it over. The program hangs.
-
-### Mutex vs channel — quick decision guide
-
-1. **Protect a small shared variable or struct with invariants?** Prefer a **mutex** inside a type with clear methods.
-2. **Pass ownership of work or results between goroutines?** Prefer a **channel**.
-3. **Fan-in events or signals?** Often a **channel**.
-4. **Hot path, one shared counter or cache?** Often a **mutex** or `RWMutex`.
-5. **Unsure and the state fits one owner goroutine?** **Channel** may simplify reasoning.
-
-> **In plain English:** Mutexes are for **shared memory with rules**. Channels are for **communication and handoff**. The Go proverb favors channels when they clarify design; mutexes remain normal and idiomatic for many structures.
+- **Protecting fields on a struct** (counter, limiter, cache, pool stats)? **Mutex** (or `RWMutex`) with clear methods.
+- **Handing off work or signaling** between goroutines? Often a **channel**.
+- Hot path shared state? **Mutex** is normal and idiomatic in Go.
 
 ---
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### 6.1 Race without mutex — broken output
+### 6.1 Broken: shared counter, no lock
 
 ```go
 package main
@@ -448,41 +252,22 @@ import (
 )
 
 func main() {
-    var n int
+    var total int64
     var wg sync.WaitGroup
-    const workers = 10000
-    for i := 0; i < workers; i++ {
+    const handlers = 10000
+    for i := 0; i < handlers; i++ {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            n++
+            total++ // race: simulates each HTTP handler bumping a global request count
         }()
     }
     wg.Wait()
-    fmt.Println(n)
+    fmt.Println(total) // often < 10000
 }
 ```
 
-```
-MEMORY TRACE:
-
-Step 1: var n int in main
-  shared memory:
-    n ──→ [ 0 ]  at addr 0xC000
-
-Step 2: two workers interleave — both read same n before either writes (e.g. both see 100)
-  goroutine A:  reads 0xC000 → gets 100
-  goroutine B:  reads 0xC000 → gets 100   ◄── BOTH read 100; n++ races
-
-Step 3: both compute 100 + 1 = 101 and store
-  shared memory:
-    n ──→ [ 101 ]  ◄── should be 102; LOST UPDATE (× many interleavings)
-
-Step 4: wg.Wait(); fmt.Println(n)
-  sample stdout: 7234 (varies; not 10000)   ◄── non-deterministic final sum
-```
-
-### 6.2 Same logic with `sync.Mutex` — correct output
+### 6.2 Fixed: `sync.Mutex` around the bump
 
 ```go
 package main
@@ -493,103 +278,44 @@ import (
 )
 
 func main() {
-    var n int
+    var total int64
     var mu sync.Mutex
     var wg sync.WaitGroup
-    const workers = 10000
-    for i := 0; i < workers; i++ {
+    const handlers = 10000
+    for i := 0; i < handlers; i++ {
         wg.Add(1)
         go func() {
             defer wg.Done()
             mu.Lock()
-            n++
+            total++
             mu.Unlock()
         }()
     }
     wg.Wait()
-    fmt.Println(n)
+    fmt.Println(total) // 10000
 }
 ```
 
-```
-10000
-```
-
-```
-MEMORY TRACE:
-
-Step 1: var n int, var mu sync.Mutex
-  shared memory:
-    n ──→ [ 0 ]  at addr 0xC000
-    mu ──→ [ unlocked ]  at addr 0xC010
-
-Step 2: worker goroutine calls mu.Lock() — only one holds lock at a time
-  shared memory:
-    mu ──→ [ locked, owner Gk ]
-  other workers:  Lock() ──→ block until Unlock   ◄── n++ never overlaps
-
-Step 3: critical section n++; mu.Unlock()
-  shared memory:
-    n ──→ strictly +1 per completed Lock/Unlock pair
-    mu ──→ [ unlocked ] then next worker proceeds
-
-Step 4: after 10000 serialized increments, fmt.Println(n)
-  shared memory:
-    n ──→ [ 10000 ]  at addr 0xC000   ◄── matches 10000 completed critical sections (stdout: 10000)
-```
-
-### 6.3 `sync.RWMutex` for concurrent reads
+### 6.3 `RequestCounter` with pointer receiver
 
 ```go
-type PhoneBook struct {
-    mu   sync.RWMutex
-    data map[string]string
+type RequestCounter struct {
+    mu     sync.Mutex
+    byPath map[string]int64
 }
 
-func NewPhoneBook() *PhoneBook {
-    return &PhoneBook{data: make(map[string]string)}
+func NewRequestCounter() *RequestCounter {
+    return &RequestCounter{byPath: make(map[string]int64)}
 }
 
-func (p *PhoneBook) Get(name string) string {
-    p.mu.RLock()
-    defer p.mu.RUnlock()
-    return p.data[name]
-}
-
-func (p *PhoneBook) Set(name, number string) {
-    p.mu.Lock()
-    defer p.mu.Unlock()
-    p.data[name] = number
+func (c *RequestCounter) Record(path string) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.byPath[path]++
 }
 ```
 
-```
-MEMORY TRACE:
-
-Step 1: *PhoneBook — p.mu and p.data on one object (e.g. heap 0xB000)
-  heap:
-    PhoneBook at 0xB000 ──→  mu at 0xB008, map data at 0xB020
-  shared memory:
-    p.mu ──→ [ readers: 0, no writer ]  at addr 0xB008
-
-Step 2: four goroutines Get → RLock
-  shared memory:
-    p.mu ──→ [ readers: 4 ]   ◄── overlapping reads; return p.data[name] under shared lock
-
-Step 3: Set calls Lock while readers still active
-  goroutine writer:  blocks until all RUnlock   ◄── exclusive mutation of map
-
-Step 4: writer updates p.data, Unlock()
-  heap:
-    map at 0xB020 ──→ new key/value visible
-  shared memory:
-    p.mu ──→ [ writer released ]
-
-Step 5: new Get after write — RLock may proceed
-  goroutine reader:  if writer holds Lock, RLock blocks ◄── readers wait for exclusive writer
-```
-
-### 6.4 Copy trap in action
+### 6.4 Copy trap: helper takes your struct by value
 
 ```go
 package main
@@ -599,173 +325,120 @@ import (
     "sync"
 )
 
-type Bag struct {
-    mu     sync.Mutex
-    coins  int
+// In-flight requests — field must move only under one real mutex.
+type Metrics struct {
+    mu         sync.Mutex
+    inFlight   int
 }
 
-func addByValue(b Bag) {
-    b.mu.Lock()
-    defer b.mu.Unlock()
-    b.coins++
+func bumpInFlightByValue(m Metrics) {
+    m.mu.Lock()
+    defer m.mu.Unlock()
+    m.inFlight++
 }
 
 func main() {
-    var bag Bag
-    addByValue(bag)
-    fmt.Println(bag.coins) // 0 — copy was modified
+    var m Metrics
+    bumpInFlightByValue(m)
+    fmt.Println(m.inFlight) // 0 — only the copy's field changed
+    // Real handler code: func(w http.ResponseWriter, r *http.Request, pool *Metrics)
 }
 ```
 
-```
-MEMORY TRACE:
-
-Step 1: main — var bag Bag on stack
-  stack (main):
-    bag at addr 0xA000 ──→  mu at 0xA008, coins at 0xA018
-  shared memory:
-    coins @0xA018 ──→ [ 0 ]
-
-Step 2: addByValue(bag) passes Bag by value — copy in callee frame
-  stack (addByValue):
-    b at addr 0xA100 ──→  mu_copy at 0xA108, coins_copy at 0xA118
-
-Step 3: b.mu.Lock(); b.coins++ on the copy only
-  shared memory:
-    mu_copy ──→ [ locked ] @0xA108
-    coins_copy @0xA118 ──→ [ 1 ]
-    coins @0xA018 ──→ [ 0 ]   ◄── main's bag never incremented
-
-Step 4: function returns — copy discarded; Unlock released copy's mutex only
-  stack (main):
-    bag.coins still [ 0 ]   ◄── fmt.Println(bag.coins) → 0
-```
+**Why a `map` in a copy is misleading in a toy:** copying the struct **copies the mutex** but the **map header still points at the same map** — you can "see" writes from a by-value helper and think you're safe. **`int` fields** show the trap in one goroutine. Under **real concurrency**, by-value helpers on **`Cache`** still give you **two lock words** and **racy map writes**.
 
 ---
 
 ## 6.5. Practice Checkpoint
 
-### Tier 1: Predict the Output (2 min)
+### Tier 1: Predict the behavior (2 min)
 
 ```go
-package main
+type RequestCounter struct {
+    mu     sync.Mutex
+    byPath map[string]int64
+}
 
-import (
-    "fmt"
-    "sync"
-)
+// Bug on purpose: value receiver — each call gets its own mutex copy.
+func (c RequestCounter) Record(path string) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.byPath[path]++
+}
 
 func main() {
-    var x int
+    c := RequestCounter{byPath: make(map[string]int64)}
     var wg sync.WaitGroup
-    for i := 0; i < 50; i++ {
+    for i := 0; i < 1000; i++ {
         wg.Add(1)
         go func() {
             defer wg.Done()
-            for j := 0; j < 1000; j++ {
-                x++
+            for j := 0; j < 100; j++ {
+                c.Record("/api/x")
             }
         }()
     }
     wg.Wait()
-    fmt.Println(x)
+    fmt.Println(c.byPath["/api/x"])
 }
 ```
 
-```
-MEMORY TRACE:
-
-Step 1: var x int
-  shared memory:
-    x ──→ [ 0 ]  at addr 0xC000
-
-Step 2: 50 goroutines each run 1000× x++; two interleave on one load/store pair
-  goroutine G1:  reads 0xC000 → gets k
-  goroutine G2:  reads 0xC000 → gets k   ◄── BOTH read k; lost updates across inner loop
-
-Step 3: both write k+1
-  shared memory:
-    x ──→ [ k+1 ]  ◄── expected +2 from this pair, got +1; repeats often
-
-Step 4: after wg.Wait(), fmt.Println(x)
-  shared memory:
-    x ──→ [ value < 50000, nondeterministic ]   ◄── no mutex; not 50000
-```
-
 > [!success]- Answer
-> The program prints a **number less than** `50000` and **not deterministic**. Many increments race on `x`. There is no mutex. Exact value varies run to run.
+> **Not `100000`.** The printed value is **wrong and varies run to run** (often **much less** than 100000). The `map` header is still shared, but **each `Record` locks a different `Mutex` copy**, so **nothing serializes** concurrent `c.byPath[path]++` — classic **data race**. Run with **`go run -race`**. Fix: **`func (c *RequestCounter) Record(...)`** so every call shares **one** mutex and the protected code between **`Lock` and `Unlock`** actually runs **one goroutine at a time**.
 
-### Tier 2: Fix the Bug (5 min)
+### Tier 2: Fix the bug (5 min)
 
 ```go
-type Stats struct {
-    mu    sync.Mutex
-    hits  int
+type Cache struct {
+    mu   sync.RWMutex
+    data map[string][]byte
 }
 
-func (s Stats) RecordHit() {
-    s.mu.Lock()
-    defer s.mu.Unlock()
-    s.hits++
+func (c Cache) Set(key string, blob []byte) {
+    c.mu.Lock()
+    defer c.mu.Unlock()
+    c.data[key] = blob
 }
-```
-
-```
-MEMORY TRACE:
-
-Step 1: first RecordHit — value receiver copies Stats into callee frame
-  stack (caller #1):
-    Stats at 0xE000 ──→  mu at 0xE008, hits at 0xE018
-  stack (RecordHit callee #1):
-    copy Stats at 0xE100 ──→  mu' at 0xE108, hits' at 0xE118
-
-Step 2: s.mu.Lock() on copy #1; s.hits++
-  mu' @0xE108 ──→ [ locked ]
-  hits' @0xE118 ──→ [ 1 ]
-  hits @0xE018 ──→ [ 0 ]   ◄── original Stats in caller untouched
-
-Step 3: second RecordHit — brand-new copy, different mu address 0xE208
-  shared memory:
-    mu'' @0xE208 ──→ [ locked ] independently
-  caller's real mu @0xE008 ──→ [ unlocked ]   ◄── each call locks a different mutex; original hits never updated on the shared Stats value
-
-Step 4: logical invariant broken — "protected" field is not serialized under one lock
-  hits @0xE018 ──→ [ still 0 or racy ]   ◄── interview trap: value receiver + Mutex
 ```
 
 > [!success]- Answer
-> **Bug:** value receiver copies `Stats`, so each call locks a **different** mutex. **Fix:** use a pointer receiver: `func (s *Stats) RecordHit()`. Optionally hide `Stats` construction so callers cannot copy it accidentally.
+> **Bug:** value receiver **`func (c Cache)`** copies the struct, so **`Lock()` locks a different mutex each call** and **`c.data` updates may not hit the caller's map reliably** — same failure mode as copying `sync.Mutex`.
+>
+> **Fix:** **`func (c *Cache) Set(key string, blob []byte)`** with pointer receiver. Construct caches as **`&Cache{data: make(...)}`** and pass **`*Cache`** around. Never pass the struct by value into handlers if it contains a mutex.
 
 ---
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | Why it bites | Safer habit |
-|------|----------------|-------------|
-| Copy trap | Duplicated `sync.Mutex` gives **false** safety | Pointer receivers; do not pass the struct by value |
-| Forgotten `Unlock` | Early `return` leaves mutex held | `defer mu.Unlock()` right after `Lock()` |
-| Recursive double `Lock` | Same goroutine blocks itself | Restructure; or use `sync.Mutex` only once per path |
-| Mixing mutex and channel for same invariant | Easy to deadlock or race | One coordination strategy per shared state |
-| `RWMutex` for tiny data | Reader lock overhead may dominate | Benchmark; sometimes `Mutex` wins |
+| Trap | What happens | What to do |
+|------|----------------|------------|
+| Copy trap | Two mutexes, **false** sense of safety | Pointer receivers; **`func (c *T)`**; pass pointers |
+| Forgotten `Unlock` | Early `return` leaves lock held | **`defer mu.Unlock()`** immediately after `Lock()` |
+| Double `Lock` same mutex | Same goroutine blocks itself | One lock per path; split functions |
+| `RWMutex` on tiny structs | Reader lock overhead | Benchmark; sometimes plain **`Mutex`** wins |
+| Mixing mutex + channel for same invariant | Easy deadlocks | One clear strategy per piece of state |
 
 ---
 
 ## 8. Interview Gold Questions (Top 3)
 
-1. **What is a data race, and how does a mutex prevent it?**  
-   A data race is two unsynchronized accesses, at least one write, to the same memory. A mutex forces those accesses into a **total order** so reads and writes do not interleave unpredictably.
+**Q1: What is a data race, and how does a mutex help?**
 
-2. **Why must you not copy `sync.Mutex`?**  
-   The mutex state lives in the value. A copy gets its **own** lock bit. Two goroutines can then enter the same logical critical section using different copies, and shared fields stay racy.
+Two goroutines access the same memory, **at least one write**, without ordering rules. The scheduler can interleave their reads and writes. A mutex **queues** those accesses so **only one goroutine at a time** runs the code between **`Lock()` and `Unlock()`** — updates appear **serial**, not tangled.
 
-3. **When would you pick `RWMutex` over `Mutex`?**  
-   When reads greatly outnumber writes, reads can run concurrently, and the read-side critical section is non-trivial enough that parallel reads help. Writers still need exclusive access.
+**Q2: Why must you not copy `sync.Mutex`?**
+
+The lock state lives **inside the struct value**. A copy gets a **new** lock word. Two goroutines can each hold **a different copy's** lock and still stomp the same shared map or counter. **One live object → one mutex.**
+
+**Q3: When pick `RWMutex` over `Mutex`?**
+
+**Many concurrent readers** (GETs from a cache), **rare writers** (invalidation), reads safe to overlap, writer needs **exclusive** access. If writes are frequent, measure — a single **`Mutex`** is often simpler.
 
 ---
 
 ## 9. 30-Second Verbal Answer
 
-Concurrent goroutines **interleave**. If they share memory without rules, **reads and writes collide** and values become **wrong and non-deterministic**. A **mutex** is a **sleeping bouncer**: one goroutine inside the **critical section** at a time. In Go, call **`Lock()`**, **`defer Unlock()`**, keep the critical section **small**, use **pointer receivers** so the mutex is **not copied**, and use **`RWMutex`** when **many readers** and **rare writers** fit the workload. Prefer **channels** when you are **handing off work or signaling**; prefer **mutexes** when **protecting shared struct fields** is clearest.
+Your handlers run in goroutines. If they share a **counter, rate limiter, cache, or pool struct** without coordination, **updates interleave** and you get **wrong counts, broken maps, or unsafe pools**. A **mutex** is a **turnstile**: **`Lock()`**, do the smallest amount of work on shared fields, **`defer Unlock()`**. **`RWMutex`** when **many readers** and **occasional writers**. **Never copy** structs that embed **`sync.Mutex`** — use **pointer receivers** and **one** object. Use **channels** when the design is about **sending work or signals**; use **mutexes** when the clearest model is **protecting shared fields**.
 
 ---
 

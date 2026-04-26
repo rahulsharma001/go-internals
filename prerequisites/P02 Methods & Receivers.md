@@ -33,19 +33,25 @@ Value receiver: you hand the clerk a photocopy. They scribble on the photocopy. 
 Pointer receiver: you tell the clerk where your desk is. They walk over and write on the original.
 
 ```go
+type LineItem struct {
+	SKU string
+	Qty int
+}
+
 type Order struct {
-	ID     string
-	Paid   bool
-	TotalCents int
+	ID          string
+	Paid        bool
+	TotalCents  int
+	Items       []LineItem
 }
 
 func (o Order) CalculateTotal() int {
-	// read-only math on a copy is fine for small structs
+	// read-only: sum from TotalCents or walk Items — copy is OK for small reads
 	return o.TotalCents
 }
 
 func (o *Order) MarkPaid() {
-	o.Paid = true // writes the real Order
+	o.Paid = true
 }
 ```
 
@@ -120,24 +126,9 @@ func (s *UserService) UpdateEmail(ctx context.Context, id int64, email string) e
 }
 ```
 
-### HTTP server: why your handler uses a pointer to `Server`
+### HTTP server: why your handler uses `func (srv *Server)`
 
-Typical pattern:
-
-```go
-type Server struct {
-	db     *sql.DB
-	router chi.Router
-}
-
-func (srv *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
-	// srv.db must be THE shared DB, not a copy of Server with wrong fields
-}
-```
-
-If `handleUsers` used a value receiver, every request would get a **copy** of `Server`. You would still have the same `*sql.DB` pointer **inside** the copy — so reads through the DB might work — but any field you set on `Server` itself (rate limiter state, middleware counters, whatever) would update only the copy. In real code you want one shared `Server` state. Pointer receiver.
-
-**Rule of thumb:** struct holds `*sql.DB`, mutex, client handles, or is "the app" — use `*YourType`.
+Your `Server` struct usually holds `*sql.DB`, a router, maybe metrics. Handlers are `func (srv *Server) handleUsers(w, r)` so every request hits **the same** `srv`. With a value receiver, each call would get a **copy** of `Server`. The `*sql.DB` inside would still point at the real DB, but anything you store **on** `Server` itself (rate limits, per-server flags) would update only the copy. Pointer receiver keeps one shared server object.
 
 ### When a value receiver is actually nice
 
@@ -146,17 +137,15 @@ Use a value receiver when:
 - The type is **small** and **read-only** in practice (`Config.Validate`, `UserID.IsEmpty`).
 - You want each call to work on a **snapshot** and you will not write back.
 
-You still need to know what "copy" means for slices and maps inside the struct (header copied, backing store shared). If your method does `append` on a slice field and you need the new length visible to the caller, you need a pointer receiver so you update the slice header in place.
+Slice/map **headers** copy; backing stores are shared. If you `append` into a slice **field** and the caller must see the new length, use a pointer receiver so the header updates in place.
 
-### Method sets (without the textbook voice)
+### Method sets (plain words)
 
-Attach this picture:
+- `func (u User)` — counts as a method on **`User`**.
+- `func (u *User)` — counts as a method on **`*User` only**, not on plain `User`.
+- **`*User`** picks up **both** kinds: value-style and pointer-style.
 
-- Methods declared as `func (u User)` belong to **`User`**.
-- Methods declared as `func (u *User)` belong to **`\*User`** only — not to plain **`User`**.
-- **`\*User`** gets **both**: all `User` methods **and** all `*User` methods.
-
-So the pointer type is the "full" side. The plain value type might be missing methods.
+So the pointer type has the longer list. The value type might be "missing" methods when an interface asks for them.
 
 ### Interfaces: `Repository` and `PostgresRepo`
 
@@ -190,7 +179,7 @@ func (r *PostgresRepo) FindByID(ctx context.Context, id int64) (*User, error) {
 var _ Repository = (*PostgresRepo)(nil) // compile-time check
 ```
 
-If **every** method on `Repository` uses pointer receiver `*PostgresRepo`, then **`PostgresRepo` (value)** does not implement `Repository`. **`\*PostgresRepo`** does. So function parameters should be `Repository`, and you pass `&repo` or a field that is already a pointer.
+If every method uses `func (r *PostgresRepo)`, then the **value** `PostgresRepo` does not implement `Repository`. The **pointer** `*PostgresRepo` does. Pass `&repo` (or keep a `*PostgresRepo` field). A compile-time check: `var _ Repository = (*PostgresRepo)(nil)`.
 
 Example of the gotcha:
 
@@ -215,9 +204,7 @@ The interface only accepts `*User` because `FullEmail` is on `*User`.
 
 ### What Go does for you at call sites
 
-If the method needs `*User` but you have a **variable** of type `User` (not a temporary), you can still write `u.FullEmail()`. The compiler turns it into `(&u).FullEmail()`. You did not type `&`. Go inserts it.
-
-That does **not** magically give `User` new methods for interfaces. It only helps **calls**. Interface matching still uses the real method lists.
+If the method is on `*User` but you have a `User` **variable**, `u.FullEmail()` becomes `(&u).FullEmail()` automatically. That helps **calls** only — interfaces still see `User` and `*User` as different shapes.
 
 ---
 
@@ -264,33 +251,15 @@ Note: `s.db` inside the method is still the real database pointer. You only "los
 ### Pointer receiver: same struct, changes stick
 
 ```go
-type Order struct {
-	ID     string
-	Paid   bool
-	Items  []LineItem
-}
-
-type LineItem struct {
-	SKU string
-	Qty int
-}
-
 func (o *Order) AddItem(item LineItem) {
 	o.Items = append(o.Items, item)
-}
-
-func (o *Order) CalculateTotal() int {
-	total := 0
-	for _, it := range o.Items {
-		total += priceTable[it.SKU] * it.Qty // pretend priceTable exists
-	}
-	return total
 }
 
 func (o *Order) MarkPaid() {
 	o.Paid = true
 }
 ```
+(`Order` and `LineItem` are the same types from the mental model above — `append` here **needs** `*Order` so the caller sees longer `Items`.)
 
 ```
 MEMORY TRACE — pointer receiver (Order.MarkPaid):
@@ -312,80 +281,47 @@ Step 3: caller sees Paid == true
 ```
 MEMORY TRACE — method sets (User vs *User):
 
-You declared:
-  func (u User) IsVerified() bool
-  func (u *User) SetVerified(v bool)
+  func (u User) IsVerified() bool      → belongs to User
+  func (u *User) SetVerified(v bool)  → belongs to *User only
 
-Callable on a value u (type User):
-  u.IsVerified()     — OK
-  u.SetVerified(true) — compiler rewrites to (&u).SetVerified only for this call; still *User method
-
-For interface matching:
-  "Does plain User implement an interface that only lists SetVerified?"
-  User's own list does NOT include SetVerified (that lives on *User).
-  So User does NOT implement. *User does.
+Interface needs SetVerified? Plain User does not qualify. *User does.
+(You can still *call* u.SetVerified on a variable — Go turns it into (&u).SetVerified.
+That trick does not help interface matching.)
 ```
 
 ### Nil pointer receiver: legal call, dangerous field access
 
 ```go
-type OrderList struct {
-	head *OrderNode
+type Cart struct {
+	items []LineItem
 }
 
-type OrderNode struct {
-	order *Order
-	next  *OrderNode
-}
-
-func (l *OrderList) Len() int {
-	if l == nil {
+func (c *Cart) ItemCount() int {
+	if c == nil {
 		return 0
 	}
-	// walk l.head ...
-	return 0
+	return len(c.items)
 }
 
-func main() {
-	var list *OrderList
-	fmt.Println(list.Len()) // prints 0, no panic
-}
+var cart *Cart
+_ = cart.ItemCount() // OK: ItemCount checks nil before c.items
 ```
 
 ```
 MEMORY TRACE — nil receiver:
 
-Step 1: var list *OrderList — zero value nil
-  stack:
-    list ──→ nil
+Step 1: var cart *Cart — nil
+Step 2: cart.ItemCount() — receiver *Cart is still nil; if c == nil { return 0 } — no field read → OK
 
-Step 2: list.Len() — receiver *OrderList is a copy of list, still nil
-  inside Len: if l == nil { return 0 } — OK, no fields read
-
-If you wrote return l.head.order.ID without the nil check first:
-  loading l.head through nil pointer → panic
+If you started with return len(c.items) with no nil check:
+  reading c.items through nil → panic
 ```
 
-Calling a method with a nil receiver is allowed. **Using** `l.someField` before checking `l == nil` is what blows up.
+Calling a method with a nil receiver is allowed. **Using** `c.items` (or any field) before `if c == nil` is what blows up.
 
-### Consistency
+**Consistency:** if `Save` is `func (r *PostgresRepo)`, make `FindByID` a pointer receiver too. Same for `UserService`, `Server`, any type that holds DB or mutable state.
 
-If any method on `PostgresRepo` mutates state or needs `*PostgresRepo`, use pointer receivers for **all** methods on that type. Same for `UserService`, `Server`, etc.
-
-### Decision card (what you say in a code review)
-
-Use **pointer receiver** when:
-
-- The struct holds `*sql.DB`, pools, loggers, HTTP clients, mutexes.
-- Any method mutates the struct or slice/map fields where the caller must see updates.
-- The struct is large.
-
-Use **value receiver** when:
-
-- The type is tiny and read-only (`Config.Validate`, IDs, small value objects).
-- You explicitly want a snapshot and no write-back.
-
-Unsure? Pointer receiver. It is the boring default for service-layer structs.
+**Code review one-liner:** pointer when the struct has a DB connection, mutex, or is big; value when it is tiny and read-only. Unsure? Pointer.
 
 ---
 
@@ -395,15 +331,8 @@ Unsure? Pointer receiver. It is the boring default for service-layer structs.
 
 ```go
 type HTTPClient struct {
-	client *http.Client
+	client  *http.Client
 	baseURL string
-}
-
-func NewHTTPClient(base string) *HTTPClient {
-	return &HTTPClient{
-		client:  http.DefaultClient,
-		baseURL: strings.TrimRight(base, "/"),
-	}
 }
 
 func (c *HTTPClient) Get(ctx context.Context, path string) (*http.Response, error) {
@@ -413,21 +342,9 @@ func (c *HTTPClient) Get(ctx context.Context, path string) (*http.Response, erro
 	}
 	return c.client.Do(req)
 }
-
-func (c *HTTPClient) Do(req *http.Request) (*http.Response, error) {
-	return c.client.Do(req)
-}
 ```
 
-Pointer receiver: you share one configured client, no copying structs with pointers inside.
-
-### `Repository` again — compile-time guard
-
-```go
-var _ Repository = (*PostgresRepo)(nil)
-```
-
-This line fails at compile time if `PostgresRepo` stops implementing `Repository`. The `nil` pointer is fine; you are not calling methods here.
+Pointer receiver: one shared `baseURL` and `client`, no struct copy on every outbound call.
 
 ---
 
@@ -469,9 +386,7 @@ func main() {
 > [!success]- Answer
 > `true true`
 >
-> `a.TryMarkPaidWrong()` copies `a`; only the copy gets `Paid = true`. `a.MarkPaidRight()` rewrites to `(&a).MarkPaidRight()`, so the real `a` is updated → `a.Paid` is true.
->
-> `b.TryMarkPaidWrong()` still uses a **value** receiver: Go copies the struct that `b` points at, sets `Paid` on the copy, discards it — `*b` stays false. `b.MarkPaidRight()` uses a pointer receiver on the live struct → `b.Paid` becomes true.
+> Wrong methods copy the struct; `MarkPaidRight` uses `*Order`. For `a`, the pointer call fixes `a`. For `b`, the value call updates only a temp; the pointer call fixes the real order.
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -497,11 +412,7 @@ func main() {
 ```
 
 > [!success]- Answer
-> Prints `0` today because `Append` uses a value receiver. `append` may update only the **copy's** slice header. The caller's `bw.lines` never grows.
->
-> Fix: `func (w *BatchWriter) Append(line string) { w.lines = append(w.lines, line) }`
->
-> Same class of bug as a repo method that appends to an internal buffer with a value receiver.
+> Prints `0`. Value receiver → `append` updates only the copy's slice header. Fix: `func (w *BatchWriter) Append(...) { w.lines = append(w.lines, line) }` — same bug pattern as an in-memory repo buffer.
 
 ---
 
@@ -512,7 +423,7 @@ func main() {
 | "I mutated in a method but nothing changed" | Value receiver copied your struct | Use `*Type` when mutating fields |
 | Value does not implement interface | Methods only on `*T` | Pass `*T`, or change receiver to value if tiny and safe |
 | `p.Method()` always copies | Compiler may pass `&p` for `*T` methods | Learn value vs pointer receivers, not just syntax |
-| Nil receiver panic | You read fields before `if v == nil` | Guard first, like `Len()` on `*OrderList` |
+| Nil receiver panic | You read fields before `if v == nil` | Guard first, like `ItemCount` on `*Cart` |
 | Mixed receivers on same type | Confuses everyone in review | One style per type; services → pointers |
 
 ---
@@ -521,21 +432,21 @@ func main() {
 
 **1. Value receiver vs pointer receiver?**
 
-Value receiver copies the receiver value. Field writes do not affect the caller's struct. Pointer receiver shares the address; writes persist. For backend code, structs that hold DB handles, loggers, or mutable state use pointer receivers. Small read-only things (`Config.Validate`) can stay value receivers.
+Copy vs address. Value: writes do not stick on the caller's struct. Pointer: they do. Services/repos/servers → pointers. Tiny read-only config helpers → values.
 
-**2. Why do people say `T` and `*T` have different "method sets"?**
+**2. Why do people say `T` and `*T` have different method lists?**
 
-Methods on `T` attach to values of type `T`. Methods on `*T` attach to pointers. Only `*T` gets both groups. So an interface that requires a `*T` method is not satisfied by a bare `T`. That is why `var _ Formatter = (*User)(nil)` works but `User{}` might not.
+Value type gets only `func (T)` methods. Pointer type gets those **plus** `func (*T)` methods. An interface that only exists on `*T` is not satisfied by bare `T` — pass `*User` or use a value receiver on tiny read-only helpers.
 
 **3. Nil receiver — when is it OK?**
 
-You can call `(*T).Method` with a nil `*T` if `Method` handles `nil` before touching fields. If you access `t.Field` when `t` is nil, you panic. Useful for empty lists, optional wrappers, ORM-style helpers.
+OK if the method checks `nil` before field access (`*Cart` item count). Panic if you read `t.Field` first. Common for optional carts, empty trees, lazy loaders.
 
 ---
 
 ## 9. 30-Second Verbal Answer
 
-A method is a function with a receiver. Value receiver means Go copies your struct; writes to fields do not stick. Pointer means you pass the address; writes stick. Types and pointer-to-types carry different lists of methods; interfaces care about that, so sometimes only `*User` implements your interface. Backend rule: pointer receivers for services, repos, servers, anything with a DB or mutex; value receivers for small read-only snapshots. Nil pointer receivers are allowed if you check `nil` before touching fields.
+Methods hang off a receiver. Value = copy; field writes do not stick. Pointer = shared struct; writes stick. `User` vs `*User` carry different method lists, so interfaces may need the pointer. Default pointers for DB/mutex/big service structs; values for tiny read-only things. Nil `*T` is fine if you guard before touching fields.
 
 ---
 

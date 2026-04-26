@@ -7,592 +7,339 @@
 
 ## 1. Concept
 
-**Garbage collection** is automatic memory management: the runtime finds heap objects that your program can never reach again and frees them so memory can be reused.
+**Garbage collection (GC)** means the runtime frees heap memory you are not using anymore. You never call `free`. Go tracks what is still **reachable** from your running program. Everything else can be recycled.
 
-> **In plain English:** Think of the GC as an office janitor. The janitor walks the building, finds trash nobody is using anymore, and hauls it away. The office keeps running while the janitor works, but when the janitor blocks a hallway for a moment, everyone pauses briefly. Cleaning is necessary, but it is not free.
+Think of a **janitor** in an office: most of the time they work around you. Sometimes they need the hallway for a moment and everyone waits briefly. You need cleaning. Cleaning has a cost.
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**Go gives you pointers and heap objects without `malloc` and `free`.** That power comes with a trade: **the runtime must prove what is still reachable** and recycle the rest.
+**Go's GC finds everything your program still uses and frees the rest.** It only cares about **heap** objects — things that outlive a single function call because the compiler had to put them somewhere stable.
 
-For interviews, the line that lands: **fewer heap allocations usually mean less GC work and more predictable latency.**
+**For your job:** high **allocation rate** (lots of new heap objects per second) means the GC runs more often and burns more CPU. That shows up as **tail latency**: your p50 looks fine while p99 spikes.
+
+**The practical lever:** fewer heap allocations → less GC work → more predictable latency. Profile first, then fix hot paths.
 
 ---
 
 ## 3. Mental Model (Lock this in)
 
-Expand the janitor story. Your program builds a web of objects on the **heap**. Some objects are **anchored** by **roots**: places the runtime knows your execution might read from without chasing other pointers first. The GC’s job is to discover the **reachable** subgraph from those roots. Anything not proved reachable is **garbage**.
+Your service is a loop: **request in → work → response out**. Every time you `make` a slice, grow a string badly, or marshal JSON into a fresh buffer, you add **heap churn**. Short-lived objects are fine in isolation; **millions** of them per minute are not.
 
-```
-MEMORY TRACE:
-Step 1: roots are known starting points (stack slots, globals, registers at safepoints).
-  stack @0x7fff_1000:  local p ──→ heap @0x1c000_0000 (object A)
-  globals @0x55aa_2000: g ──→ heap @0x1c000_0040 (object B)
+**Reachable** means: "Could my code still get to this value through a pointer chain from globals, stacks, or other heap objects?" If not, it is garbage.
 
-Step 2: heap objects form a pointer graph from those roots.
-  heap @0x1c000_0000 (A) ──field──→ heap @0x1c000_0040 (B)
-  heap @0x1c000_0040 (B) ──field──→ heap @0x1c000_0080 (C)
-  heap @0x1c000_00c0 (X) ◄── no incoming path from any root in Step 1–2
-
-Step 3: transitive closure from roots visits {A, B, C}; X is never enqueued.
-  reachable:  A ──→ B ──→ C
-  garbage:    X   (candidate for sweep)
-
-(aha: reachability is graph reachability from roots; “orphan” heap objects are not roots by themselves.)
-```
-
-**Tri-color marking** is a bookkeeping trick while the janitor works. Each heap object is mentally painted:
-
-```
-WHITE  = not proved reachable yet        (default suspicion: might be garbage)
-GREY   = proved reachable, work remains  (still need to scan its outgoing pointers)
-BLACK  = reachable and fully scanned      (all outgoing pointers processed)
-```
-
-```
-MEMORY TRACE: tri-color during marking (same objects as above; colors are GC bookkeeping)
-Step 1: all heap objects start WHITE (unproven).
-  heap:  A=white  B=white  C=white  X=white
-
-Step 2: roots seed the frontier — roots’ targets become GREY.
-  stack/globals ──→ enqueue GREY: {A, B}   (order conceptual)
-  heap:  A=grey  B=grey  C=white  X=white
-
-Step 3: scan GREY — follow outgoing pointers; first-seen targets turn GREY; finished nodes turn BLACK.
-  scan A: no new edges ──→ A=black
-  scan B: discovers C ──→ C=grey, then scan C ──→ C=black; B=black
-  heap:  A=black  B=black  C=black  X=white
-
-Step 4: GREY empty; remaining WHITE is unreachable.
-  heap:  X=white ◄── never reached from roots
-
-(aha: “still white at end” means no path from roots existed during this cycle — safe to recycle X.)
-
-The GC drains GREY until empty.
-Anything still WHITE at the end is garbage.
-```
-
-> **In plain English:** White means “I have not vouched for this yet.” Grey means “I know you exist; I still need to follow your arrows.” Black means “I know you exist and I already followed your arrows.” If the GC finishes and something is still white, your program cannot reach it anymore, so it can be recycled.
+**What triggers GC:** you do not call it by hand for normal code. **Allocation** drives it. The runtime tracks how big the live heap is getting. When it crosses the pacing threshold (related to **GOGC**, default 100), a cycle starts. More allocations → more cycles → more background work and occasional pauses.
 
 ---
 
-## 4. How It Works
+## 4. How It Works (Backend-Useful Level)
 
-### 4.1 Mark phase: start from roots
+### 4.1 Mark and sweep, without the textbook
 
-The mark phase discovers reachability by graph traversal from **roots**.
+**Mark:** starting from places the runtime always knows about (goroutine stacks, globals, registers), Go walks pointers and marks everything still in use.
 
-Typical root families:
+**Sweep:** unmarked heap memory is returned for reuse.
 
-- **Goroutine stacks**: local variables and arguments that hold pointers
-- **Global variables** in the data segment
-- **Registers** that temporarily hold pointers at safepoints
+Most of this happens **while your code runs**, not in one giant stop. There are still **short stop-the-world** moments. For healthy services they are usually small. Under **allocation pressure** or huge heaps, pauses hurt tail latency.
 
-```
-MEMORY TRACE: mark phase (BFS/DFS — conceptual queue/stack)
-Step 1: collect roots — every pointer live in goroutine stacks, globals, registers @ safepoint.
-  stack @0x7fff_1000:  &A ──→ heap @0x1c000_0000
-  globals @0x55aa_2000: &G ──→ heap @0x1c000_0100
+**GC assist:** when allocation outpaces background GC, your allocating goroutine may **do collection work itself** before it gets more memory. That shows up as **surprise latency** inside business code — not in `runtime` frames you were looking for. Fewer allocations → less assist.
 
-Step 2: GREY frontier — each root’s object is reachable but not fully scanned.
-  frontier (grey):  [ A, G ]   (order depends on traversal)
+You do not need tri-color diagrams to ship a fast API. You need to know: **GC is real work**, tied to **heap size and allocation rate**.
 
-Step 3: pop GREY node, scan its outgoing pointers — each unseen target becomes GREY.
-  scan A:  A ──ptr──→ B   (B first seen) ──► enqueue B as GREY
-  heap marks:  A=grey→black (when A’s fields done), B=grey, …
+### 4.2 Stack vs heap (why you hear "escape")
 
-Step 4: repeat until frontier empty — all reachable nodes end BLACK.
-  (aha: marking is just graph traversal from roots; anything never visited is not reachable.)
-```
+Values that **only** live inside one function and never leak out as pointers can live on the **stack**. The stack is cheap: when the function returns, the frame is dropped. **No GC** for those slots.
 
-### 4.2 Sweep phase: recycle the rest
-
-After marking, **sweep** walks allocator structures and returns unmarked white memory to free lists or similar mechanisms so future allocations can reuse it.
-
-```
-MEMORY TRACE: sweep phase (after marking, X stayed WHITE)
-Step 1: BEFORE SWEEP — allocator still holds dead object X’s span metadata.
-  heap reachable (BLACK):  A ──→ B ──→ C
-  heap garbage (WHITE):    X @0x1c000_00c0   ◄── no root path
-
-Step 2: sweep walks allocator structures; unmarked objects return to free lists.
-  sweep visits X @0x1c000_00c0 ──→ memory returned to allocator pool
-
-Step 3: AFTER SWEEP — logical program graph unchanged for live data; X’s slot reusable.
-  heap:  A ──→ B ──→ C     (X’s storage eligible for next allocation)
-
-(aha: sweep does not “delete pointers”; it recycles memory backing objects proven unreachable.)
-```
-
-### 4.3 Stop-the-world (STW)
-
-**STW** means: for a short window, **all goroutines are paused** so the runtime can move the GC through a delicate step safely.
-
-Go’s GC is famous for **short STW**, not zero STW. Treat STW as real, measurable, and something you design around.
-
-```
-MEMORY TRACE: STW vs concurrent marking (logical mutator view)
-Step 1: mutator running — stacks and heap mutate freely between GC cycles.
-  stack: goroutine frames active   heap: objects allocated/mutated
-
-Step 2: short STW — all Ps pause; roots scanned precisely; GC phase transition.
-  (aha: even “concurrent” GC needs brief STW windows for correctness/barrier handoffs.)
-
-Step 3: concurrent mark — mutator resumes with write barrier on; marker scans heap in parallel.
-  stack/heap: mutator updates pointers ◄──► barrier records shade/references
-
-Step 4: short STW — finalize marking/sweep handoff (details in T24); mutator pauses again briefly.
-
-Step 5: TIMELINE (not to scale) — mutator runs in long stretches; GC inserts brief STW at phase edges.
-  stack/heap:  app  ████ run ████ run ████ run ████
-  gc phases:        ^STW^   concurrent mark    ^STW^
-                    short                  short
-```
-
-### 4.4 Concurrent marking and the write barrier
-
-Modern Go does **much of marking concurrently** while your goroutines run. That creates a race: your program mutates pointers while the GC walks the graph.
-
-The **write barrier** is instrumentation on pointer writes. It records just enough information so the GC cannot “miss” a newly created edge from black objects to white objects. You can treat it as **a tiny tax on pointer updates** that buys correctness during concurrent marking.
-
-```
-MEMORY TRACE: write barrier during concurrent marking
-Step 1: marker has finished scanning B — B is BLACK (all outgoing edges were GREY/BLACK when scanned).
-  heap:  B=black @0x1c000_0040   field next was nil (or old target already non-white)
-
-Step 2: mutator runs concurrently — stores new pointer into BLACK object.
-  stack:  tmp = &W @0x1c000_0200 (W still WHITE — not yet reached by marker)
-  heap:   B.next ──store──→ W   (new edge BLACK ──→ WHITE)
-
-Step 3 WITHOUT barrier (broken invariant): marker believes “all live refs from B” already processed.
-  (aha: W could stay WHITE and be swept while still reachable from B — use-after-free class bug.)
-
-Step 4 WITH write barrier: on B.next = W, runtime shades W (GREY) or logs edge so marker revisits.
-  heap after barrier:  W=grey (or enqueued for scan) ◄── W cannot be swept while reachable
-
-Step 5: correct outcome — store records the BLACK──→WHITE edge so W is not lost to the sweeper.
-  heap:  on B.next = W, runtime notes the edge or repaints bookkeeping ◄── tri-color invariant restored
-
-(aha: barrier turns a dangerous concurrent store into a safe enqueue/shade so marking catches W before sweep.)
-```
-
-Details of barrier algorithms and tri-color invariants live in [[T24 Garbage Collector Deep Dive]].
-
-### 4.5 What triggers GC
-
-You do not call GC like `free`. Allocation **pays into** a pacing system. When live heap grows relative to expectations, the **GC cycle starts or intensifies**. More allocation pressure tends to mean **more frequent cycles** and more background work.
+If you take the address of a local and return it, or store it somewhere that outlives the call, the value **escapes** to the **heap**. Now it participates in GC. **Escape analysis** decides this; `go build -gcflags="-m"` shows compiler notes.
 
 ---
 
-## 5. Key Rules & Behaviors
+## 5. Memory Traces (Only Two)
 
-### Every heap allocation creates future GC work
-
-```
-LOOP ALLOCATES NEW SLICES
-
-for i := 0; i < N; i++ {
-    b := make([]byte, 1024) // heap object each time
-    _ = b
-}
-
-Each iteration: new object → more bytes to track → more marking/sweep work eventually
-```
-
-```
-MEMORY TRACE: per-iteration heap allocation (GC pressure)
-Step 1: enter iteration i — stack frame holds loop variable i, local b (slot empty).
-  stack @frame+0x10:  i = 0..N-1
-  stack @frame+0x20:  b (slice header, not yet filled)
-
-Step 2: make([]byte, 1024) — new backing array on heap; slice header on stack points to it.
-  heap @0x1c000_1000+i*0x400:  [1024]byte backing array (new object every i)
-  stack @frame+0x20:  b.ptr ──→ heap backing @0x1c000_1000+…   b.len=1024 b.cap=1024
-
-Step 3: previous iteration’s b is dead if not saved — old backing becomes garbage unless rooted elsewhere.
-  heap: older backings WHITE after last reference drops ◄── more objects to mark/sweep later
-
-Step 4: N iterations ⇒ N distinct heap objects (high allocation rate).
-  (aha: each new backing raises live/total heap bytes and the GC’s future work — pacing fires more often under pressure.)
-
-Each iteration: new object → more bytes to track → more marking/sweep work eventually
-```
-
-> **In plain English:** Every new heap object is a new thing the janitor might need to inspect later. A tight loop of small allocations can overwhelm the pacing system.
-
-### GC runs concurrently with your program (mostly)
-
-```
-MEMORY TRACE: mutator vs GC CPU (concurrent cycle — conceptual timeline)
-Step 1: P runs your goroutine — mutator executes on stack; heap updates interleave with app logic.
-  stack:  active frames @0x7fff_2000   heap:  objects allocated/mutated @0x1c000_…
-
-Step 2: GC assist / dedicated workers run in parallel — same OS process, different time slices.
-  your code:     ████████████████████  ◄── mutator threads
-  GC helpers:    ▓▓  ▓▓▓   ▓▓    ▓▓▓▓  ◄── mark/sweep assist + workers
-
-Step 3: no extra heap objects from “background” alone — cost is CPU cycles + barrier work on pointer writes.
-  (aha: concurrent GC reduces STW wall time but does not remove CPU spent tracing; it overlaps with your budget.)
-```
-
-> **In plain English:** The janitor mostly works alongside you, not only when you sleep. That reduces pause times but does not erase CPU cost.
-
-### STW pauses are short but real
-
-Interviewers sometimes mythologize “Go has no pauses.” More defensible: **pauses are usually sub-millisecond on healthy programs**, but **load, heap size, and allocation rate** move the needle.
-
-> **In plain English:** The hallway block is short, not fictional.
-
-### Reducing allocations is the #1 practical optimization lever
-
-```
-BAD PATTERN (many transient objects)
-
-var sb strings.Builder
-for _, s := range parts {
-    sb.WriteString(strings.ToUpper(s)) // ToUpper allocates
-}
-
-BETTER PATTERN (reuse, fewer temps)
-
-var sb strings.Builder
-for _, s := range parts {
-    for i := 0; i < len(s); i++ {
-        sb.WriteByte(upperASCII(s[i])) // example: custom, no new string per part
-    }
-}
-```
-
-```
-MEMORY TRACE: BAD pattern — per-iteration transient string on heap
-Step 1: for each s, strings.ToUpper allocates a new string; data lives on heap.
-  stack:  s (string header) points to parts[i] backing
-  heap:   NEW string @0x1c000_2000 — ToUpper copies bytes here
-
-Step 2: sb.WriteString copies again into Builder’s growing buffer — double traffic.
-  heap:  Builder.buf may reallocate several times ◄── each growth can abandon old backing arrays
-
-Step 3: after iteration, temporary ToUpper string becomes garbage unless retained.
-  heap:  many short-lived WHITE objects between cycles ◄── high GC pressure
-
-MEMORY TRACE: BETTER pattern — bytes flow into Builder without per-part string object
-Step 1: upperASCII + WriteByte — no new heap string per iteration (conceptually stack/registers only).
-  stack:  byte scratch from s[i]   heap:  only Builder’s internal buf grows
-
-Step 2: fewer distinct heap objects survive each iteration.
-  (aha: lowering allocation rate throttles how often the pacer starts / assists GC.)
-
-Step 3: allocation rate vs pacer — high churn creates many short-lived WHITE objects between cycles.
-  heap:  high rate ◄── * * * * * * * * (many fresh objects per window)   ◄── GC cycles crowd the timeline
-
-Step 4: reuse/low churn — fewer new objects; marker sees smaller nursery of garbage between runs.
-  heap:  low rate ◄── *     * (occasional growth)   ◄── GC “breathes”; less assist per unit of app work
-```
-
-> **In plain English:** If you stop generating disposable objects, the janitor visits less often.
-
-### Stack allocations are free from the GC’s perspective
-
-```
-MEMORY TRACE: stack frame vs GC (non-escaping locals)
-Step 1: call enters — frame laid out contiguously on goroutine stack (high → low addresses conceptual).
-  stack @0x7fff_ff00:  return addr
-  stack @0x7fff_fef8:  local int (scalar, not a GC scan slot)
-  stack @0x7fff_fef0:  local *T ──→ heap @0x1c000_5000 (if it points out)
-
-Step 2: while frame is live, pointer slots in the frame are roots; scalars are not traced as heap objects.
-  stack:  *T slot is a root edge to heap @0x1c000_5000   heap:  object @0x1c000_5000 reachable while frame active
-
-Step 3: call returns — entire frame popped; stack slots disappear without sweep (no heap object for the int).
-  stack:  frame reclaimed by stack pointer adjustment   heap:  former *T target may become garbage if no other roots
-
-(aha: locals that never escape have no heap allocation — the GC does not “sweep” the stack; the stack unwinds for free.)
-```
-
-> **In plain English:** Locals that do not escape live and die with the call frame. The GC is not maintaining a separate heap object for them.
-
-### Pointers from heap to heap increase GC graph work and barrier traffic
-
-```
-MEMORY TRACE: heap graph density vs mark/barrier work
-Step 1: sparse graph — few outgoing pointers per object; marker visits fewer edges from each BLACK node.
-  heap:  A @0x1c000_6000 ──ptr──→ B @0x1c000_6040   (frontier drains quickly)
-
-Step 2: dense chain — each object points to the next; scan work grows with chain length.
-  heap:  A ──→ B ──→ C ──→ D ──→ E ──→ …   ◄── each GREY→BLACK step scans another outgoing ptr
-
-Step 3: mutator updates pointers on hot edges — write barrier fires per store; denser graphs mean more mutation sites.
-  stack:  mutator stores into heap fields   heap:  each ptr write ◄── potential barrier + shading
-
-(aha: wider/deeper pointer graphs mean more mark work per cycle and more barrier traffic during concurrent marking.)
-```
-
-> **In plain English:** A bushy pointer graph is a bigger maze for the janitor, and every pointer write is a place the barrier must be careful.
-
-### GOGC controls trigger frequency (default 100 means next cycle when heap roughly doubles)
-
-**GOGC:** higher value → GC runs less often but each cycle may collect more; lower value → more frequent GC, smaller heaps, often more CPU spent in GC.
-
-**GOMEMLIMIT:** a soft memory cap that pushes the GC to work harder before the process grows without bound; it trades CPU for staying under a budget.
-
-Details and tuning tradeoffs: [[T25 GC Tuning & Memory Limits]].
-
----
-
-## 6. Code Examples
-
-### Heavy allocators vs reuse
+### Trace 1 — Stack vs heap: `User` on stack vs pointer out
 
 ```go
-package main
+func stackUser() User {
+	user := User{Name: "ada"} // often stays on stack / registers; no heap object for this pattern
+	return user               // returned by value — copy, still not necessarily a separate heap box
+}
 
-import "fmt"
+func heapUser() *User {
+	user := User{Name: "ada"}
+	return &user // pointer escapes: caller may hold *User after this returns → user lives on heap
+}
+```
 
-func heavy(n int) [][]int {
-	out := make([][]int, n)
-	for i := 0; i < n; i++ {
-		row := make([]int, 100) // fresh backing array each row
-		for j := range row {
-			row[j] = j
-		}
-		out[i] = row
+```
+MEMORY TRACE: stack vs heap (GC only traces heap objects)
+
+Step 1: stackUser()
+  stack:  user = User{Name: "ada"}
+  heap:   (often nothing for `user` itself — dies with the frame when you're done copying out)
+
+Step 2: heapUser()
+  stack:  temporary frame while building user
+  heap:   one User object — the returned *User points here
+          GC keeps this object while anything reachable still points at it
+
+(aha: returning &local forces heap allocation; by-value return of a small struct often stays off heap.)
+```
+
+### Trace 2 — What "reachable" means in an API handler
+
+Picture: **HTTP handler** → calls **service** → loads **`[]Order`** → each **Order** has fields. While the handler is running and still holds references (directly or indirectly), that chain is **reachable**. After you send the response and drop your locals, if nothing else stores those pointers, the whole batch becomes **garbage** for the next cycle.
+
+```
+MEMORY TRACE: handler → service → orders
+
+Step 1: request arrives
+  goroutine stack:  handler has *Service, ctx, writer…
+  heap:             service object, slice header for orders, backing array of Order structs
+
+Step 2: you build JSON from orders
+  heap:             temporary buffers / strings from marshaling (often many short-lived objects)
+
+Step 3: response sent, handler returns, no global cache kept
+  stack:            handler frame gone
+  heap:             orders + temporaries no longer reachable from any root → garbage
+
+(aha: "reachable" is about pointer chains from live code — not about whether you still "need" it logically.)
+```
+
+---
+
+## 6. Why This Shows Up in Production
+
+### 6.1 The API handler that allocates `[]Order` every request
+
+```go
+func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) {
+	orders := make([]Order, 0, 64) // slice header often on stack; backing may be heap
+	orders = h.svc.LoadOrders(r.Context()) // returns a new slice + rows — heap growth
+
+	writeJSON(w, orders) // marshaling allocates hard — see below
+}
+```
+
+If **every request** allocates fresh rows and fresh JSON buffers, you create a **steady stream** of short-lived heap objects. GC keeps up until it does not. **p99** wobbles: sometimes the collector runs hotter or your goroutine does **assist** work during a hot path.
+
+**Not every allocation is evil.** **Sustained high rate** on a latency-sensitive path is the problem.
+
+### 6.2 JSON: new buffer every call vs `sync.Pool`
+
+**Bad pattern:** every response does `json.NewEncoder(w)` or `json.Marshal` into a newly grown `[]byte` you throw away immediately. That is thousands of allocations per second under load.
+
+**Better pattern:** reuse a `[]byte` buffer from a **`sync.Pool`**. Reset length to 0 between uses; still watch for races — only one goroutine should use a pooled buffer at a time.
+
+```go
+var bufPool = sync.Pool{
+	New: func() any {
+		return new(bytes.Buffer)
+	},
+}
+
+func marshalOrders(orders []Order) ([]byte, error) {
+	buf := bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer func() {
+		buf.Reset()
+		bufPool.Put(buf)
+	}()
+	if err := json.NewEncoder(buf).Encode(orders); err != nil {
+		return nil, err
 	}
-	return out
-}
-
-func reuseBuffer(n int) int {
-	buf := make([]int, 100) // one backing array reused
-	sum := 0
-	for i := 0; i < n; i++ {
-		for j := range buf {
-			buf[j] = i + j
-		}
-		for _, v := range buf {
-			sum += v
-		}
-	}
-	return sum
-}
-
-func main() {
-	fmt.Println(len(heavy(10)))
-	fmt.Println(reuseBuffer(10))
+	// Encoder writes a trailing newline; clone because the buffer returns to the pool
+	out := bytes.Clone(buf.Bytes())
+	return bytes.TrimSuffix(out, []byte("\n")), nil
 }
 ```
 
-ASCII:
+You still pay for **one** output slice per request if you copy out — that is often fine. The win is **reusing** the `Buffer`'s **backing array** across requests instead of growing from zero every time. **Profile** to confirm; sometimes `json.Marshal` + pool is enough.
 
-```
-MEMORY TRACE: heavy(n) — fresh heap backing per row (high allocation / GC pressure)
-Step 1: outer slice allocated — `out` is a [][]int; stack holds slice header; heap holds row pointer table.
-  stack @frame:  out.ptr ──→ heap @0x1c000_7000 (backing: n slice headers for rows)
-  heap @0x1c000_7000:  metadata for `out`’s backing array (n entries)
+Real services tune **initial `Buffer` capacity** after seeing peak response sizes in production.
 
-Step 2: iteration i — `row := make([]int, 100)` allocates NEW [100]int on heap each time.
-  heap @0x1c000_8000+i*stride:  backing array for row i   stack:  row.ptr ──→ that backing
-
-Step 3: `out[i] = row` — each row backing stays reachable via `out` until `heavy` returns.
-  heap:  out[i] ──→ row’s backing @0x1c000_8000+…   (n distinct live backings for n rows)
-
-Step 4: after `return out`, all n inner backings + outer structure remain live — large retained set.
-  (aha: one inner `make` per row multiplies heap objects and future mark/sweep work.)
-
-MEMORY TRACE: reuseBuffer(n) — single backing reused (lower pressure)
-Step 1: once — `buf := make([]int, 100)` one heap backing; stack holds `buf` header for all iterations.
-  stack @frame:  buf.ptr ──→ heap @0x1c000_9000 ([100]int)   heap:  single backing @0x1c000_9000
-
-Step 2: iteration i — same backing overwritten in place; no new inner array per i.
-  heap @0x1c000_9000:  elements mutated in place   stack:  buf.ptr still ──→ @0x1c000_9000
-
-Step 3: `sum` on stack; no slice-of-rows graph — fewer distinct heap objects than `heavy`.
-  (aha: one reused buffer cuts allocation rate and shrinks what the marker traces each cycle.)
-
-Step 4: compare — `heavy` creates O(n) fresh inner arrays; `reuseBuffer` holds O(1) inner backing.
-  heap:  heavy ◄── n fresh [100]int   reuseBuffer ◄── one [100]int   ◄── pacer sees lower churn in reuse pattern
-```
-
-### Reading GC stats with `runtime.ReadMemStats`
+### 6.3 `strings.Builder` vs `+` in a loop
 
 ```go
-package main
-
-import (
-	"fmt"
-	"runtime"
-)
-
-func main() {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
-
-	fmt.Println("HeapAlloc bytes:", m.HeapAlloc)
-	fmt.Println("TotalAlloc bytes (cumulative):", m.TotalAlloc)
-	fmt.Println("NumGC:", m.NumGC)
-	fmt.Println("PauseTotalNs:", m.PauseTotalNs)
-}
-```
-
-ASCII:
-
-```
-MEMORY TRACE: runtime.ReadMemStats(&m) — one snapshot in time
-Step 1: caller allocates `m runtime.MemStats` (typically on stack; large value struct).
-  stack @0x7fff_3000:  m (struct)   &m ──→ passed to runtime
-
-Step 2: runtime fills fields from internal accounting — point-in-time copy into `m`.
-  heap:  (unchanged by this call’s purpose)   runtime:  HeapAlloc, NumGC, … → m’s fields
-
-Step 3: after return, `m` reflects counters at the snapshot instant — not a live stream.
-  stack:  m.HeapAlloc, m.NumGC populated   (aha: one ReadMemStats = one “photograph”; repeat to see a movie.)
-
-Step 4: later mutator allocations update runtime’s global stats; your `m` stays stale until next read.
-  heap:  program may allocate elsewhere   stack:  your m ◄── frozen picture from Step 2
-```
-
-### Escape analysis: stack vs heap
-
-```go
-package main
-
-//go:noinline
-func identity(x int) int { return x }
-
-func stackInt() int {
-	n := 42
-	return identity(n) // n can live in registers/stack; no heap box needed for n
-}
-
-type big struct{ a, b, c int }
-
-func heapBig() *big {
-	x := big{1, 2, 3}
-	return &x // escapes: caller needs pointer after return → likely heap
-}
-
-func main() {
-	_ = stackInt()
-	_ = heapBig()
-}
-```
-
-Build with escape diagnostics:
-
-```
-go build -gcflags="-m -m" .
-```
-
-Typical directionally-correct story in output:
-
-```
-stackInt: values do not escape
-heapBig: moved to heap: escapes to heap
-```
-
-ASCII after the commands concept:
-
-```
-MEMORY TRACE: escape analysis — stackInt() (no escape)
-Step 1: `stackInt` frame — `n := 42` in stack slot or register; `identity(n)` passes by value.
-  stack @frame:  n = 42   (scalar)   heap:  (no box for n)
-
-Step 2: `identity` returns int — no pointer to `n` outlives the callee; storage dies with frame unwind.
-  stack:  frames pop   heap:  nothing allocated for `n`
-
-Step 3: GC view — no heap object for `n`; no root edge needed for this path.
-  (aha: no address taken / no return of *n → value stays stack/register — no GC object.)
-
-MEMORY TRACE: escape analysis — heapBig() (address escapes to caller)
-Step 1: BEFORE — `x := big{1,2,3}` could live on stack if only used inside `heapBig`.
-  stack @frame:  x {a,b,c} (candidate)   heap:  (no x yet)
-
-Step 2: `return &x` — pointer must survive after return; stack slot would be invalid after pop.
-  stack:  &x after return ◄── illegal if x were stack-only   ◄── next call would reuse that memory
-
-Step 3: AFTER compiler — `x` moved to heap @0x1c000_a000; returned *big points there.
-  stack @caller:  result.ptr ──→ heap @0x1c000_a000 (big{1,2,3})   heap:  fields live in heap object
-
-Step 4: GC — caller’s pointer is a root; object traced until unreachable.
-  (aha: escape = pointer outlives frame → heap allocation + mark/sweep participation.)
-```
-
----
-
-## 6.5. Practice Checkpoint
-
-### Tier 1: Predict the Output (2 min)
-
-What is a defensible statement about `heapBig` in the escape example?
-
-1. `new` forced the heap
-2. Returning `&x` can force `x` to the heap because the pointer outlives the callee
-3. `big` is always on the stack because it is a struct
-
-> [!success]- Answer
-> **2 is correct.** Returning the address of a local variable means the storage must survive after `heapBig` returns, so the compiler typically allocates `x` on the heap. **1 is the classic trap:** `new` is just syntax; placement follows escape analysis and compiler rules, not the keyword name. **3 is wrong** for this pattern because struct value does not imply stack placement.
-
-### Tier 2: Fix the Bug (5 min)
-
-This function builds a large string in a loop. It allocates badly.
-
-```go
-func JoinInts(nums []int) string {
+// BAD: each += may allocate a new backing string; O(n²) copies for large inputs
+func JoinIDs(ids []string) string {
 	s := ""
-	for _, n := range nums {
-		s += fmt.Sprintf("%d,", n)
+	for _, id := range ids {
+		s += id + ","
 	}
 	return s
 }
-```
 
-Rewrite it to reduce per-iteration allocations without changing the comma-separated format intent.
-
-> [!success]- Answer
-> Use `strings.Builder` and format into it once per iteration, or precompute capacity if you can estimate size. Example shape:
-
-```go
-func JoinInts(nums []int) string {
+// BETTER: one growing buffer
+func JoinIDs(ids []string) string {
 	var b strings.Builder
-	for i, n := range nums {
+	for i, id := range ids {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		fmt.Fprintf(&b, "%d", n)
+		b.WriteString(id)
 	}
 	return b.String()
 }
 ```
 
-> The bug was repeated string concatenation creating new backing strings each loop iteration. Builder keeps one growing buffer.
+`String()` still copies once at the end. That is usually fine. The win is not allocating **every** iteration.
+
+### 6.4 `pprof`: where the allocs come from
+
+You see **80% of allocations in JSON** in a heap profile. You pool buffers and cut serialization copies. **p99** drops. Without the profile you would tune **GOGC** blindly.
+
+```text
+go test -bench=. -benchmem
+# or for a live service, expose net/http/pprof and:
+go tool pprof http://localhost:6060/debug/pprof/heap
+```
+
+Look for **flat** allocation counts in your handler path — `encoding/json`, `fmt`, string concat, `append` in tight loops.
+
+**`allocs` profile** (CPU profile with sampling of allocations) helps tie **which lines** allocate to **request latency**. Start with **heap** for "what objects exist?", then **allocs** for "who keeps calling `new`?"
+
+### 6.5 Reading `runtime.MemStats` (optional sanity check)
+
+For dashboards or quick logs, `runtime.ReadMemStats` gives **heap size**, **total bytes allocated** (cumulative), **GC count**, and **pause time** totals. It is a **snapshot**, not a tracer — use **`pprof`** for line-level blame.
+
+```go
+var m runtime.MemStats
+runtime.ReadMemStats(&m)
+// m.HeapAlloc — bytes on heap now
+// m.NumGC — completed GC cycles
+// m.PauseTotalNs — sum of STW pauses (check docs: semantics evolved across Go versions)
+```
+
+Correlate **NumGC** rising fast with **traffic** spikes. If **HeapAlloc** is flat but **p99** is bad, your issue may not be GC — check **locks, IO, and downstreams**.
+
+### 6.6 `GOGC` in one sentence
+
+**`GOGC=200`** → target roughly **double** the live heap before the next GC cycle vs default → **fewer GC cycles**, **more RAM usage**, often **better CPU/latency** if you were GC-bound. **`GOGC=50`** → more aggressive collection → **smaller heap**, **more GC churn**. Always validate under load; **profile allocations first**.
+
+**`GOMEMLIMIT`:** soft cap on **total memory** the runtime tries to respect by **collecting harder** before growing without bound. It can save you from OOM at the cost of **more GC CPU**. Full tradeoffs: [[T25 GC Tuning & Memory Limits]].
 
 ---
 
-## 7. Gotchas & Interview Traps
+## 7. Story You Can Tell in an Interview
 
-- **`new` always allocates on the heap** is wrong. Escape analysis and compiler choices decide placement. `new(T)` can be optimized similarly to `&T{}` in many cases.
-- **GC pauses are seconds long in normal servers** is wrong as a blanket claim. Pauses are usually tiny compared to second-scale stalls; second-scale issues are more often **locks, IO, oversubscription, or bugs**, not baseline STW.
-- **Finalizers are a reliability tool** is wrong. Finalizers run late, may not run under pressure, and do not solve resource lifetimes. Close files with `defer`, not `runtime.SetFinalizer`.
-- **“I will tune GOGC first”** without profiling allocations often signals backwards reasoning. Start with **allocation profiles**, then tune.
+**Scenario A:** "Your API's **p99** went from **5ms** to **50ms**. **`pprof heap`** shows **~80%** of allocations in **JSON serialization**. You add **`sync.Pool`** for encode buffers and reduce extra copying. **p99** lands near **8ms** again."
 
----
-
-## 8. Interview Gold Questions (Top 3)
-
-1. **What is reachable memory, and what are roots?**  
-   Give a crisp graph definition: roots are stack slots, globals, registers at safepoints; reachability is transitive closure following pointers from roots.
-
-2. **Why can’t naive reference counting replace Go’s GC?**  
-   Cycles, atomic refcount updates on hot paths, and the cost of writes on every pointer assignment. Go’s mutation-heavy pointer graphs fit tracing GC better in practice.
-
-3. **What is the write barrier for in a concurrent GC?**  
-   It prevents the mutator from hiding new edges from the marker while the graph is being scanned; it keeps the tri-color invariant from breaking.
+**Scenario B:** "Every handler builds a **new `[]byte`** for the response body. After **10k RPS**, the allocator and GC are constantly cleaning short-lived objects. Every few hundred ms the runtime **pauses goroutines briefly** to finish a phase. Users see rare **latency spikes** — not CPU saturation, **tail** issues."
 
 ---
 
-## 9. 30-Second Verbal Answer
+## 8. Key Rules & Behaviors
 
-Go uses a **tracing garbage collector** that **marks** everything reachable from **roots** like stacks and globals, then **sweeps** unreachable heap objects. Most marking runs **concurrently**, but there are still **short STW** windows. **Tri-color marking** is the standard bookkeeping, and **write barriers** keep concurrent mutation safe. In real systems, **allocation rate drives GC cost**, so **reducing heap allocations** is the first latency win. **GOGC** adjusts how aggressively cycles trigger, and **GOMEMLIMIT** adds a soft cap that trades CPU for memory.
+- **Heap allocations** → future GC work. **Rate** matters as much as size.
+- **Stack** values that do not escape are **invisible** to GC sweep — they disappear when the function returns.
+- **Escaping** pointers (`return &local`, storing into globals, interface boxing sometimes) → **heap**.
+- **Fewer, larger, reused** buffers usually beat **many tiny** throwaway allocations on hot paths.
+- **`GOGC`** trades **RAM for GC frequency**. **`GOMEMLIMIT`** (see [[T25 GC Tuning & Memory Limits]]) adds a **soft cap** so the process does not grow without bound — different knob, same family of tradeoffs.
+
+---
+
+## 9. Code Smell Quick Reference
+
+| Smell | Why it hurts | Direction |
+|-------|----------------|-----------|
+| `s += x` in a tight loop | Repeated string reallocations | `strings.Builder` |
+| `fmt.Sprintf` in a hot loop | Allocations per call | format into `Builder`, reduce work |
+| Fresh `[]byte` per JSON write | High alloc rate | `sync.Pool`, reuse buffers |
+| Returning `&T` from helpers everywhere | More heap objects | return values, smaller pointer graphs |
+| Huge pointer-heavy caches | More work for the marker | object pooling, sharding, bounded caches |
+
+---
+
+## 10. Practice Checkpoint
+
+### Tier 1 — Handler pressure (2 min)
+
+Your `GetReport` handler unmarshals JSON into a new struct every request, then calls `json.Marshal` on a fresh map for the response. Traffic doubles. Which metric is **most likely** to get worse **first** if you do nothing: **p50**, **p99**, or **average** CPU?
+
+> [!success]- Answer
+> **p99** (and tail latency generally) usually worsens before **p50** because GC and scheduling jitter hit worst-case paths. **Average CPU** rises too, but operators often notice **tail** regressions first on APIs. The fix starts with a **heap profile** to confirm JSON and per-request allocations.
+
+### Tier 2 — Pooling sketch (5 min)
+
+Sketch how you would reuse a `[]byte` for `json.Marshal` of a response in an HTTP handler. What is **one** correctness rule you must follow when using `sync.Pool`?
+
+> [!success]- Answer
+> **Sketch:** `pool.Get()` yields `*[]byte`, reset `b = (*b)[:0]`, marshal into `*b` (or `append` JSON bytes), write to `ResponseWriter`, then reset and `pool.Put`. **Rule:** a pooled value must **not** be used after `Put` — another goroutine may take it. Never retain a reference to the buffer after returning it to the pool.
+
+### Tier 3 — `GOGC` tradeoff (2 min)
+
+You set **`GOGC=200`**. Describe the **memory vs GC frequency** tradeoff in one sentence.
+
+> [!success]- Answer
+> **Higher `GOGC` lets the live heap grow more before the next cycle, so you run **fewer GC cycles** but typically use **more memory**; it can reduce GC overhead if you were spending a lot of time in the collector.
+
+### Tier 4 — Builder vs concat (5 min)
+
+This handler builds a CSV line of user IDs in a loop. Fix the allocation pattern.
+
+```go
+func UserIDsLine(ids []int64) string {
+	line := ""
+	for _, id := range ids {
+		line += fmt.Sprintf("%d,", id)
+	}
+	return line
+}
+```
+
+> [!success]- Answer
+> Use **`strings.Builder`** (or pre-size with `Grow` if you know `len(ids)`). **`+=` with `fmt.Sprintf` each iteration** allocates new strings repeatedly. Example shape:
+>
+> ```go
+> func UserIDsLine(ids []int64) string {
+> 	var b strings.Builder
+> 	for i, id := range ids {
+> 		if i > 0 {
+> 			b.WriteByte(',')
+> 		}
+> 		fmt.Fprintf(&b, "%d", id)
+> 	}
+> 	return b.String()
+> }
+> ```
+>
+> For huge inputs, also estimate capacity with `b.Grow(...)` from digit counts to avoid buffer reallocations.
+
+---
+
+## 11. Gotchas & Interview Traps
+
+| Trap | Reality |
+|------|---------|
+| "Go has no GC pauses" | Pauses are usually **short**, not **zero**. Tail latency still exists. |
+| "`new` always hits heap" | **Escape analysis** decides; keyword is not the rule. |
+| "I'll set `GOGC` first" | **Profile allocations** on real traffic first; tuning without data often hides the bug. |
+| "Stack is faster so I will return `&T` everywhere" | Returning pointers **increases** heap use and GC graph work. Use pointers when semantics need them. |
+| Finalizers fix cleanup | Prefer **`defer`** for files/sockets. Finalizers are **late** and **unreliable** under load. |
+
+---
+
+## 12. Interview Gold Questions (Top 3)
+
+**Q1: Why does allocation rate matter for a Go API?**
+
+Each heap allocation adds work for the allocator and later for the GC. Under high RPS, many short-lived objects increase GC frequency and **assist** work, which shows up as **CPU** and **tail latency**. Reducing allocations on hot paths is the first practical fix.
+
+**Q2: What is the difference between stack and heap allocation in Go?**
+
+Stack-allocated values live in the goroutine's frame and vanish when the function returns. Heap objects outlive the call because the compiler **escapes** them (e.g., returned pointers, captured by closures, stored in interfaces). **Only heap** objects are tracked by GC.
+
+**Q3: What does `GOGC` do?**
+
+`GOGC` sets the **relative growth** of the live heap that triggers the next GC cycle compared to the default (100). Higher values run GC **less often** but allow **more memory**; lower values do the opposite. Validate under production-like load.
+
+---
+
+## 13. 30-Second Verbal Answer
+
+Go uses a **tracing garbage collector**: it finds **reachable** heap objects from stacks and globals, then **frees** the rest. You pay for **heap allocations** with **future GC work** — under API load that often hurts **p99** before **p50**. **Escape analysis** decides stack vs heap; **returning pointers** usually forces **heap**. Reduce pressure with **`strings.Builder`**, **fewer `fmt` temps**, and **`sync.Pool`** for **JSON buffers** where profiling proves it helps. Use **`pprof` heap** to find the real hotspots. **`GOGC`** trades **memory for GC frequency** — e.g. **`GOGC=200`** runs fewer cycles but uses more RAM.
 
 ---
 

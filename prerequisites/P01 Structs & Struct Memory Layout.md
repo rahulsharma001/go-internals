@@ -7,7 +7,7 @@
 
 ## 1. Concept
 
-A **struct** is your way of giving a name to a fixed set of fields. You decide the shape up front. Go doesn't have classes. You model things like users, orders, and config with structs. Then you hang methods on those types if you need behavior.
+A **struct** is your way of giving a name to a fixed set of fields. You decide the shape up front. Go doesn't have classes. You model users, orders, config, and API payloads with structs. You hang methods on those types when you need behavior.
 
 Think of it like a form at the DMV. The boxes are printed on the sheet. You don't get new boxes mid-flight. You fill `Name`, `Email`, `Age` — same layout every time.
 
@@ -27,57 +27,9 @@ Think of it like a form at the DMV. The boxes are printed on the sheet. You don'
 
 Picture a row of lockers in order: first `Name`, then `Email`, then `Age`. The compiler might leave an empty locker between two real ones so the big locker (`int64`, say) starts on a "round" address. Reorder the lockers and the row can get shorter or longer even though you're still storing the same ideas.
 
-**ASCII: why a tiny field before a big one wastes space**
+**Tiny field before a big one:** a 1-byte `uint8` then an `int64` → the compiler leaves a gap so the `int64` starts on an 8-byte boundary (typical on 64-bit).
 
-```go
-type User struct {
-    Age   uint8 // 1 byte
-    Score int64 // 8 bytes — wants to start on an 8-byte boundary
-}
-```
-
-```
-Source order:     [ Age | Score ]
-Memory (typical): [ Age ][ 7 bytes unused ][ Score takes 8 bytes ]
-```
-
-**Error-driven example: you "updated" a copy**
-
-```go
-type User struct {
-    Name  string
-    Email string
-    Age   int
-    IsAdmin bool
-}
-
-func promoteToAdmin(u User) {
-    u.IsAdmin = true
-}
-
-func main() {
-    u := User{Name: "Sam", Email: "sam@co.com", Age: 28, IsAdmin: false}
-    promoteToAdmin(u)
-    // u.IsAdmin is still false — you changed a photocopy, not Sam's row in your sheet
-}
-```
-
-```
-MEMORY TRACE (value parameter — copy):
-
-  Caller: u at 0xC000  →  IsAdmin: false
-  promoteToAdmin gets a COPY at 0xD000
-  Inside the func: only 0xD000 flips to true
-  When the func returns, 0xD000 is thrown away. 0xC000 never changed.
-```
-
-Pass `&u` and take `*User` in the function if everyone should edit the same `User`.
-
----
-
-## 4. How It Works
-
-### 4.1 Declaration forms
+**Error-driven: you "promoted" a copy**
 
 ```go
 type User struct {
@@ -87,26 +39,60 @@ type User struct {
     IsAdmin bool
 }
 
-// One-off shape (handy in tests or handlers)
+func promoteToAdmin(u User) { u.IsAdmin = true }
+
+func main() {
+    u := User{Name: "Sam", Email: "sam@co.com", Age: 28, IsAdmin: false}
+    promoteToAdmin(u)
+    // u.IsAdmin is still false — photocopy problem
+}
+```
+
+```
+MEMORY TRACE (value parameter — copy):
+
+  Caller: u at 0xC000  →  IsAdmin: false
+  promoteToAdmin gets a COPY at 0xD000; only 0xD000 flips to true
+  When the func returns, 0xD000 is discarded. 0xC000 never changed.
+```
+
+Pass `&u` and take `*User` if everyone should edit the same `User`.
+
+---
+
+## 4. How It Works
+
+### 4.1 Declaration forms
+
+```go
+type User struct {
+    Name    string `json:"name" db:"full_name"`
+    Email   string `json:"email,omitempty" db:"email"`
+    Age     int    `json:"age" db:"age_years"`
+    IsAdmin bool   `json:"is_admin"`
+}
+
 row := struct {
     StatusCode int
     Body       []byte
 }{StatusCode: 200, Body: []byte(`ok`)}
 
 u := User{Name: "Ada", Email: "ada@co.com", Age: 36, IsAdmin: true}
-v := User{"Grace", "grace@co.com", 31, false} // positional — order must match the type
+v := User{"Grace", "grace@co.com", 31, false} // positional — order must match
 
 pu := &User{Name: "Lin", Email: "lin@co.com", Age: 40, IsAdmin: false}
-fmt.Println(pu.Name) // compiler turns this into (*pu).Name
+fmt.Println(pu.Name) // (*pu).Name
 ```
 
-Named types are reusable. Anonymous structs are "this shape, right here only." A pointer to a struct is just an address; `pu.Name` still feels like dot access because the compiler adds the star for you.
+Named types are reusable; anonymous structs are one-off shapes. A pointer is an address; the compiler adds `*` for field access.
 
 ### 4.2 Zero values
 
-Declare a struct without setting fields and every field is its **zero value**: `""` for strings, `0` for numbers, `false` for bools, `nil` for pointers, slices, maps.
+New struct fields start at their **zero value**: `""`, `0`, `false`, `nil` for pointers/slices/maps.
 
 ```go
+type Item struct{ SKU string; Qty int }
+
 type Order struct {
     ID        int64
     Total     int64
@@ -115,30 +101,28 @@ type Order struct {
 }
 
 var o Order
-// o.ID == 0, o.Total == 0, o.Items == nil, o.CreatedAt is the zero time
+// o.ID == 0, o.Total == 0, o.Items == nil, o.CreatedAt is zero time
 ```
 
-That's safe to pass around. You're not reading garbage memory. For a handler, you often start with an empty `User` or `Order`, then fill it from JSON or a SQL row.
+Handlers often `var u User` or `var o Order`, then fill from JSON or SQL.
 
 ### 4.3 Field access, nesting, embedding
 
-**Nested struct** — one field's type is another struct. The inner struct lives **inline** inside the outer one (not automatically a pointer).
+**Nested** — inner struct lives **inline** inside the outer struct.
 
 ```go
-type Address struct {
-    City string
+type Address struct{ City string }
+
+type Customer struct {
+    Name string
+    Home Address
 }
 
-type User struct {
-    Name    string
-    Home    Address
-}
-
-u := User{Name: "Sam", Home: Address{City: "Austin"}}
-fmt.Println(u.Home.City) // "Austin"
+c := Customer{Name: "Sam", Home: Address{City: "Austin"}}
+fmt.Println(c.Home.City)
 ```
 
-**Embedding** — anonymous field. The inner type's fields and methods can be used as if they lived on the outer struct.
+**Embedding** — anonymous field; inner fields promote to the outer type.
 
 ```go
 type AuditLog struct {
@@ -148,66 +132,51 @@ type AuditLog struct {
 }
 
 type APIResponse struct {
-    AuditLog          // embedded — no extra field name
+    AuditLog
     StatusCode int
     Body       []byte
     Headers    map[string]string
 }
 
 resp := APIResponse{
-    AuditLog:   AuditLog{UserID: 42, Action: "GET /orders", Timestamp: time.Now()},
+    AuditLog: AuditLog{UserID: 42, Action: "GET /orders", Timestamp: time.Now()},
     StatusCode: 200,
     Body:       []byte(`{"ok":true}`),
     Headers:    map[string]string{"Content-Type": "application/json"},
 }
-fmt.Println(resp.UserID)           // promoted — same as resp.AuditLog.UserID
-fmt.Println(resp.AuditLog.UserID)  // explicit path, same bits
+fmt.Println(resp.UserID, resp.AuditLog.UserID) // same field, two spellings
 ```
 
-Embedding is great for cross-cutting stuff (audit metadata, tracing IDs). It's still one flat memory layout: the `AuditLog` fields sit inside `APIResponse` at fixed offsets. You're not "subclassing."
+One flat layout in memory — not subclassing.
 
 ### 4.4 Struct tags
 
-Tags are little strings after a field. Normal Go code ignores them. **Reflection** reads them — `encoding/json`, many SQL scanners, validators.
-
-```go
-type User struct {
-    Name    string `json:"name" db:"full_name"`
-    Email   string `json:"email,omitempty" db:"email"`
-    Age     int    `json:"age" db:"age_years"`
-    IsAdmin bool   `json:"is_admin"`
-}
-```
-
-Wire name `name` in JSON, column `full_name` in the DB, same Go field. `omitempty` skips the field in JSON output when it's the zero value. Export fields with a **capital** first letter or `json` won't see them.
+Those backtick strings on `User` in §4.1 are **tags**. Normal code ignores them. **`encoding/json`**, SQL helpers, and validators read them with **reflection**. JSON uses `name` on the wire; the DB column can be `full_name`. `omitempty` skips zero values in JSON output. Only **exported** fields (capital letter) participate in `json` and most scanners.
 
 ### 4.5 Memory layout, alignment, padding
 
-Fields land in **declaration order** in memory. The compiler inserts padding so each field starts at an address that's valid for that field's type (alignment). Misordering small types before big ones can balloon size.
+Fields sit in **declaration order**. The compiler adds **padding** so each field starts at a valid **alignment** for its type. Putting a 1-byte `bool` before an `int64` often wastes 7 bytes.
 
 ```go
 type Config struct {
-    Debug   bool   // 1 byte
-    MaxConns int64 // often wants 8-byte alignment
+    Debug    bool  // 1 byte
+    MaxConns int64 // often needs 8-byte alignment
 }
 
 type ConfigTidy struct {
     MaxConns int64
     Debug    bool
-    // struct may still get tail padding if you make arrays of ConfigTidy
 }
 ```
 
 ```
 MEMORY TRACE (padding — Config vs reordered):
 
-  Config:        [ Debug 1 byte ][ 7 bytes padding ][ MaxConns 8 bytes ]
-  ConfigTidy:    [ MaxConns 8 bytes ][ Debug 1 byte ][ maybe tail padding ]
+  Config:     [ Debug 1 ][ 7 bytes pad ][ MaxConns 8 ]
+  ConfigTidy: [ MaxConns 8 ][ Debug 1 ][ maybe tail pad for arrays ]
 ```
 
-You don't need to obsess on every struct. When you care (hot paths, huge slices of structs), measure with `unsafe.Sizeof` on the platform you ship.
-
----
+When it matters (huge `[]Config`, hot paths), measure `unsafe.Sizeof` on the arch you ship.
 
 ## 5. Key Rules & Behaviors
 
@@ -216,24 +185,19 @@ You don't need to obsess on every struct. When you care (hot paths, huge slices 
 ```go
 u := User{Name: "A", Email: "a@x.com", Age: 20, IsAdmin: false}
 v := u
-v.Age = 99
-// u.Age is still 20
+v.Age = 99 // u.Age still 20
 ```
 
 ```
 MEMORY TRACE (assignment):
 
-  u at 0xC000, v at 0xC040 — two separate User blobs with the same starting text
-  Changing v.Age only touches 0xC040
+  u at 0xC000, v at 0xC040 — two User blobs; only v's Age changes
 ```
 
 ### Zero value is usable
 
 ```go
-type OrderTotals struct {
-    Sum   int64
-    Count int
-}
+type OrderTotals struct{ Sum int64; Count int }
 
 func addLine(t OrderTotals, amount int64) OrderTotals {
     t.Sum += amount
@@ -245,82 +209,35 @@ var acc OrderTotals
 acc = addLine(acc, 1000)
 ```
 
-`acc` starts real and all zeros. You can pass it in and assign the returned struct. Pattern: small aggregates updated by return values instead of pointers.
+Small totals often use "pass value, return updated struct."
 
 ### Comparison rules
 
-`==` and `!=` work on structs **only if every field type is comparable**. Slices, maps, and functions break that.
+`==` works only if **every field type is comparable**. Slices, maps, and functions break that.
 
 ```go
-type UserKey struct {
-    ID    int64
-    Email string
-}
+type UserKey struct{ ID int64; Email string }
 
-type Order struct {
+type OrderLine struct {
     ID    int64
     Total int64
-    Items []Item // slice — makes Order non-comparable
+    Items []Item // slice — whole struct is not comparable with ==
 }
 
 var a, b UserKey
 _ = a == b
-// var x, y Order; _ = x == y // compile error
+// var x, y OrderLine; _ = x == y // compile error
 ```
 
-If you need "are these orders the same?" with slice fields, compare fields yourself or use something like `slices.Equal` on `Items`.
+Compare orders by ID, or use `slices.Equal` on `Items`, or write your own helper.
 
 ### Field ordering affects memory size
 
-```go
-import "unsafe"
-
-type ConfigLoose struct {
-    Debug    bool
-    Port     int16
-    MaxConns int64
-}
-
-type ConfigTight struct {
-    MaxConns int64
-    Port     int16
-    Debug    bool
-}
-
-func main() {
-    println(unsafe.Sizeof(ConfigLoose{})) // often larger
-    println(unsafe.Sizeof(ConfigTight{})) // often smaller — same info, tighter packing
-}
-```
-
-Same ingredients, different shelf order, different box size.
+Reorder `bool` / `int16` / `int64` in a `Config`-style struct and print `unsafe.Sizeof` — same data, smaller struct when big fields come first. Same lesson as §4.5.
 
 ### Embedding is not inheritance
 
-```go
-type AuditLog struct {
-    UserID    int64
-    Action    string
-    Timestamp time.Time
-}
-
-func (a AuditLog) Summary() string {
-    return fmt.Sprintf("user %d %s", a.UserID, a.Action)
-}
-
-type ExportJob struct {
-    AuditLog
-    Bucket string
-}
-
-job := ExportJob{
-    AuditLog: AuditLog{UserID: 1, Action: "export", Timestamp: time.Now()},
-    Bucket:   "backups",
-}
-fmt.Println(job.Summary()) // promoted — runs on the embedded AuditLog value
-```
-
-Promoted methods still use the embedded value as the receiver unless you define a method on the outer type. No hidden vtables. Compose explicit types.
+Promoted methods still take the **embedded** value as the receiver (same `AuditLog` inside `APIResponse` in §4.3). No superclass, no vtable — just names lifted for convenience.
 
 ### Unexported fields stay in the package
 
@@ -328,53 +245,35 @@ Promoted methods still use the embedded value as the receiver unless you define 
 package users
 
 type User struct {
-    Name     string
-    emailHash string // lowercase — not visible outside `users`
+    Name      string
+    emailHash string // other packages can't read or set this
 }
 
-func NewUser(name, hash string) User {
-    return User{Name: name, emailHash: hash}
-}
+func NewUser(name, hash string) User { return User{Name: name, emailHash: hash} }
 ```
-
-Another package can read `Name`. It cannot touch `emailHash`. That's how you hide implementation details while still using a struct.
-
----
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### POST /users — JSON into a struct
+### POST /users — JSON body into a struct
+
+`User` is defined once in §4.1 (HTTP + SQL tags on the same type).
 
 ```go
-type User struct {
-    Name    string `json:"name"`
-    Email   string `json:"email"`
-    Age     int    `json:"age"`
-    IsAdmin bool   `json:"is_admin"`
-}
-
 func createUser(w http.ResponseWriter, r *http.Request) {
     var u User
     if err := json.NewDecoder(r.Body).Decode(&u); err != nil {
         http.Error(w, "bad json", http.StatusBadRequest)
         return
     }
-    // pass u to your service layer...
+    // svc.CreateUser(r.Context(), u)
 }
 ```
 
-You decode into `&u` because `Decode` fills an existing value through a pointer. The tags map JSON keys to fields.
+`Decode` needs `&u`. Hand the filled `u` to your service by value or `&u` depending on whether it mutates.
 
-### Scanning a database row
+### Database row → struct
 
 ```go
-type User struct {
-    Name    string `db:"full_name"`
-    Email   string `db:"email"`
-    Age     int    `db:"age"`
-    IsAdmin bool   `db:"is_admin"`
-}
-
 func loadUser(ctx context.Context, db *sql.DB, id int64) (User, error) {
     var u User
     row := db.QueryRowContext(ctx,
@@ -384,9 +283,7 @@ func loadUser(ctx context.Context, db *sql.DB, id int64) (User, error) {
 }
 ```
 
-The struct is your row-shaped container. Scanners differ by library; the idea is the same: one struct, one record shape.
-
-### Config at startup
+### Config file at startup
 
 ```go
 type Config struct {
@@ -402,92 +299,64 @@ func LoadConfig(path string) (Config, error) {
     if err != nil {
         return c, err
     }
-    if err := json.Unmarshal(b, &c); err != nil {
-        return c, err
-    }
-    return c, nil
+    return c, json.Unmarshal(b, &c)
 }
 ```
 
-One blob of settings. Pass `Config` by value if it's small and read-mostly; use `*Config` if many packages need to share one live instance.
-
-### Service layer — value vs pointer
+### Service: when to use `*` on `User`
 
 ```go
-type User struct {
-    Name    string
-    Email   string
-    Age     int
-    IsAdmin bool
-}
+func SendWelcomeEmail(u User) { /* read-only; copy is fine */ }
 
-// Copies the whole User — fine for small structs, or when you want immutability
-func SendWelcomeEmail(u User) { /* ... */ }
-
-// Mutates the same User the caller has — admin dashboard, profile updates
-func SetAdmin(u *User, admin bool) {
-    u.IsAdmin = admin
-}
+func SetAdmin(u *User, admin bool) { u.IsAdmin = admin }
 ```
 
 ```
 MEMORY TRACE (pointer — mutation sticks):
 
-  Caller: u at 0xE000
-  SetAdmin(&u, true) passes 0xE000 into the function
-  The function writes IsAdmin through that address
-  After return, caller's u at 0xE000 shows IsAdmin == true
+  Caller holds u at 0xE000. SetAdmin(&u, true) passes 0xE000.
+  Writes go through that address; caller sees IsAdmin == true after return.
 ```
 
-### API response shape with tags
+### JSON response envelope (`OrderDTO`)
 
 ```go
-type APIResponse struct {
-    StatusCode int               `json:"-"`              // don't emit in JSON body
-    Body       json.RawMessage   `json:"data"`
-    Headers    map[string]string `json:"-"`
-}
-
 type OrderDTO struct {
     ID        int64     `json:"id"`
     Total     int64     `json:"total"`
     CreatedAt time.Time `json:"created_at"`
 }
 
-func writeOrder(w http.ResponseWriter, o OrderDTO) {
-    payload, _ := json.Marshal(APIResponse{Body: mustJSON(o)})
+func writeOrder(w http.ResponseWriter, dto OrderDTO) {
+    body, _ := json.Marshal(struct {
+        Data OrderDTO `json:"data"`
+    }{Data: dto})
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusOK)
-    w.Write(payload)
+    w.Write(body)
 }
 ```
 
-Tags control what clients see. `json:"-"` keeps internal fields off the wire.
+Use `json:"-"` on fields you want in Go (`StatusCode`, `Headers` on an `APIResponse`) but not in the JSON body.
 
-### Copying an `Order` shares the `Items` slice
+### `Order` copy shares `Items` backing array
 
 ```go
-type Item struct {
-    SKU  string
-    Qty  int
-}
-
-type Order struct {
-    ID        int64
-    Total     int64
-    Items     []Item
-    CreatedAt time.Time
-}
-
 a := Order{ID: 1, Items: []Item{{SKU: "A", Qty: 1}}}
 b := a
 b.Items[0].Qty = 5
-// a.Items[0].Qty is also 5 — slice header was copied, backing array is shared
+// a.Items[0].Qty is 5 too
 ```
 
-Copying the struct duplicates the **slice header** (pointer, len, cap), not the whole `[]Item` array. That's the usual backend gotcha when you "duplicate" an order in memory.
+```
+MEMORY TRACE (struct copy, slice header):
 
----
+  a.Items points at backing array 0x9000
+  b := a copies the Order; b.Items still points 0x9000
+  Editing b.Items[0] edits that shared array — a sees it
+```
+
+Deep copy line items when you need independence (`slices.Clone`, `append` into a new slice, etc.).
 
 ## 6.5. Practice Checkpoint
 
@@ -518,8 +387,6 @@ func main() {
 > Prints `30`.
 >
 > `bumpAge` receives a **copy** of `u`. The `++` runs on the copy. Kim's struct in `main` never changes.
-
----
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -560,37 +427,27 @@ func main() {
 > }
 > ```
 >
-> **Interview line:** If the function must persist changes visible to the caller, take `*T`, not `T`.
-
----
+> **Interview line:** Caller-visible mutation needs `*T`, not `T`.
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | Why it bites | Fast fix / mental rule |
-|------|--------------|------------------------|
-| Huge struct in a hot loop by value | Full copy every call | Profile first; switch to `*T` if copies hurt |
-| Expecting Java-style inheritance | Embedding promotes names; it's not a superclass | Be explicit about composition; add wrapper methods if needed |
-| `==` on `Order` with `Items []Item` | Slices aren't comparable | Compare IDs, or field-by-field with `slices.Equal` |
-| JSON missing after `Marshal` | Field not exported or `json:"-"` | Capitalize field names; check tags |
-| Surprise shared mutation after `b := a` for orders | Slice maps share backing arrays | Copy slice with `append([]Item(nil), a.Items...)` if you need independence |
-| Padding shock after reordering | Alignment and tail padding | `unsafe.Sizeof` on the target arch |
-
----
+| Trap | Why it bites | Fast fix |
+|------|--------------|----------|
+| Big struct by value in a hot path | Full copy every call | Profile; try `*T` |
+| Java-style inheritance expectations | Embedding only promotes names | Compose; add wrappers |
+| `==` or slice field / `b := a` on `Order` | Slices aren't comparable; `Items` shares backing array | Compare by ID / `slices.Equal`; clone `Items` if needed |
+| JSON missing / padding shocks | Unexported fields, bad tags, field order | Export + tags; `unsafe.Sizeof` on target arch |
 
 ## 8. Interview Gold Questions (Top 3)
 
-**1) Are Go structs classes?** No. You define named types and attach methods. There's no built-in inheritance. You compose with struct fields and embedding. Visibility is package-level and driven by capital letters on names.
+**1) Classes?** No — named types, methods, composition; embedding isn't inheritance; capitalization exports across packages.
 
-**2) What happens when you pass a struct to a function?** The struct is copied byte-for-byte into the parameter unless you pass a pointer. Mutations on a value parameter don't affect the caller. Return the updated struct or take `*T` when you need shared mutation.
+**2) Pass by value?** Full copy unless you pass `*T`; mutate caller state via pointer or return value.
 
-**3) Why can two structs with the same fields have different sizes?** Declaration order changes padding and trailing alignment (important for arrays of the struct). Measure with `unsafe.Sizeof` on the machine you care about.
-
----
+**3) Same fields, different size?** Order changes padding and array stride — measure `unsafe.Sizeof` on target hardware.
 
 ## 9. 30-Second Verbal Answer
 
-A struct is a fixed layout of named fields — your main tool for modeling users, orders, config, and responses in Go. It's a **value type**: assignment and calls copy the whole thing unless you use a pointer. Pointers mean "one shared record everyone reads and writes through." The compiler may add padding between fields for alignment, so order can change size. `==` only works when every field is comparable — watch slices inside DTOs. Tags are hints for `json`, SQL helpers, and validators; they don't change normal field access. Embedding promotes fields and methods but isn't inheritance — it's composition with sugar.
-
----
+Structs model users, orders, config, responses as fixed field layouts. They're **values**: copy on assign/call unless you use a pointer for one shared record. Padding depends on field order. `==` needs every field comparable. Tags wire `json` and DB mappers. Embedding is composition with promoted names, not subclassing.
 
 > See [[Glossary]] for term definitions.

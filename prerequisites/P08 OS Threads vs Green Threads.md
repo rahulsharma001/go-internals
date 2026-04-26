@@ -7,426 +7,240 @@
 
 ## 1. Concept
 
-An **OS thread** is a unit of execution the **kernel** schedules on a CPU. The kernel allocates a large per-thread stack, tracks kernel state for the thread, and performs expensive context switches when it moves the CPU from one thread to another.
+You have probably used **OS threads** before. Your language runtime asks the kernel for a thread. The kernel gives you a real scheduling unit: a big stack, kernel bookkeeping, and a slot on the CPU run queue. Switching the CPU from one OS thread to another is the kernel's job. It is not free.
 
-A **green thread** is a user-space thread the **language runtime** schedules. The kernel does not schedule individual green threads. The runtime multiplexes many green threads onto a smaller pool of OS threads.
-
-> **In plain English:** Think of **OS threads** as **highway lanes**. Think of **goroutines** as **cars**. You do not need one lane per car. Most cars are **parked** most of the time, waiting on lights, loading zones, or passengers. A small number of lanes can serve a huge parking lot if the runtime keeps traffic moving and reuses lanes efficiently.
+A **goroutine** is like a super lightweight thread that **Go manages itself**. The kernel does not schedule individual goroutines. Go's runtime parks them, wakes them, and runs many of them on a small pool of OS threads. You still get blocking `db.Query()` and `http` handlers that *read* like normal synchronous code. Under the hood, waiting work gets out of the way so the same OS thread can run something else.
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**OS threads are kernel-managed, stack-heavy, and costly to create and switch.** **Green threads such as goroutines are runtime-managed, start with tiny stacks, and switch mostly in user space** so you can run **huge concurrency** with **few underlying OS threads**. **True parallelism across cores still requires multiple OS threads**; in Go, **GOMAXPROCS** sets how many OS threads can execute Go code at once.
+**OS threads are heavy.** Big stacks, kernel involvement, expensive creation and context switches.
+
+**Goroutines are cheap.** Tiny starting stacks, runtime bookkeeping, switches mostly in user space.
+
+**Go maps many goroutines onto fewer OS threads (M:N).** That is why your HTTP server can have one goroutine per request, or your WebSocket layer can hold tens of thousands of idle connections, without spawning tens of thousands of kernel threads.
+
+**Real parallelism across CPU cores still needs multiple OS threads running Go code.** In Go, **`GOMAXPROCS`** sets how many of those runners you use by default. It is **not** a cap on goroutine count.
 
 ---
 
 ## 3. Mental Model (Lock this in)
 
-### Highway analogy expanded
+Picture your production service.
+
+- **Each incoming HTTP request** often becomes its own goroutine (or sits on a goroutine that reads the request). Ten thousand slow clients do not mean ten thousand OS threads. They mean ten thousand goroutines that are mostly **waiting** on the network.
+- **Each `db.Query` or `rows.Scan`** blocks *your* goroutine, not necessarily the whole process. While Postgres is thinking, that goroutine is **parked**. An OS thread that was running it can pick up **another** goroutine—another request, another query, a worker draining a channel.
+- **Fifty thousand idle WebSockets** can be fifty thousand goroutines. You still only have a handful of OS threads actually executing Go code at once. The rest of the story is waiting and I/O.
+
+The scheduler vocabulary you will see in [[T14 GMP Scheduler]]: **G** is a goroutine, **M** is an OS thread that runs Go code. Many **G**s, few **M**s. For now, that picture is enough.
 
 ```
-HIGHWAY ... CPU-bound work that actually moves
-  LANE  = OS thread ... kernel schedules this on a core
-  CAR   = goroutine ... runtime schedules this onto a lane
-
-Most cars are NOT cruising at top speed.
-They are waiting: network, disk, locks, channels, timers.
-
-So: many parked cars, few moving lanes, still feels "busy"
-    because the parking lot is huge.
+Many goroutines  ──multiplexed onto──►  fewer OS threads (Ms)  ──►  CPU cores
 ```
 
-### ASCII comparison table
-
-```
-+------------------+---------------------------+---------------------------+
-|                  | OS thread                 | Goroutine in Go           |
-+------------------+---------------------------+---------------------------+
-| Stack (typical)  | ~1-8 MB, commonly MB-scale| ~2-8 KB initial segment   |
-|                  |                           | grows when required       |
-+------------------+---------------------------+---------------------------+
-| Create/destroy   | Heavy: kernel structures  | Light: runtime allocates  |
-|                  | + accounting              | small stack + descriptor  |
-+------------------+---------------------------+---------------------------+
-| Switch cost      | ~1-10 µs typical ballpark | ~200 ns order of magnitude|
-|                  | kernel path + cache/TLB   | in-process cooperative +  |
-|                  | effects vary by workload  | small scheduler work      |
-+------------------+---------------------------+---------------------------+
-| Who schedules?   | Kernel                    | Go runtime schedules Gs;  |
-|                  |                           | kernel still schedules Ms |
-+------------------+---------------------------+---------------------------+
-| Visible to       | Yes in perf, gdb, top     | Ms show up; individual Gs |
-| `top`/`ps`?      |                           | do not map 1:1 in `ps`    |
-+------------------+---------------------------+---------------------------+
-```
-
-### M:N mapping
-
-In Go scheduler vocabulary, **M** names an **OS thread** that executes goroutines. **P** and **G** show up later in [[T14 GMP Scheduler]]. For this prerequisite, lock in the idea: **many Gs**, **few Ms**.
-
-```
-Many goroutines  ---- multiplexed onto ---->  fewer OS-thread Ms
-
-     g g g g g g g g g g g g g g g
-       \ \ \ \ \ | | | | | | | | /
-        \ \ \ \ \| | | | | | | /
-         v v v v v v v v v v v
-         M M M M M M M M M M M
-              ^   ^   ^
-              |   |   |__ count follows GOMAXPROCS and runtime policy,
-              |   |       not "one M per g"
-              |   |
-              v   v
-           [ CPU cores / kernel run queue ]
-```
-
-> **In plain English:** **Many goroutines** time-share a **small pool of OS threads**. When one goroutine waits, the OS thread can run a **different** goroutine. You pay the **big** OS-thread costs only **N** times, not once per goroutine.
+**Error-driven intuition:** If you mentally equate "I spawned a goroutine" with "the kernel spawned a thread," you will **overestimate** memory and **underestimate** how much concurrency one machine can hold.
 
 ---
 
 ## 4. How It Works
 
-### 4.1 OS thread lifecycle
+### 4.1 OS threads: what you are used to
+
+When you create an OS thread (or your JVM or thread pool does), the kernel allocates a **large per-thread stack**—often on the order of **~1 MB** per thread on many 64-bit Linux setups unless you tune it. The thread is a first-class citizen in the scheduler. Context switches save and restore full register sets, update kernel structures, and often hurt cache warmth.
+
+If you wrote a server that mapped **one OS thread per TCP connection**, you would feel it quickly: memory from stacks, OS thread limits, and scheduler overhead bite long before you run out of *ideas* for work.
+
+### 4.2 Goroutines: cheap units the runtime schedules
+
+A goroutine is a **runtime object**: small initial stack (on the order of **~2 KB** to start; it grows if your function calls go deep), saved registers when it is not running, and a status like runnable or waiting. Creating one is **`go func() { ... }()`**—low ceremony.
+
+**Switching** between goroutines on the same OS thread is mostly **user-space** work: save a little state, pick the next **G**, restore, keep going. You are not paying for a full kernel thread switch every time.
+
+### 4.3 Blocking and parking (the feature, not the bug)
+
+When your handler calls **`http.ResponseWriter`** flushes, **`db.Query`**, **`conn.Read`**, or waits on a **channel**, your goroutine may **block**. The runtime marks it as waiting and **does not** waste an OS thread spinning. When the network packet, database reply, or channel send arrives, the goroutine becomes runnable again.
+
+That is how you get **high concurrency with few threads**: most goroutines are parked most of the time. The ones that actually burn CPU share the cores; the ones waiting on I/O stay cheap.
+
+### 4.4 GOMAXPROCS and real parallelism
+
+**`GOMAXPROCS`** (default: number of logical CPUs on your machine) controls how many OS threads are in play to execute Go code **in parallel** on the CPU. On your **4-core** machine, the default is often **4**—so up to **four goroutines** can be executing Go bytecode **at the same instant** on different cores, in the rough mental model.
+
+It does **not** limit how many goroutines exist. You can have **500k** goroutines and **`GOMAXPROCS=4`**. You simply have **four** hot runners for CPU-bound Go work; the rest are waiting or runnable in queues.
+
+**Concurrency vs parallelism:** Many tasks **in flight** is concurrency. **Parallel** means **multiple cores** actually executing at once. Goroutines give you cheap concurrency; **`GOMAXPROCS`** and the **M** pool give you parallelism.
+
+### 4.5 How this differs from classic Java (one paragraph)
+
+**Java** (classic **platform threads**) is closer to the OS thread model: a thread pool with **200 threads** might mean **200 × ~1 MB** stacks before you count anything else, and the kernel is scheduling each of those threads. **Project Loom / virtual threads** move Java closer to the "many lightweight tasks, few carrier threads" story Go had from the start—but the contrast you should feel in your bones is: **in Go you routinely model each request or each connection as its own goroutine** without treating `new Thread` as a scarce resource.
+
+### 4.6 Three backend shapes you actually ship
+
+**HTTP / RPC front door.** You accept connections, hand work to goroutines, most of them spend their lives **waiting** on clients or backends. The win is **cheap parking**, not infinite CPU.
+
+**Database-heavy middle tier.** Your handler goroutine calls **`Query`**, **`Exec`**, **`Begin`**. Each call may **park** the goroutine while Postgres or MySQL works. Same OS threads keep other requests moving. You write **straight-line** code; you do not manually thread-pool every query.
+
+**Worker pool + channel.** You have **100 goroutines** pulling **`Job`** values from a **`chan Job`**. Maybe they call an external API, resize images, or enqueue to Kafka. If work is **mostly I/O**, **100 goroutines** on **few Ms** is normal. If work is **pure CPU**, **100** fighting for **`GOMAXPROCS`** cores buys you little—**cap** workers or shard across processes.
+
+**Error-driven intuition:** Match **goroutine count** to **waiting**, not to "I want more speed." **CPU** needs **cores** and **bounded** parallelism.
+
+---
+
+## MEMORY TRACE 1 — Stacks: 10k threads vs 10k goroutines
+
+You want **10,000** concurrent pieces of work—say 10k idle HTTP connections or 10k channel-backed jobs.
+
+**If each unit were an OS thread** with **~1 MB** stack reservation (typical ballpark on Linux):
 
 ```
-CREATE THREAD
-   |
-   v
-Kernel allocates:
-  - kernel thread struct
-  - kernel + user stacks; footprint varies by OS and config
-  - scheduling entity on run queue
-   |
-   v
-RUNNING on a core; kernel picks what runs
-   |
-   +--> BLOCKED on I/O wait, futex, and similar --+
-   |                                            |
-   +--> READY when runnable again --------------+--> back to RUNNING
-   |
-   v
-EXIT: teardown + bookkeeping
+10,000 threads × ~1 MB stack ≈ ~10 GB address space (often reserved) just for stacks
+Plus kernel thread structs, TLS, accounting — you hit limits and RSS pressure fast
 ```
 
-**Error-driven intuition:** If your design creates a thread per incoming request, you can hit **thread count limits**, **memory pressure from stacks**, and **scheduler overhead** long before you run out of "logical work."
-
-### 4.2 Context switch cost
-
-When the kernel switches between OS threads on a core, it must **save and restore** register state, update kernel bookkeeping, and often pay **cache and TLB** effects. **Rule of thumb:** roughly **1-10 microseconds** for the switch itself; **downstream** cost can dominate if **working sets** no longer fit cache.
+**If each unit is a goroutine** with **~2 KB** initial stack (order of magnitude; grows only if needed):
 
 ```
-Thread A running on Core 0
-        |
-        |  timer interrupt / syscall / preemption
-        v
-Save A's registers -> pick Thread B -> restore B's registers
-        |
-        v
-Thread B running on Core 0
-
-Caches may now be "cold" for B's memory.
-TLB entries may be less helpful after the switch.
+10,000 goroutines × ~2 KB ≈ ~20 MB class for stack *starts* (plus per-G metadata on the heap)
+Kernel still sees only a small number of OS threads (Ms), each with its own large pthread-style stack
 ```
 
-### 4.3 Green thread mechanics
+Same *count* of logical workers. Totally different *memory* story. That is why Go servers talk about **10k concurrent connections** without bragging about **10k `pthread_create`** calls.
 
-A green thread is a **runtime object** with:
+---
 
-```
-+----------------------------------+
-| goroutine descriptor             |
-|  - stack bounds                  |
-|  - saved registers while parked  |
-|  - status: runnable / waiting    |
-|  - scheduler links               |
-+----------------------------------+
-```
+## MEMORY TRACE 2 — Parking: `db.Query` on a request goroutine
 
-**Switching** often means: save a **small** register set to the goroutine struct, pick another runnable goroutine, restore its registers, continue in user space **without** asking the kernel to create a new OS thread.
-
-**Error-driven intuition:** If you wrongly assume every goroutine is a **new** OS thread, you will **overestimate** memory use and **underestimate** how many concurrent tasks Go can track.
-
-### 4.4 M:N multiplexing
+Your **`http.Handler`** runs on a goroutine—call it the **request goroutine**.
 
 ```
-Time ---->
+1. Request goroutine runs your handler code on OS thread M.
 
-OS thread M1:  [g3][g7][g1][g3 resumes][g9]...
-OS thread M2:  [g2][g2][g8][g8][g4]...
+2. You call db.Query(...). Your goroutine needs rows from Postgres.
+   While it waits for the network + server, the runtime parks THIS goroutine.
+   It is not burning a CPU core in a busy-loop.
 
-Many goroutines interleave on each M.
-Only some goroutines are actively executing at a given instant.
+3. OS thread M is now free to run ANOTHER goroutine:
+   another HTTP request, a worker reading from a channel, whatever is runnable.
+
+4. Postgres responds; the runtime marks your request goroutine runnable again.
+   Eventually M (or another M) resumes your handler past db.Query.
+
+5. You write the response. Maybe tens of thousands of other goroutines did the same dance
+   on the same handful of Ms while yours was parked.
 ```
 
-Blocking operations are the key: **waiting** goroutines **release** their M to run **other** goroutines.
-
-### 4.5 GOMAXPROCS and CPU parallelism
-
-**GOMAXPROCS** sets the **default** number of OS threads that can execute user-level Go code **simultaneously** across available logical CPUs. It does **not** cap how many goroutines exist.
-
-```
-GOMAXPROCS = 4   ... illustrative only
-
-At most ~4 pieces of Go code "in flight" on CPU at once
-for the scheduler's P/M arrangement,
-
-while thousands of goroutines may exist total.
-```
-
-**Interview nuance:** **Parallelism** needs **multiple** executing OS threads. **Concurrency** is a broader pattern: many tasks **in progress**, not necessarily all on-CPU at once.
-
-### 4.6 Peer runtimes at a glance
-
-The point is not to memorize release dates. The point is to **place Go** on a map: **who schedules what**, and **where** parallelism actually comes from.
-
-```
-                    KERNEL KNOWS ABOUT          USER-SPACE SCHEDULER
-                    EACH UNIT?                  MULTIPLEXES HEAVILY?
-                    -----------                 ---------------------
-Java platform       yes: 1:1 OS threads        JVM still maps to OS threads
-Java virtual        yes at bottom             yes: huge stacks of cheap tasks
-Python CPython      OS threads exist          GIL caps bytecode parallelism
-Node.js             one main OS thread        event loop + callbacks/promises
-Erlang              OS threads for VM         millions of lightweight processes
-Go                  OS threads = Ms           goroutines on Ms + netpoller story
-```
-
-**Java before virtual threads:** A straightforward mental model is **platform threads** as **thick** OS-level units. You can create many, but you will feel **memory** and **scheduler** pressure if you pretend they are free like goroutines.
-
-**Java virtual threads:** The runtime **stacks** enormous **logical** concurrency onto **fewer** carrier threads. Interview phrase: **mount** many virtual threads on a **small** OS-thread pool. The **shape** rhymes with Go even if the implementation details differ.
-
-**Python and the GIL:** CPython **bytecode** execution is **serialized** by the **Global Interpreter Lock** for many core paths. OS threads exist, yet **CPU-bound Python threads** often fail to speed up **pure Python** numeric loops the way **independent** native threads would. **IO** can still overlap with threads and libraries that **release** the GIL.
-
-```
-Thread-1  [|||||python bytecode|||||][  wait  ]
-Thread-2           [|||||python bytecode|||||]
-
-Those "|||||" regions cannot execute on two cores at once
-for typical pure-Python CPU work under the GIL story.
-```
-
-**Error-driven intuition:** If you spawn **10** Python threads for a **CPU-heavy** loop and expect **10x**, you may measure **~1x** and blame the wrong layer. The fix is **multiprocessing**, **native extensions**, or a **different** runtime — not "more threads" alone.
-
-**Node.js:** The classic model is **one** main **JavaScript** execution thread plus an **event loop**. **Concurrency** comes from **non-blocking IO** and **callbacks** or **async**/`await` state machines, not from **spawning** one OS thread per request.
-
-```
-[ JS thread ]  <-- single lane for your JS bytecode execution
-      |
-      +---- epoll/kqueue/etc. wakes you when sockets ready
-
-Thousands of "in flight" requests can exist
-without thousands of OS threads for JS stacks.
-```
-
-**Error-driven intuition:** If you **block** the event loop with a **CPU** burn or a **synchronous** file read on the wrong API, you **freeze** everyone behind you. The ecosystem answer is **worker threads** or **splitting** processes — different tradeoffs than goroutines, same **lesson**: **cheap concurrency** requires **disciplined** blocking rules.
-
-**Erlang processes:** **BEAM** schedules **massive** counts of **lightweight processes** with **small** per-process heaps in the **actor** style. **Parallelism** still lands on **real** CPU cores via **OS threads** inside the VM, but **your** unit of concurrency is **not** a **1 MB** POSIX thread stack per actor.
-
-```
-Erlang world:
-
-  process process process process ...
-       \         |        /
-        \        |       /
-         BEAM schedulers on OS threads
-```
-
-> **In plain English:** **Go** is not unique in wanting **millions** of cheap tasks. **Erlang** and **virtual threads** push the same **economic** idea. **Node** gets there with **one** JS lane plus **async IO**. **Classic Java threads** and **Python's GIL story** teach the **pain** of treating **OS threads** as **unlimited** scratch paper.
-
-### 4.7 Why Go bet on this shape
-
-```
-Goals in one screenful:
-
-  * millions of goroutines for connection-style servers
-  * `go func()` as a low-ceremony fork
-  * blocking reads look synchronous in user code
-    while runtime parks goroutines cheaply
-```
-
-**Error-driven lesson:** If you **disable** parallelism accidentally, you still keep **concurrency**. If you spawn **infinite** CPU-bound goroutines, you still **saturate** cores. **Green threads** fix **waiting**, not **physics**.
+The lesson: **waiting is cheap** in Go because **parking** is cheap. You are not dedicating a whole OS thread and **~1 MB** stack to every blocked database call.
 
 ---
 
 ## 5. Key Rules & Behaviors
 
-### OS threads are expensive
+### OS threads stay expensive
 
-```
-One OS thread ~= big stack + kernel entity + heavier switches
+Treat every **new long-lived OS thread** as a **big** commitment. Thread pools exist in Java and elsewhere because **nobody** wants a million kernel threads.
 
-     $$$$  per thread ... memory plus scheduler tax add up fast
-```
+### Goroutines stay cheap (but not magic)
 
-> **In plain English:** Treat an OS thread like **leasing a full-size truck** for every errand. It works, but the fleet gets **expensive** fast.
+Spawning **`go func()`** is cheap. **CPU work** is still CPU work. A million goroutines all doing tight **`for {}`** loops will still **fight** for **`GOMAXPROCS`** cores.
 
-### Goroutines are cheap
+### `GOMAXPROCS` dials CPU parallelism, not goroutine count
 
-```
-Many goroutines ~= small initial stacks + runtime bookkeeping
+**Lower** `GOMAXPROCS`: less parallel CPU execution. **Higher**: more, up to what your hardware and scheduler usefully support. **Neither** deletes goroutines or "turns off" concurrency.
 
-     $  per goroutine at creation ... not free, yet tiny next to an OS thread
-```
+### Blocking I/O is normal
 
-> **In plain English:** Goroutines are closer to **handing out numbered tickets** at a deli counter than **building a new lane** for each customer.
+Your code **blocks** on reads and DB calls. The **runtime** makes that okay for throughput by **parking** goroutines and reusing threads. You are not supposed to rewrite everything as callbacks.
 
-### M:N model: many goroutines, few OS threads
+### When to worry
 
-```
-        g's ... many
-          |
-          v
-        M pool ... fewer
-          |
-          v
-      CPU cores
-```
-
-> **In plain English:** The **runtime** is the **traffic cop** in the parking lot. The **kernel** only polices the **lanes**.
-
-### GOMAXPROCS controls simultaneous OS-thread execution of Go code
-
-```
-Raise GOMAXPROCS  -> more OS parallelism opportunity for CPU work
-Lower GOMAXPROCS  -> less parallel CPU execution; not a goroutine limit
-```
-
-> **In plain English:** **GOMAXPROCS** dials **how many lanes** the runtime tries to use for **actually driving**, not **how many cars** exist.
-
-### Goroutine blocking does not necessarily block progress of the whole program
-
-```
-Goroutine waits on network
-        |
-        v
-Runtime parks that goroutine
-        |
-        v
-Underlying M runs a different goroutine.
-Netpoller integration and thread handoff also matter for I/O; [[T14 GMP Scheduler]] fills that in.
-```
-
-> **In plain English:** **Waiting** is not a **sin** in Go. **Parking** a waiter is the **feature**.
+- **CPU-bound** work: you need enough cores, batching, or worker limits—not infinite goroutines.
+- **Too many runnable goroutines** at once: scheduling overhead and latency spikes.
+- **C extensions, syscalls, or locks** that pin OS threads: sometimes you **do** create thread pressure outside the nice M:N story—profile and read [[T14 GMP Scheduler]] when you get there.
 
 ---
 
-## 6. Code Examples
+## 6. Code Examples (Show, Don't Tell)
 
-### Spawning many goroutines
+### HTTP server: one goroutine per request (mental model)
+
+The standard library accepts connections and handles each request with goroutines (details vary by API, but the **per-request goroutine** mental model is what you carry into production).
 
 ```go
 package main
 
 import (
+	"database/sql"
 	"fmt"
-	"sync"
+	"log"
+	"net/http"
 )
 
+var db *sql.DB // wired up in main
+
 func main() {
-	const n = 100_000
-	var wg sync.WaitGroup
-	wg.Add(n)
-	for i := 0; i < n; i++ {
-		go func() {
-			defer wg.Done()
-		}()
-	}
-	wg.Wait()
-	fmt.Println("done")
+	http.HandleFunc("/api/user", func(w http.ResponseWriter, r *http.Request) {
+		// This handler runs on a goroutine.
+		// Under load, thousands of these exist; only a few OS threads run Go code at once.
+		var id int
+		err := db.QueryRowContext(
+			r.Context(),
+			`SELECT id FROM users WHERE email = $1`,
+			r.URL.Query().Get("email"),
+		).Scan(&id)
+		if err != nil {
+			http.Error(w, "lookup failed", http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprintf(w, "%d", id)
+	})
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 ```
 
-MEMORY TRACE:
+While **`QueryRowContext`** waits on Postgres, **your** request goroutine is **parked**. The OS thread that was running it can serve **another** request's goroutine. That is how one process keeps **10k slow clients** from turning into **10k kernel threads**.
 
-Step 1: `main` runs as goroutine `G-main` on OS thread `M0`. Kernel has already given `M0` a **full-size pthread-style user stack** (order **~1–8 MB** depending on OS/ulimit). The heap holds `sync.WaitGroup` state and scheduler metadata; no extra goroutines yet.
+### Worker pool: 100 goroutines, one job channel
 
-```
-Process (illustrative):
-  text/data           ◄── program + runtime
-  heap                ◄── `wg`, global state
-  M0 stack [~1–8 MB]  ◄── kernel-mapped for this OS thread
-  G-main stack        ◄── ~2–8 KB initial segment, runtime-grown if needed
-```
-
-Step 2: Each `go func()` creates `G₀…G₉₉₉₉₉`. Per goroutine: descriptor + **~2–8 KB** initial stack (runtime allocates; grows on demand). **100_000** such stacks are **~400 MB** order-of-magnitude *if* each stays tiny—vs **100_000 OS threads** at **~2 MB** average stack ⇒ **~200 GB** virtual stack footprint before you count TLS and kernel structs.
-
-```
-100_000 goroutines:
-  Σ(initial G stacks)  ──→ ~100_000 × (~2–8 KB)  ◄── hundreds of MB, manageable on many machines
-100_000 OS threads (hypothetical same pattern):
-  Σ(per-thread stacks) ──→ ~100_000 × (~1–8 MB)   ◄── TB-scale address space / RLIMIT cliff
-```
-
-Step 3: Each child immediately `Done()`s and exits. Runtime frees or pools `G` stacks; `wg.Wait()` observes zero waiters. **M:N:** thousands of `G` completions interleave on **few** `M`s—no **1:1** `G`↔kernel thread mapping.
-
-```
-Scheduler view:
-  G's completed in bursts  ──→  bound to ≤ GOMAXPROCS active runners on CPU at once
-  context switches among G's on same M  ◄── mostly user-space (~100s ns class) vs kernel thread switch (~µs class + cache/TLB)
-```
-
-```
-Aha: Fan-out to 100_000 tasks stayed in **runtime-sized** memory because each unit is a **kilobyte-scale** green thread, not a **megabyte-scale** OS thread stack.
-```
-
-**Error-driven contrast:** The same **pattern** with **100_000 OS threads** is not a fair fight. You will typically blow **memory** on stacks, hit **OS limits**, and spend time in **kernel scheduling** long before you finish.
-
-### Why 100_000 OS threads is a trap
+You often cap **how much CPU-heavy work** runs at once, but the **goroutine count** can still be large if workers spend time waiting on **HTTP**, **S3**, or **message brokers**.
 
 ```go
-// DO NOT RUN naively at full 100_000 on a typical laptop.
 package main
 
-import (
-	"fmt"
-	"sync"
-)
+import "sync"
 
-func main() {
-	const n = 100_000
-	var wg sync.WaitGroup
-	wg.Add(n)
+type Job struct {
+	UserID int
+	// ...
+}
+
+func process(j Job) {
+	// Maybe call payment API, write audit row, push to queue — lots of waiting is typical.
+}
+
+// StartWorkers launches n goroutines; each pulls from jobs until the channel closes.
+func StartWorkers(jobs <-chan Job, n int, wg *sync.WaitGroup) {
 	for i := 0; i < n; i++ {
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			// Pretend this were a real OS thread per iteration:
-			// you would need a different API and pay OS-thread costs each time.
+			for j := range jobs {
+				process(j)
+			}
 		}()
 	}
-	wg.Wait()
-	fmt.Println("done")
 }
 ```
 
-MEMORY TRACE:
+**100 goroutines** here are **100 logical workers**, not **100 MB stacks × 100**. If **`process`** is **I/O-bound**, most of those goroutines are **parked** most of the time. If **`process`** is a **CPU furnace**, **`GOMAXPROCS`** still caps how much Go code runs **in parallel**—you tune **`n`** for queue depth and latency, not "more goroutines = more cores."
 
-Step 1: Identical **Go** layout as the previous example: **100_000** `G` records with **~2–8 KB** stacks and runtime descriptors. Kernel still sees only **few** `M` stacks (**~1–8 MB** each).
+**Hundred goroutines** draining a channel is normal in Go. **Hundred dedicated OS threads** for the same pattern would be a harder conversation with **ops** and **ulimits**.
 
-```
-Actual memory story (this program):
-  goroutine side  ──→ ~100_000 × (small stack + descriptor)
-  OS thread side  ◄── O(GOMAXPROCS)-sized M stacks, not O(n)
-```
+### WebSocket-style concurrency (sketch)
 
-Step 2: **Hypothetical** `pthread_create` per iteration: each new thread gets kernel bookkeeping + **default stack** often **megabytes**. Creation walks syscall paths; the global run queue holds **100_000** kernel schedulable entities.
+Thousands of connections each have a **read loop** goroutine. Most of the time those goroutines block in **`ReadMessage`**. You are not paying **50,000 × 1 MB** thread stacks for **50,000** quiet sockets.
 
-```
-If `go` → `pthread_create` mentally:
-  thread 0 stack [~1–8 MB] ──→ 0x7f.... 
-  thread 1 stack [~1–8 MB] ──→ 0x7f.... 
-  ...
-  thread 99999               ──→ address space + `/proc/self/status` VmRSS grows like a cliff
-  context switches           ──→ kernel saves/restores full thread_t + MM state more often
-```
-
-Step 3: Comment in source is the lesson: **same syntax shape in Go** still maps to **green threads**; swapping APIs swaps **memory class** from **KB/G** to **MB/M**.
-
-```
-Aha: The trap is not the loop—it's **what each iteration allocates**. OS thread = **kernel stack + sched entity**; goroutine = **runtime slice + tiny stack**.
-```
-
-### Checking GOMAXPROCS
+### Checking `GOMAXPROCS`
 
 ```go
 package main
@@ -437,150 +251,75 @@ import (
 )
 
 func main() {
-	fmt.Println(runtime.GOMAXPROCS(0))
+	fmt.Println(runtime.GOMAXPROCS(0)) // 0 = read current setting; often == logical CPU count
 }
 ```
 
-MEMORY TRACE:
-
-Step 1: `runtime.GOMAXPROCS(0)` only **reads** the parallelism limit; it does not allocate goroutines or grow the `M` pool beyond what the runtime already uses. **Heap / stacks unchanged** by this call except for any temporary args on the caller's stack.
-
-```
-Illustrative:
-  GOMAXPROCS = N   ──→ at most **N** logical Ps driving **N** pieces of Go code on-CPU simultaneously (model detail in [[T14 GMP Scheduler]])
-  goroutine count  ◄── **uncapped** by this setting; millions of Gs may exist while N Ms run bytecode
-```
-
-Step 2: On a laptop with 8 logical CPUs and default settings, print is often **8**. That means **up to ~8 parallel OS-thread runners** for **CPU-bound** Go work—not "8 goroutines max."
-
-```
-CPU parallelism budget:
-  raise GOMAXPROCS  ──→ more M's may execute Go in parallel on different cores (if hardware/OS allow)
-  lower GOMAXPROCS  ──→ fewer parallel runners; **does not** shrink existing G stacks or free parked Gs
-```
-
-```
-Aha: **GOMAXPROCS** dials **how many OS-backed runners** can burn CPU at once; it is not a goroutine **count** knob or a memory **release** knob.
-```
-
-### Many waiters, few runners
-
-```go
-package main
-
-import "time"
-
-func main() {
-	ch := make(chan struct{})
-	for i := 0; i < 50_000; i++ {
-		go func() {
-			<-ch
-		}()
-	}
-	time.Sleep(time.Second)
-	close(ch)
-	time.Sleep(100 * time.Millisecond)
-}
-```
-
-MEMORY TRACE:
-
-Step 1: **50_000** `go func()` launches. Each `G` allocates **~2–8 KB** initial stack + wait state pointing at channel `ch`. All block on `<-ch`; runtime marks them **waiting**, not **runnable**.
-
-```
-Channel waiters (conceptual per G):
-  Gᵢ stack        ◄── ~2–8 KB (idle frame for `<-ch`)
-  Gᵢ status       ──→ parked on `ch`'s receive queue
-  backing M       ◄── few Ms still exist; **no** 50_000 kernel stacks for these waiters
-```
-
-Step 2: During `Sleep`, **no** 50_000 OS threads each hold **~1–8 MB** stacks blocked in the kernel. **M:N:** a small set of `M`s idles or runs other work; **context-switch savings** vs 50_000 futex-blocked pthreads are enormous (kernel thread switch + TLB/cache vs runtime dequeue of another `G` on same `M`).
-
-```
-If each waiter were OS thread k:
-  Σ stacks  ──→ 50_000 × (~1–8 MB)  ◄── same cliff as 100_000-thread thought experiment, scaled
-As goroutines:
-  Σ stacks  ──→ 50_000 × (~2–8 KB)  ◄── parked cheaply in user heap / runtime structures
-```
-
-Step 3: `close(ch)` broadcasts; waiters become runnable, drain, exit. Memory for stacks returns to runtime pools.
-
-```
-M:N snapshot while parked:
-  g g g … (50k waiting)  ──→ multiplexed onto ──→  M M … (few, ≤ GOMAXPROCS busy at once for runnable work)
-```
-
-```
-Aha: **Blocking** in Go **parks** the **kilobyte-scale** goroutine; it does not force a **megabyte-scale** **dedicated** kernel thread per waiter.
-```
-
-**Error-driven reading:** This program is a **stress toy**, not a **template** for production logic. It exists to **contrast** **parked goroutines** with **parked OS threads**.
+On your **4-core** laptop, you will often see **4**. That means **four goroutines** can execute Go code **truly in parallel** at peak—not "only four goroutines allowed."
 
 ---
 
 ## 6.5. Practice Checkpoint
 
-### Tier 1: Predict the Output (2 min)
+### Tier 1: Reason about the server (2 min)
 
-**Question A.** What is a reasonable expectation for `runtime.GOMAXPROCS(0)` on a machine with 8 logical CPUs if you never called `GOMAXPROCS` with a positive value earlier in `main`?
+You deploy an API behind `net/http`. At peak you have **8,000** open connections. Each connection is served by **one long-lived goroutine** waiting on reads most of the time.
 
-**Question B.** You launch **500_000** goroutines that **all** spin in a tight **empty `for {}`**. Does **green-thread cheapness** imply your laptop will stay **responsive**?
+**A.** Roughly how many **~1 MB** OS-thread stacks should you expect **just** because you have 8,000 goroutines?
+
+**B.** You set **`GOMAXPROCS=4`** on a **4-core** box. Does that mean only **four** of your 8,000 connection goroutines can exist?
 
 > [!success]- Answer
-> **A.** It commonly reports **8**, matching the number of **logical CPUs** the Go runtime sees. This is **not** a promise about every environment; always measure in your deployment. The interview punchline: **default** `GOMAXPROCS` tracks **available logical CPUs** unless configured otherwise.
+> **A.** You should **not** expect **8,000 × ~1 MB** from goroutines alone. Goroutines start around **kilobyte-scale** stacks; the process still has **a small number** of OS threads with large stacks, not one per connection.
 >
-> **B.** No. **Cheap scheduling** does not erase **CPU contention**. Half a million **runnable** tight loops **fight** for **few** cores. Expect **latency collapse**, **thermal** throttling, and **preemption** traffic. **Cheap** means **cheap to park and switch**, not **free infinite compute**.
+> **B.** **No.** **`GOMAXPROCS`** limits how much **parallel CPU execution** Go uses, not goroutine count. You can have **8,000** parked goroutines and **`GOMAXPROCS=4`**. Thousands wait on I/O; up to **four** run CPU-heavy Go code at once on that setting.
 
-### Tier 2: Fix the Bug (5 min)
+### Tier 2: Worker pool intuition (5 min)
 
-You wrote a benchmark-style loop. You spawn one goroutine per iteration to compute `i*i`, but your process becomes sluggish and memory grows far more than expected. You **intended** cheap concurrency, but you accidentally created **one OS thread per task** via a C library binding.
+You process jobs from **`chan Job`**. You start **100** worker goroutines. Each worker spends **90%** of its time waiting on a **downstream HTTP call** and **10%** doing CPU work in **`process(j)`**.
 
-Which symptom triad best signals "I am actually making OS threads, not just goroutines" in production triage?
+**A.** Is the main win here "100 goroutines are cheaper than 100 OS threads," or "most workers are parked on I/O most of the time"?
+
+**B.** You change **`process(j)`** to a **pure tight CPU loop** with no I/O, but keep **100** workers and feed jobs as fast as possible. What happens to CPU saturation and latency?
 
 > [!success]- Answer
-> Look for **thread count** in the OS exploding toward your task count, **resident memory** climbing roughly with **thread stack footprint**, and **context switch** metrics going nonlinear. Fix by **reusing** a worker pool, **batching** calls, or using an **async** interface that does not map 1:1 to OS threads. In Go specifically, **pure goroutines** should not create **one** OS thread **per** goroutine; if they do, something **outside** the Go scheduler model is pinning threads.
+> **A.** Both matter, but the **I/O** picture is the **big** one: most workers are **blocked** waiting on the network, so **parking** goroutines and reusing a few **M**s is exactly what Go is good at. The **100 vs 100 OS threads** stack argument still holds, but the **scheduler story** is driven by **waiting**.
+>
+> **B.** You become **CPU-bound**. **`GOMAXPROCS`** cores saturate. Extra goroutines mostly **queue** and **fight** for time on those cores—throughput may plateau and **p99 latency** can spike. You would cap workers, batch, or scale out.
 
 ---
 
 ## 7. Gotchas & Interview Traps
 
-```
-TRAP: "Each goroutine is a thread"
-REALITY: Goroutines are multiplexed; OS threads are the underlying carriers.
-
-TRAP: "More goroutines always means more speed"
-REALITY: CPU-bound work still needs cores; excess goroutines add scheduling work.
-
-TRAP: "GOMAXPROCS limits goroutines"
-REALITY: It shapes OS-thread parallelism for the Go scheduler model, not goroutine count.
-
-TRAP: "Green threads mean free parallelism"
-REALITY: Multiple cores still require multiple executing OS threads underneath.
-
-TRAP: "Context switch is always ~X nanoseconds"
-REALITY: OS switch costs vary; cache/TLB effects dominate many real workloads.
-```
-
-**CPU-bound goroutines can starve others** if work is not yielded and preemption is not helping your mental model. **IO-bound** workloads are where goroutines shine brightest in **throughput-per-thread** stories.
+| Trap | Reality |
+|------|---------|
+| "Each goroutine is an OS thread" | **No.** Many **G**s map onto few **M**s. |
+| "More goroutines = always faster" | **CPU** work still needs **cores**. Too many **runnable** goroutines adds **scheduling** cost. |
+| "`GOMAXPROCS` caps goroutines" | It shapes **parallel OS-thread execution** of Go code, not goroutine count. |
+| "Goroutines give free multi-core speedup" | **Parallelism** needs **multiple** **M**s running; **`GOMAXPROCS`** and your workload determine that. |
+| "`db.Query` holds a thread so nobody else runs" | In Go, your **goroutine** waits; the **runtime** runs **other** goroutines on the **M** (modulo blocking syscalls—see [[T14 GMP Scheduler]]). |
 
 ---
 
 ## 8. Interview Gold Questions (Top 3)
 
-1. **Why can Go spawn hundreds of thousands of goroutines but spawning the same count of OS threads is unrealistic?**  
-   Tie answer to **stack size**, **kernel scheduling entities**, **creation cost**, and **switch cost**.
+**Q1: Why can Go run tens of thousands of goroutines but not tens of thousands of OS threads?**
 
-2. **What does M:N mean, and what are M and N in plain language?**  
-   **Many** user-space goroutines mapped onto **fewer** OS threads; goroutines **wait** cheaply while Ms keep cores useful.
+Point to **small initial stacks** vs **~MB-scale thread stacks**, **runtime vs kernel scheduling**, **creation and switch cost**, and **parked I/O-heavy** workloads.
 
-3. **Why does Go still need GOMAXPROCS if goroutines are cheap?**  
-   Because **parallel CPU execution** requires **multiple** OS threads executing at once; **GOMAXPROCS** configures that **parallelism** budget for the scheduler.
+**Q2: What does M:N mean here?**
+
+**Many** goroutines (**N**) multiplexed onto **fewer** OS threads (**M**). Waiting goroutines **release** their **M** to do other work.
+
+**Q3: What does `GOMAXPROCS` do?**
+
+Sets how many OS threads execute Go code **in parallel** across CPUs (default ≈ logical cores). Does **not** limit goroutines. Explains why your **4-core** box runs **four** goroutines **truly parallel** at peak, while **10k** others may wait.
 
 ---
 
 ## 9. 30-Second Verbal Answer
 
-**OS threads** are **kernel-scheduled** with **large stacks** and **microsecond-scale** context switches. **Goroutines** are **runtime-scheduled** **green threads** with **tiny initial stacks** and **hundreds-of-nanoseconds-scale** switching in typical discussions. Go uses **M:N multiplexing** so **many** goroutines share **few** OS threads, which fits **I/O-heavy** servers and simple **`go` syntax**. **GOMAXPROCS** sets how many OS threads run Go code **in parallel**, because **green threads alone** do not magically occupy **all cores** without that **underlying** thread pool.
+An **OS thread** is kernel-scheduled, has a **large** stack, and costs real money to create and switch. A **goroutine** is Go's **green thread**: **tiny** starting stack, **runtime**-scheduled, **cheap** to create and switch. Go runs **many goroutines** on **few OS threads** so your **HTTP server**, **database clients**, and **WebSocket** loops can have **huge concurrency** without **huge** thread stacks. **`GOMAXPROCS`** sets how many OS threads run Go code **in parallel** on the CPU—default is usually your **core count**. Goroutines make **waiting** cheap; they do not break the laws of **CPU** physics.
 
 ---
 
