@@ -33,25 +33,36 @@ func (c *Counter) BumpPointer() { *c++ }   // edits the original
 ```
 
 ```
-VALUE RECEIVER (copy)
+MEMORY TRACE:
 
-  caller's c:  [ 5 ]
-                    |
-                    | copy made for method
-                    v
-  inside method: [ 6 ]   <-- only this copy changes
-  caller still sees 5
+Scenario A — value receiver: caller holds Counter(5), calls BumpValue()
+
+Step 1: c := Counter(5)  (conceptually; Counter is int underneath)
+  stack:
+    c ──→ [ 5 ]  at addr 0xC000
+
+Step 2: c.BumpValue() — full copy of c into the value receiver parameter; c++ runs on the copy only  ◄── aha: caller’s slot is never written
+  stack:
+    c ──→ [ 5 ]  at addr 0xC000   ◄── unchanged
+    receiver in BumpValue ──→ [ 6 ]  at addr 0xC010   ◄── only this temporary copy increments
+
+Step 3: BumpValue returns; receiver copy discarded
+  stack:
+    c ──→ [ 5 ]  at addr 0xC000
 
 
-POINTER RECEIVER (shared location)
+Scenario B — pointer receiver: cp := &c, then BumpPointer()
 
-  caller's c points to --> [ 5 ]
-                              ^
-                              |
-                    method edits this box
-                              |
-                              v
-                           now [ 6 ]
+Step 1: c holds 5; cp holds c’s address
+  stack:
+    c  ──→ [ 5 ]  at addr 0xC000
+    cp ──→ 0xC000   ◄── pointer value (8 bytes) names the same underlying int as c
+
+Step 2: cp.BumpPointer() — receiver is a copy of the pointer bits, still pointing at 0xC000; *c++ mutates that int
+  stack:
+    c  ──→ [ 6 ]  at addr 0xC000   ◄── original storage updated
+    cp ──→ 0xC000
+    receiver *Counter in BumpPointer ──→ 0xC000   ◄── same address as cp; aliases caller’s value
 ```
 
 Here is the classic silent failure: you "bump" with a value receiver and nothing happens.
@@ -60,6 +71,21 @@ Here is the classic silent failure: you "bump" with a value receiver and nothing
 var x Counter = 5
 x.BumpValue()
 fmt.Println(x) // still 5
+```
+
+```
+MEMORY TRACE:
+
+Step 1: var x Counter = 5
+  stack:
+    x ──→ [ 5 ]  at addr 0xC000
+
+Step 2: x.BumpValue() — entire Counter value copied into value receiver; only the copy is incremented  ◄── aha: silent no-op from caller’s perspective
+  stack:
+    x ──→ [ 5 ]  at addr 0xC000   ◄── never updated
+    receiver copy ──→ [ 6 ]  at addr 0xC010   ◄── thrown away when the method returns
+
+Step 3: fmt.Println(x) observes x ──→ [ 5 ]  at addr 0xC000
 ```
 
 > **In plain English:** You shouted at a photograph of your bank balance, not at the bank. The real account never heard you.
@@ -81,11 +107,20 @@ func (id ID) IsEmpty() bool {
 ```
 
 ```
-syntax pattern
+MEMORY TRACE:
 
-  func (receiver Type) MethodName(args...) (results...) { ... }
-        ^^^^^^^^
-        binds name + type
+Step 1: id := ID("")
+  stack:
+    id ──→ [ string header: ptr,len for empty string ]  at addr 0xC000
+
+Step 2: id.IsEmpty() — value receiver copies the whole ID (the string header bytes) into the method’s `id` parameter
+  stack:
+    caller id ──→ …  at addr 0xC000
+    receiver id in IsEmpty ──→ copy of same header  at addr 0xC010   ◄── separate stack slot; comparison does not mutate caller
+
+Step 3: return id == ""  → true (reads only the receiver copy’s contents)
+
+(The `func (id ID)` syntax binds that receiver name + type to every call site the compiler generates.)
 ```
 
 > **In plain English:** You are teaching Go a new verb that only applies to values of this type, the same way you might add a custom button only on one kind of remote control.
@@ -109,23 +144,32 @@ func (u *User) SetNameRight(s string) {
 ```
 
 ```
-SetNameWrong(u User)
+MEMORY TRACE:
 
-  caller: User{"alice"}
-              |
-              +--copy--> User{...}  Name field changed here only
-              |
-  caller still "alice"
+SetNameWrong — value receiver
+
+Step 1: u := User{Name: "alice"} in caller
+  stack:
+    u ──→ [ Name: "alice" ]  at addr 0xC000
+
+Step 2: SetNameWrong("bob") — entire User struct copied into value receiver; assignment writes Name on the copy only  ◄── aha: caller’s struct untouched
+  stack:
+    caller u ──→ [ Name: "alice" ]  at addr 0xC000
+    receiver u ──→ [ Name: "bob" ]  at addr 0xC010
+
+Step 3: after return, receiver discarded; caller u still "alice"
 
 
-SetNameRight(u *User)
+SetNameRight — pointer receiver
 
-  caller: *User --> User{"alice"}
-                      |
-                      method writes here
-                      |
-                      v
-                   User{"bob"}
+Step 1: u := User{Name: "alice"}
+  stack:
+    u ──→ [ Name: "alice" ]  at addr 0xC000
+
+Step 2: SetNameRight("bob") — receiver parameter is a copy of &u (8-byte pointer), not a copy of the struct
+  stack:
+    u ──→ [ Name: "bob" ]  at addr 0xC000   ◄── same struct mutated in place
+    receiver *User ──→ 0xC000   ◄── aliases caller’s User
 ```
 
 > **In plain English:** Value receiver is a stunt double. Pointer receiver is the actor on set.
@@ -140,13 +184,22 @@ For type `T`:
 The method set of `T` does **not** include methods whose receiver is `*T` only.
 
 ```
-type T struct{}
+MEMORY TRACE:
 
-func (T)  A() {}
-func (*T) B() {}
+Step 1: type T struct{}; var v T
+  stack:
+    v ──→ [ empty struct ]  at addr 0xC000
 
-method set of T:   { A }
-method set of *T:  { A, B }
+Step 2: method set of T (what you may call on a value of type T)
+  dispatch: { A } only   ◄── B was declared with receiver *T, so it is not in T’s method set
+
+Step 3: var p *T = &v
+  stack:
+    v ──→ [ ]  at addr 0xC000
+    p ──→ 0xC000
+
+Step 4: method set of *T (superset)
+  dispatch: { A, B }   ◄── aha: *T gets value-receiver methods plus pointer-receiver-only methods; the converse is false for plain T
 ```
 
 > **In plain English:** A plain value is a locked-down employee badge that only opens doors listed for "value badge." A pointer badge inherits every door the value badge opens, plus extra doors only pointer people may use.
@@ -173,12 +226,18 @@ var _ Stringer = (*Point)(nil) // ok: *Point has String
 ```
 
 ```
-Interface needs:  String() string
+MEMORY TRACE:
 
-Point value:   method set has no String (only *Point does)
-*Point value:  method set has String
+Step 1: String is declared only on *Point
+  method set of Point:   no String
+  method set of *Point:  includes String
 
-So only *Point implements Stringer here.
+Step 2: var _ Stringer = (*Point)(nil) — interface value’s dynamic type is *Point; data word can be nil
+  iface (conceptual):
+    type ──→ *Point
+    data ──→ 0x0   ◄── nil *Point is still typed; method table has String
+
+Step 3: var _ Stringer = Point{} would require Point.String in Point’s method set — it is not there  ◄── aha: value Point cannot satisfy Stringer when only *Point carries the method
 ```
 
 > **In plain English:** The interface is a job description. Your value type might be under-qualified if all the real work was attached to the pointer job title instead.
@@ -195,9 +254,18 @@ s := p.String() // same as (&p).String()
 This is **syntactic sugar**. It does not change method sets. It only affects **call** sites.
 
 ```
-p.String()
+MEMORY TRACE:
 
-compiler rewrites to (&p).String() when method is on *Point and p is addressable
+Step 1: p := Point{X: 1, Y: 2}
+  stack:
+    p ──→ [ X: 1 | Y: 2 ]  at addr 0xC000
+
+Step 2: s := p.String() — String’s receiver type is *Point; p is addressable, so compiler rewrites to (&p).String()  ◄── aha: no full struct copy; only the address (8 bytes) is passed into the method
+  stack:
+    p ──→ [ X: 1 | Y: 2 ]  at addr 0xC000
+    receiver *Point inside String ──→ 0xC000   ◄── copy of pointer &p, aliases original p
+
+Step 3: String reads p.X, p.Y through that pointer
 ```
 
 > **In plain English:** The language hands you a pointer behind the counter so you do not have to say "address of" out loud every time, but the job opening still said "pointer skills required."
@@ -220,11 +288,18 @@ func main() {
 ```
 
 ```
-b before: Box{n:1}
-          |
-Add copies --> Box{n:1} --+10--> Box{n:11}  (discarded)
-          |
-b after:  Box{n:1}
+MEMORY TRACE:
+
+Step 1: b := Box{n: 1}
+  stack:
+    b ──→ [ n: 1 ]  at addr 0xC000
+
+Step 2: b.Add(10) — full copy of Box into value receiver; b.n += 10 runs on the copy only  ◄── aha: caller’s Box never sees the +10
+  stack:
+    b ──→ [ n: 1 ]  at addr 0xC000   ◄── unchanged
+    receiver in Add ──→ [ n: 11 ]  at addr 0xC010   ◄── discarded when Add returns
+
+Step 3: fmt.Println(b.n) reads b ──→ [ n: 1 ]  at addr 0xC000
 ```
 
 > **In plain English:** You inflated a balloon that was not tied to your wrist. It floated away.
@@ -242,9 +317,18 @@ func main() {
 ```
 
 ```
-b.n starts at 1
-*b points at that field
-method does b.n += 10 on the live struct
+MEMORY TRACE:
+
+Step 1: b := Box{n: 1}
+  stack:
+    b ──→ [ n: 1 ]  at addr 0xC000
+
+Step 2: b.Add(10) — compiler passes address &b; receiver *Box is a copy of that pointer (8 bytes)
+  stack:
+    b ──→ [ n: 11 ]  at addr 0xC000   ◄── += applied through *Box on the live struct
+    receiver *Box in Add ──→ 0xC000   ◄── aliases caller’s b
+
+Step 3: fmt.Println(b.n) reads [ n: 11 ]  at addr 0xC000
 ```
 
 > **In plain English:** You edited the document saved on the shared drive. Everyone sees the update.
@@ -261,10 +345,17 @@ func (*N) B() {}
 ```
 
 ```
-   T ----A---->
-  / \
- *T --A--+
-        \--B-->
+MEMORY TRACE:
+
+Step 1: var n N = 7
+  stack:
+    n ──→ [ N underlying int: 7 ]  at addr 0xC000
+
+Step 2: method set attached by compiler to type N vs *N
+  callable on n (value N):   { A }
+  callable on &n (type *N): { A, B }   ◄── aha: *N includes value-receiver A plus pointer-only B; N never gets B without taking address
+
+Step 3: calling B requires *N — e.g. (&n).B(); plain n.B() is invalid
 ```
 
 > **In plain English:** Promotion goes up, not sideways. The pointer world is a superset for methods, not the other way around.
@@ -283,8 +374,18 @@ func main() {
 ```
 
 ```
-x lives in a variable (addressable)
-x.Double() --> (&x).Double()
+MEMORY TRACE:
+
+Step 1: var x V = 3
+  stack:
+    x ──→ [ 3 ]  at addr 0xC000
+
+Step 2: x.Double() — x is addressable; compiler rewrites to (&x).Double(); receiver *V is copy of pointer &x (8 bytes), not a copy of the int  ◄── aha: same pattern as struct pointer receivers
+  stack:
+    x ──→ [ 6 ]  at addr 0xC000   ◄── after *v *= 2
+    receiver *V in Double ──→ 0xC000
+
+Step 3: fmt.Println(x) observes updated x on the stack
 ```
 
 > **In plain English:** The compiler quietly passes your home address when the method needs to ring your doorbell.
@@ -311,11 +412,18 @@ func main() {
 ```
 
 ```
-l is nil --+
-           |
- l.Len() --+--> receiver is nil *List
-           |
-           +--> method body may still run
+MEMORY TRACE:
+
+Step 1: var l *List — zero value
+  stack:
+    l ──→ nil (0x0)   ◄── no List struct allocated
+
+Step 2: l.Len() — receiver parameter is a copy of l’s pointer bits (still nil)
+  stack:
+    caller l ──→ 0x0
+    receiver *List in Len ──→ 0x0   ◄── nil receiver is legal; method runs
+
+Step 3: if l == nil { return 0 } — compares pointer only; no field access on *List → no panic
 ```
 
 > **In plain English:** A nil pointer is an empty folder. You can still ask "how many papers?" and get zero, as long as you do not blindly open a drawer inside that folder.
@@ -333,9 +441,19 @@ func (w *Wallet) Balance() int { return w.cents }
 ```
 
 ```
-all methods on *Wallet
+MEMORY TRACE:
 
-readers assume: shared mutable state behind the pointer
+Step 1: w := &Wallet{cents: 100}
+  heap:
+    struct ──→ [ cents: 100 ]  at addr 0xH100
+  stack:
+    w ──→ 0xH100
+
+Step 2: w.Deposit(50) — receiver *Wallet is copy of 0xH100; mutates same struct
+  heap:
+    struct ──→ [ cents: 150 ]  at addr 0xH100   ◄── one shared mutable backing store
+
+Step 3: w.Balance() — again receiver ──→ 0xH100; read returns 150  ◄── consistent story: every method uses pointer receiver + same address
 ```
 
 > **In plain English:** If one door in the house needs a key, give every roommate the same keychain. Mixed locks invite accidents.
@@ -374,8 +492,18 @@ func main() {
 ```
 
 ```
-b --> Bank{100}     DepositWrong copies --> Bank{150} discarded
-b --> Bank{100}     caller unchanged
+MEMORY TRACE:
+
+Step 1: b := Bank{balance: 100}
+  stack:
+    b ──→ [ balance: 100 ]  at addr 0xC000
+
+Step 2: b.DepositWrong(50) — full Bank struct copied into value receiver; += runs on copy only  ◄── aha: same failure mode as Box.Add with value receiver
+  stack:
+    b ──→ [ balance: 100 ]  at addr 0xC000
+    receiver in DepositWrong ──→ [ balance: 150 ]  at addr 0xC010   ◄── discarded on return
+
+Step 3: fmt.Println(b.balance) reads b ──→ [ balance: 100 ]  at addr 0xC000
 ```
 
 ### Pointer receiver method — modification sticks
@@ -391,7 +519,18 @@ func main() {
 ```
 
 ```
-b --> Bank{100} == *b edited in place --> Bank{150}
+MEMORY TRACE:
+
+Step 1: b := Bank{balance: 100}
+  stack:
+    b ──→ [ balance: 100 ]  at addr 0xC000
+
+Step 2: b.DepositRight(50) — receiver *Bank is copy of &b (8 bytes)
+  stack:
+    b ──→ [ balance: 150 ]  at addr 0xC000   ◄── mutation through pointer
+    receiver *Bank ──→ 0xC000
+
+Step 3: fmt.Println(b.balance) reads [ balance: 150 ]  at addr 0xC000
 ```
 
 ### Interface satisfaction: value versus pointer
@@ -417,7 +556,18 @@ func demo() {
 ```
 
 ```
-*Tag has Format; Tag does not. Interface holds *Tag with nil pointer; method handles nil.
+MEMORY TRACE:
+
+Step 1: *Tag declares Format; Tag (value) has no Format in its method set
+  *Tag satisfies Formatter; Tag does not
+
+Step 2: var f Formatter = (*Tag)(nil)
+  iface (conceptual):
+    type/word ──→ *Tag
+    data word ──→ 0x0   ◄── dynamic value is nil *Tag; interface value itself is non-nil
+
+Step 3: f.Format() — dispatch to (*Tag).Format; receiver *Tag parameter ──→ 0x0
+  method checks t == nil → "<nil tag>" without reading *t  ◄── aha: nil receiver safe until you dereference fields of the pointed-to Tag
 ```
 
 ### Nil receiver behavior
@@ -440,9 +590,27 @@ func (t *Tree) Sum() int {
 If you forget the nil check and do `t.v` first, you panic. The nil receiver is allowed; **field access on nil** is not.
 
 ```
-t == nil --> early return 0   (safe)
+MEMORY TRACE (Sum with nil check — safe):
 
-t == nil --> read t.v        (panic)
+Step 1: var t *Tree = nil
+  stack:
+    t ──→ 0x0
+
+Step 2: t.Sum() — receiver *Tree ──→ 0x0 (copy of nil pointer)
+  stack:
+    receiver in Sum ──→ 0x0   ◄── nil is a legal pointer value in the receiver slot
+
+Step 3: if t == nil { return 0 } — no load through nil → no panic
+
+
+MEMORY TRACE (broken order — panic):
+
+Step 1: var t *Tree = nil
+  stack:
+    t ──→ 0x0
+
+Step 2: t.Sum() enters with receiver ──→ 0x0
+Step 3: return t.v + ... — CPU tries to read field v through address 0x0  ◄── aha: nil receiver was fine to enter the method; dereferencing nil to reach fields panics
 ```
 
 ### Methods on non-struct types
@@ -453,6 +621,21 @@ type Celsius float64
 func (c Celsius) String() string {
 	return fmt.Sprintf("%.1f C", c)
 }
+```
+
+```
+MEMORY TRACE:
+
+Step 1: var c Celsius = 36.5
+  stack:
+    c ──→ [ float64: 36.5 ]  at addr 0xC000   ◄── named type Celsius, same size/layout as float64
+
+Step 2: s := c.String() — value receiver copies the full 8-byte Celsius value into the method’s receiver slot
+  stack:
+    caller c ──→ 36.5  at addr 0xC000
+    receiver c in String ──→ 36.5  at addr 0xC010   ◄── full value copy (not a pointer), like a tiny struct with one scalar field
+
+Step 3: fmt.Sprintf runs on the copy; caller’s c unchanged (method does not mutate)
 ```
 
 The defined type `Celsius` is not a struct, but methods attach to the named type the same way.
@@ -476,16 +659,29 @@ func main() {
 ```
 
 ```
-method expression
+MEMORY TRACE:
 
-  (*Counter).Inc  --> func(*Counter)
+Step 1: var c Counter; c is 0
+  stack:
+    c ──→ [ 0 ]  at addr 0xC000
 
-  call: f(&c)
+Step 2: f := (*Counter).Inc — method expression, type is func(*Counter); no receiver bound yet
+  stack:
+    c ──→ [ 0 ]  at addr 0xC000
+    f ──→ function value (*Counter).Inc   ◄── not tied to a particular Counter yet
 
+Step 3: f(&c) — you pass the pointer explicitly each call; receiver *Counter ──→ 0xC000; *c++ → c is 1
+  stack:
+    c ──→ [ 1 ]  at addr 0xC000
 
-method value
+Step 4: g := c.Inc — method value: compiler builds a function value closed over receiver *Counter ──→ 0xC000  ◄── aha: no argument at call time; “who to mutate” is fixed
+  stack:
+    c ──→ [ 1 ]  at addr 0xC000
+    g ──→ func bound to receiver ──→ 0xC000
 
-  c.Inc --> func() bound to receiver already (closure-like)
+Step 5: g() — same as another Inc on that fixed address; c becomes 2
+  stack:
+    c ──→ [ 2 ]  at addr 0xC000
 ```
 
 ---
@@ -517,6 +713,43 @@ func main() {
 }
 ```
 
+```
+MEMORY TRACE:
+
+Step 1: initial state
+  stack:
+    v ──→ [ x: 1 ]  at addr 0xC000
+    p ──→ 0xC100   ◄── pointer value (8 bytes)
+  heap:
+    object at 0xC100 ──→ [ x: 1 ]
+
+Step 2: v.A() — value receiver copies v to a temp; temp.x++; v’s slot unchanged → v.x still 1
+  stack:
+    v ──→ [ x: 1 ]  at addr 0xC000
+    receiver copy in A ──→ [ x: 2 ]  at addr 0xC020   ◄── discarded on return
+
+Step 3: v.B() — rewrite (&v).B(); receiver *S ──→ 0xC000; mutates v.x → v.x = 2
+  stack:
+    v ──→ [ x: 2 ]  at addr 0xC000
+
+Step 4: p.A() — value receiver copies the struct *p points at into a temp; only temp.x++; heap object unchanged  ◄── aha: looked like a “pointer call” but A still used a full struct copy
+  stack:
+    v ──→ [ x: 2 ]  at addr 0xC000
+    p ──→ 0xC100
+    receiver copy in A ──→ [ x: 2 ]  at addr 0xC030   ◄── temp only
+  heap:
+    0xC100 ──→ [ x: 1 ]   ◄── untouched
+
+Step 5: p.B() — receiver *S ──→ 0xC100; *s++ mutates heap struct
+  heap:
+    0xC100 ──→ [ x: 2 ]
+
+Step 6: fmt.Println(v.x, p.x) → 2 2
+  stack:
+    v ──→ [ x: 2 ]
+    p ──→ 0xC100
+```
+
 > [!success]- Answer
 > `2 2`
 >
@@ -540,6 +773,28 @@ func main() {
 	buf.Write([]byte("hello"))
 	fmt.Println(len(buf.data))
 }
+```
+
+```
+MEMORY TRACE (bug — value receiver):
+
+Step 1: var buf Buffer — zero value
+  stack:
+    buf ──→ [ data: slice header ptr=0 len=0 cap=0 ]  at addr 0xC000
+
+Step 2: buf.Write("hello") — entire Buffer (the slice header) copied into value receiver
+  stack:
+    caller buf ──→ slice header at 0xC000
+    receiver copy ──→ slice header at 0xC010   ◄── append may allocate and update ptr/len only on this copy
+
+Step 3: method returns; caller’s buf.data still len 0  ◄── aha: mutation of backing array / header never propagated back
+
+MEMORY TRACE (fix — pointer receiver):
+
+Step 1: var buf Buffer; buf.Write with (b *Buffer) receiver
+  stack:
+    buf ──→ [ data: slice header ]  at addr 0xC000
+    receiver *Buffer ──→ 0xC000   ◄── aliases caller’s Buffer; append updates this header in place → len(buf.data) reflects growth
 ```
 
 > [!success]- Answer

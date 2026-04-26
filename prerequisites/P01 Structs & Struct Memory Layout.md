@@ -55,13 +55,32 @@ func bump(c Counter) {
 func main() {
 	c := Counter{n: 0}
 	bump(c)
-	// still 0: bump received a COPY
+	fmt.Println(c.n) // still 0!
 }
 ```
 
 ```
-main's c          bump's parameter c (copy)
-[ n: 0 ]    -->   [ n: 1 ]   (then discarded)
+MEMORY TRACE:
+
+Step 1: c := Counter{n: 0}
+  main stack:
+    c ──→ [ n: 0 ]  at addr 0xC000
+
+Step 2: bump(c)  — Go copies the ENTIRE struct
+  main stack:
+    c ──→ [ n: 0 ]  at addr 0xC000        ◄── untouched
+  bump stack:
+    c ──→ [ n: 0 ]  at addr 0xD000        ◄── brand new copy at DIFFERENT address
+
+Step 3: c.n++ inside bump()
+  main stack:
+    c ──→ [ n: 0 ]  at addr 0xC000        ◄── STILL 0, nobody touched this
+  bump stack:
+    c ──→ [ n: 1 ]  at addr 0xD000        ◄── only the copy changed
+
+Step 4: bump() returns — copy at 0xD000 is gone
+  main stack:
+    c ──→ [ n: 0 ]  at addr 0xC000        ◄── still 0. the increment was lost.
 ```
 
 > **In plain English:** You handed the function a photocopy of the form. They scribbled on the photocopy. Your original form never changed. Pass `&c` if you want one shared form everyone edits.
@@ -90,10 +109,27 @@ fmt.Println(pp.Name) // compiler inserts * for field access
 ```
 
 ```
-Named type Person     -> new noun in your program
-Anonymous struct      -> one-off shape, no package-level name
-Struct literal        -> named fields (safe) vs positional (brittle if fields reorder)
-Pointer pp            -> address ----> [Person in memory]; pp.Name still works
+MEMORY TRACE:
+
+Step 1: p := Person{Name: "Ada", Age: 36}
+  stack:
+    p ──→ [ Name: "Ada" | Age: 36 ]  at addr 0xC000
+           (Name is a StringHeader: ptr to "Ada" bytes + len=3)
+           (Age is an int: 8 bytes holding 36)
+
+Step 2: q := Person{"Grace", 31}
+  stack:
+    q ──→ [ Name: "Grace" | Age: 31 ]  at addr 0xC028   ◄── separate copy
+
+Step 3: pp := &Person{Name: "Lin", Age: 40}
+  heap (or stack, escape analysis decides):
+    Person ──→ [ Name: "Lin" | Age: 40 ]  at addr 0xE000
+  stack:
+    pp ──→ [ 0xE000 ]                                    ◄── pp is just an address (8 bytes)
+
+Step 4: pp.Name
+  Go reads: *pp → follow 0xE000 → find Name field → "Lin"
+  The compiler inserts the dereference for you. pp.Name is sugar for (*pp).Name
 ```
 
 > **In plain English:** You invented a dictionary word (`Person`), printed a one-time label (anonymous struct), filled out the form (literal), or kept the house address instead of cloning the house (pointer).
@@ -116,7 +152,19 @@ var j Job
 ```
 
 ```
-Fresh Job: [ "" | false | 0 ]
+MEMORY TRACE:
+
+var j Job
+  stack:
+    j ──→ [ Title: "" (ptr=nil, len=0) | Done: false | Ticks: 0 ]
+
+  Every byte is zeroed by Go. No garbage, no uninitialized memory.
+
+  Title field breakdown:
+    StringHeader [ Data: nil | Len: 0 ]  ──→ points nowhere (empty string)
+
+  Done: 1 byte, value 0x00 = false
+  Ticks: 8 bytes, all zeros = 0
 ```
 
 > **In plain English:** The form is printed. No one wrote on it yet. Defaults: empty string, false, zero number, nil pointer, nil slice, nil map as appropriate.
@@ -147,9 +195,28 @@ fmt.Println(r.Meta.ID)  // explicit
 ```
 
 ```
-Nested:   Employee [ Name | Home-->[City] ]
-Embedded: Record [ Meta subobject | Label ]
-           promoted: r.ID resolves like r.Meta.ID
+MEMORY TRACE:
+
+Step 1: e := Employee{Name: "Sam", Home: Address{City: "Austin"}}
+  stack:
+    e ──→ [ Name: "Sam" | Home: [ City: "Austin" ] ]
+           ↑ field 1      ↑ field 2 (nested struct, stored INLINE, not a pointer)
+
+  e.Home.City → navigate: e → Home field → City field → "Austin"
+  Total size: sizeof(string) + sizeof(Address) = 16 + 16 = 32 bytes
+
+Step 2: r := Record{Meta: Meta{ID: 7}, Label: "x"}
+  stack:
+    r ──→ [ Meta: [ ID: 7 ] | Label: "x" ]
+           ↑ embedded (no field name in source, but occupies real memory)
+
+  r.ID → compiler rewrites to → r.Meta.ID → 7
+  r.Meta.ID → same thing, explicit path → 7
+
+  Memory layout:
+  offset 0:  [ ID: 7 ]         ← Meta subobject (8 bytes)
+  offset 8:  [ Label: "x" ]    ← string (16 bytes)
+  total: 24 bytes
 ```
 
 > **In plain English:** Nested is a folder inside a folder. Embedding slides a small card under a big card so the small headings line up at the outer edge; you can still lift the small card with `r.Meta`.
@@ -214,7 +281,21 @@ q.X = 99 // p.X still 1
 ```
 
 ```
-q is a full copy; writes to q do not touch p
+MEMORY TRACE:
+
+Step 1: p := Point{1, 2}
+  stack:
+    p ──→ [ X: 1 | Y: 2 ]  at addr 0xC000
+
+Step 2: q := p    — FULL COPY of all bytes
+  stack:
+    p ──→ [ X: 1 | Y: 2 ]  at addr 0xC000
+    q ──→ [ X: 1 | Y: 2 ]  at addr 0xC010   ◄── different address, same values
+
+Step 3: q.X = 99
+  stack:
+    p ──→ [ X: 1 | Y: 2 ]  at addr 0xC000   ◄── unchanged
+    q ──→ [ X: 99 | Y: 2 ] at addr 0xC010   ◄── only q changed
 ```
 
 > **In plain English:** Duplicate sticky notes. Erasing one copy does not erase the other.
@@ -274,13 +355,30 @@ type Loose struct{ a int8; b int64; c int8 }
 type Tight struct{ b int64; a, c int8 }
 
 func main() {
-	_ = unsafe.Sizeof(Loose{})
-	_ = unsafe.Sizeof(Tight{})
+	fmt.Println(unsafe.Sizeof(Loose{})) // 24
+	fmt.Println(unsafe.Sizeof(Tight{})) // 16
 }
 ```
 
 ```
-Measure on the target; ordering changes internal and tail padding
+MEMORY TRACE:
+
+Loose layout (a int8, b int64, c int8):
+  offset 0:   [a: 1 byte]
+  offset 1-7: [padding 7 bytes]     ◄── wasted! b needs 8-byte alignment
+  offset 8:   [b: 8 bytes]
+  offset 16:  [c: 1 byte]
+  offset 17-23: [tail padding 7 bytes]  ◄── struct alignment = max field = 8
+  total: 24 bytes
+
+Tight layout (b int64, a int8, c int8):
+  offset 0:   [b: 8 bytes]          ◄── already aligned
+  offset 8:   [a: 1 byte]
+  offset 9:   [c: 1 byte]
+  offset 10-15: [tail padding 6 bytes]
+  total: 16 bytes
+
+  Same fields, same data, 8 bytes SAVED just by reordering.
 ```
 
 > **In plain English:** Suitcase order changes how much foam you waste in the trunk.
@@ -297,15 +395,29 @@ func (b Base) Show() int { return b.N }
 
 func main() {
 	d := Derived{Base: Base{N: 5}}
-	_ = d.Base.Show() // not d.Show()
+	fmt.Println(d.Show())      // 5 — promoted, calls d.Base.Show()
+	fmt.Println(d.Base.Show()) // 5 — explicit
 }
 ```
 
 ```
-Derived has Base inside; Base's methods do not become Derived's methods automatically
+MEMORY TRACE:
+
+Step 1: d := Derived{Base: Base{N: 5}}
+  stack:
+    d ──→ [ Base: [ N: 5 ] ]  at addr 0xC000
+           ↑ Base is stored INLINE at the start of Derived
+
+Step 2: d.Show()
+  Go rewrites this to: d.Base.Show()
+  The receiver is d.Base (type Base), NOT d (type Derived).
+  So inside Show(): b.N reads from the Base subobject → 5
+
+  IMPORTANT: if Base.Show() modifies b.N, it modifies a COPY of d.Base
+  (because Show has a value receiver). The original d.Base.N stays the same.
 ```
 
-> **In plain English:** Taping notebooks together does not rewrite the author name on the cover.
+> **In plain English:** Taping notebooks together does not rewrite the author name on the cover. The promoted method still runs in the notebook's own context.
 
 ---
 
@@ -352,11 +464,33 @@ type Car struct{ Make string; Miles int }
 c := Car{Make: "Nova", Miles: 12000}
 c.Miles += 500
 pc := &c
-pc.Make = "Nova Sport" // same underlying value as c
+pc.Make = "Nova Sport"
+fmt.Println(c.Make) // "Nova Sport" — same underlying value
 ```
 
 ```
-c and *pc alias the same record after you take &c
+MEMORY TRACE:
+
+Step 1: c := Car{Make: "Nova", Miles: 12000}
+  stack:
+    c ──→ [ Make: "Nova" | Miles: 12000 ]  at addr 0xC000
+
+Step 2: c.Miles += 500
+  stack:
+    c ──→ [ Make: "Nova" | Miles: 12500 ]  at addr 0xC000
+           direct field write: addr 0xC000 + offset(Miles) = 0xC010 → write 12500
+
+Step 3: pc := &c
+  stack:
+    c  ──→ [ Make: "Nova" | Miles: 12500 ]  at addr 0xC000
+    pc ──→ [ 0xC000 ]                        ◄── pc holds c's address
+
+Step 4: pc.Make = "Nova Sport"
+  Go rewrites to: (*pc).Make = "Nova Sport"
+  Follow 0xC000 → find Make field → overwrite
+  stack:
+    c  ──→ [ Make: "Nova Sport" | Miles: 12500 ]  ◄── c changed via pointer!
+    pc ──→ [ 0xC000 ]
 ```
 
 ---
@@ -383,8 +517,32 @@ func main() {
 ```
 
 ```
-Value: mutate copy, return replacement
-Pointer: one shared Wallet in caller memory
+MEMORY TRACE — value path:
+
+Step 1: var w Wallet
+  main stack:    w ──→ [ Balance: 0 ]  at 0xA000
+
+Step 2: addByValue(w, 10)  — copies w into function's parameter
+  main stack:    w ──→ [ Balance: 0 ]  at 0xA000     ◄── untouched
+  func stack:    w ──→ [ Balance: 0 ]  at 0xB000     ◄── copy
+  w.Balance += 10:
+  func stack:    w ──→ [ Balance: 10 ] at 0xB000
+  return w → copies 10 back to main's w
+
+Step 3: w = addByValue(w, 10)
+  main stack:    w ──→ [ Balance: 10 ] at 0xA000     ◄── updated by return
+
+
+MEMORY TRACE — pointer path:
+
+Step 1: w2 := Wallet{}
+  main stack:    w2 ──→ [ Balance: 0 ]  at 0xA020
+
+Step 2: addByPointer(&w2, 10)  — copies ADDRESS, not struct
+  main stack:    w2 ──→ [ Balance: 0 ]  at 0xA020
+  func stack:    w  ──→ [ 0xA020 ]                    ◄── pointer (8 bytes)
+  w.Balance += 10 → follow 0xA020 → modify in place
+  main stack:    w2 ──→ [ Balance: 10 ] at 0xA020     ◄── changed directly!
 ```
 
 ---
@@ -399,11 +557,20 @@ type Document struct {
 }
 
 d := Document{Audit: Audit{CreatedBy: "lee"}, Title: "memo"}
-fmt.Println(d.CreatedBy, d.Audit.CreatedBy)
+fmt.Println(d.CreatedBy, d.Audit.CreatedBy) // "lee lee"
 ```
 
 ```
-Two ways to read the same compartment: promoted vs explicit
+MEMORY TRACE:
+
+d ──→ [ Audit: [ CreatedBy: "lee" ] | Title: "memo" ]
+       offset 0: Audit subobject (16 bytes — one string)
+       offset 16: Title (16 bytes — one string)
+
+d.CreatedBy  → compiler rewrites → d.Audit.CreatedBy → "lee"
+d.Audit.CreatedBy → explicit path → same memory location → "lee"
+
+Both paths read the SAME bytes at offset 0 inside d.
 ```
 
 ---
@@ -421,7 +588,14 @@ func TestSquare(t *testing.T) {
 ```
 
 ```
-Each row: anonymous struct { in, want }
+MEMORY TRACE:
+
+The slice of anonymous structs in memory:
+  [ {in: 2, want: 4} | {in: 3, want: 9} ]
+    element 0 (16 bytes)  element 1 (16 bytes)
+
+Each tc in the range loop is a COPY of the element.
+Mutating tc would not change the slice.
 ```
 
 ---
