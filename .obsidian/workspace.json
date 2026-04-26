@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
+                "file": "prerequisites/P01 Structs & Struct Memory Layout.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T07 Pointers & Pointer Semantics - Interview Questions"
+              "title": "P01 Structs & Struct Memory Layout"
             }
           }
         ]
@@ -196,11 +196,18 @@
   },
   "active": "7dcdbc0f2a97cdcd",
   "lastOpenFiles": [
+    "Study Plan.md",
+    "prerequisites/P01 Structs & Struct Memory Layout.md",
+    "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
+    "prerequisites/P09 GC Basics & Why It Matters.md",
+    "prerequisites/P08 OS Threads vs Green Threads.md",
+    "prerequisites/P07 Functions, Closures & Variable Capture.md",
+    "prerequisites/P06 Function Call Stack.md",
+    "prerequisites/P05 Interfaces Basics.md",
+    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "prerequisites/P02 Methods & Receivers.md",
-    "prerequisites/P01 Structs & Struct Memory Layout.md",
     "prerequisites",
-    "Study Plan.md",
     "Roadmap.md",
     "questions/T12 Interface Design Principles - Interview Questions.md",
     "T12 Interface Design Principles.md",
@@ -216,13 +223,6 @@
     "simplified/T11 Interface Internals (iface & eface) - Simplified.md",
     "questions/T10 Defer, Panic & Recover Internals - Interview Questions.md",
     "T10 Defer, Panic & Recover Internals.md",
-    "visuals/T10 Defer, Panic & Recover Internals - Visual Map.md",
-    "revision/T10 Defer, Panic & Recover Internals - Revision.md",
-    "exercises/T10 Defer, Panic & Recover Internals - Exercises.md",
-    "simplified/T10 Defer, Panic & Recover Internals - Simplified.md",
-    "questions/T09 Error Handling Patterns - Interview Questions.md",
-    "exercises/T09 Error Handling Patterns - Exercises.md",
-    "visuals/T09 Error Handling Patterns - Visual Map.md",
     "visuals",
     "revision",
     "questions",

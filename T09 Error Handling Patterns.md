@@ -8,6 +8,14 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P05 Interfaces Basics]]
+
+---
+
 ## 1. Concept
 
 In Go, **`error` is a built-in interface** with a single method: `Error() string`. Any concrete type that implements that method is an error. There is no `try` or `throw`. **Errors are values.** You return them. You test them. You do not "catch" them up the stack by default.

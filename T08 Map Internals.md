@@ -8,6 +8,15 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+- [[prerequisites/P04 Hash Functions & Hashing Basics]]
+
+---
+
 ## 1. Concept
 
 A **map** in Go is a hash table. You give it a key, it gives you a value in O(1) average time.

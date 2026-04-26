@@ -8,6 +8,14 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[T11 Interface Internals (iface & eface)]]
+
+---
+
 ## 1. Concept
 
 **Interface design** in Go means you **name the thing you need at the call site** and you **ask for as little as possible**. A common phrasing: **accept interfaces, return concrete structs** — the **caller** states the **smallest** contract, and the **callee** returns a **type you can name** and **construct** without a registry of fake names. **Consumer-defined interfaces** live next to the code that **uses** them, not next to the big implementation file. **Structural typing** means **satisfaction** is **implicit**. The compiler checks **method sets** only. There is no **`implements` keyword** in the language.

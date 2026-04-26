@@ -8,6 +8,16 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+- [[prerequisites/P02 Methods & Receivers]]
+- [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
+
+---
+
 ## 1. Concept
 
 A **pointer** is a variable that holds the memory address of another variable. In Go, `*T` is "pointer to T" and `&x` gives you the address of `x`.

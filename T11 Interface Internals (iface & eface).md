@@ -8,6 +8,16 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+- [[prerequisites/P02 Methods & Receivers]]
+- [[prerequisites/P05 Interfaces Basics]]
+
+---
+
 ## 1. Concept
 
 An **interface value** in Go is always a **pair of words** at runtime. The first word is **“what is this, really”**. The second word is **“where is the value”**. Together they are the whole interface, not a single pointer. **Non-empty** interfaces, which are interfaces that list **one or more methods**, use a runtime shape called **iface** with a method dispatch table. **Empty** interfaces, written **`any`**, use **eface**, which is just **type** plus **data**, with no method table. In the **Go runtime** source, **eface** is the real struct name for the empty slot pair. The **iface** name flags the variant that must carry a **method table** pointer. That table is a struct called an **itab** from **interface** **table** in the runtime. It is the one **record** the runtime reuses to map an **interface** to a **concrete** type. You will read that name in **runtime/iface.go** in the public tree.

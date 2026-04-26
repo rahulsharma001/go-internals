@@ -8,6 +8,14 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P06 Function Call Stack]]
+
+---
+
 ## 1. Concept
 
 A **`defer` statement** schedules a function to run when the **surrounding function** returns, every `return` path, or a **panic** starts unwinding. The scheduled work is **not** the next line. It is "later, on the way out."

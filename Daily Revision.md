@@ -180,6 +180,183 @@ Append beyond cap: NEW array, old eligible for GC, caller's header stale
 
 ---
 
+### [[prerequisites/P01 Structs & Struct Memory Layout]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is a struct? How does it differ from a class?
+2. What is the zero value of a struct?
+3. What happens when you assign one struct to another?
+4. Why does field ordering affect struct size?
+5. Can you compare two structs with `==`?
+
+**5-second answer:**
+> A struct is a named bundle of typed fields -- Go's replacement for classes. Structs are value types: assignment copies all fields. The compiler inserts padding for alignment, so field order matters for memory size. Two structs are comparable with `==` only if all fields are comparable. Embedding promotes fields and methods but is NOT inheritance.
+
+**Key visual:**
+```
+type User struct { Age uint8; Score int64 }
+Memory: [Age][pad 7 bytes][Score 8 bytes] = 16 bytes
+Reorder: [Score 8 bytes][Age][pad 7 bytes] = 16 bytes (same!)
+Better:  struct { Score int64; Age uint8 } = only 16 bytes aligned
+```
+
+**Traps to remember:**
+- Struct with slice/map/func fields is NOT comparable (compile error with `==`)
+- `bump(c Counter)` copies c -- the original is unchanged
+- Embedding is delegation, not inheritance -- the embedded type's receiver is still the inner type
+
+**Weak? Drill deeper** → [[prerequisites/P01 Structs & Struct Memory Layout]]
+
+---
+
+### [[prerequisites/P02 Methods & Receivers]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is a method in Go?
+2. Value receiver vs pointer receiver -- what's the key difference?
+3. What is T's method set vs *T's method set?
+4. When should you use a pointer receiver?
+5. What happens when you call a method on a nil pointer?
+
+**5-second answer:**
+> A method is a function with a receiver parameter. Value receivers get a copy (can't mutate original), pointer receivers get the address (can mutate). T's method set has value-receiver methods only; *T has both. Use pointer receiver when: need mutation, struct is large, consistency with other methods, contains sync.Mutex. Nil pointer receiver won't panic unless you access a field.
+
+**Key visual:**
+```
+func (a Account) Deposit(n int)  → gets COPY → original unchanged
+func (a *Account) Deposit(n int) → gets ADDRESS → original mutated
+
+Method set: T  → { value receiver methods }
+            *T → { value + pointer receiver methods }
+```
+
+**Traps to remember:**
+- Value receiver modification is silently lost (no error, no warning)
+- Value of type T can't satisfy interface requiring pointer receiver method
+- Mixing value/pointer receivers on same type → inconsistent, confuses interface satisfaction
+
+**Weak? Drill deeper** → [[prerequisites/P02 Methods & Receivers]]
+
+---
+
+### [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is a mutex? What problem does it solve?
+2. What is a critical section?
+3. Why should you always use `defer mu.Unlock()`?
+4. What happens if you copy a mutex?
+5. RWMutex: how many readers can hold the lock at once?
+
+**5-second answer:**
+> A mutex provides mutual exclusion -- only one goroutine enters the critical section at a time. Always pair Lock() with defer Unlock() to avoid forgetting unlock on error paths. NEVER copy a mutex (pass by pointer or embed). RWMutex allows multiple concurrent readers OR one exclusive writer. Locking twice without unlock = deadlock.
+
+**Key visual:**
+```
+goroutine A: Lock() → [critical section] → Unlock()
+goroutine B: Lock() → blocked... → unblocked → [critical section] → Unlock()
+
+NEVER: func(mu sync.Mutex) ← copies the lock! Use *sync.Mutex
+```
+
+**Traps to remember:**
+- Copying a struct with mutex field copies the lock state (use pointer)
+- Forgetting Unlock = all other goroutines blocked forever
+- RWMutex: can't upgrade RLock to Lock (must release first)
+
+**Weak? Drill deeper** → [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
+
+---
+
+### [[prerequisites/P04 Hash Functions & Hashing Basics]]
+
+**Blurt check** (cover below, answer from memory):
+1. What does a hash function do?
+2. What is a collision and is it a bug?
+3. How does Go handle collisions in maps?
+4. What is load factor?
+5. Why can't slices be map keys?
+
+**5-second answer:**
+> A hash function maps a key to a fixed-size number deterministically. Collisions (two keys, same hash) are normal, not bugs -- Go handles them with chaining (overflow buckets). Load factor is entries/buckets; Go grows at ~6.5 avg per bucket. Only comparable types can be map keys (no slices, maps, or functions). Each map gets a random hash seed to prevent hash-flooding attacks.
+
+**Key visual:**
+```
+key "alice" → hash(seed, "alice") → 0x4A2B → bucket index: 0x4A2B % 8 = 3
+key "bob"   → hash(seed, "bob")   → 0x4A2B → same bucket! → chained after alice
+```
+
+**Traps to remember:**
+- `map[[]int]string` won't compile (slices aren't comparable)
+- Map iteration order is random by design (hash seed)
+- Different program runs = different hash seeds = different iteration order
+
+**Weak? Drill deeper** → [[prerequisites/P04 Hash Functions & Hashing Basics]]
+
+---
+
+### [[prerequisites/P05 Interfaces Basics]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is an interface in Go?
+2. How does a type satisfy an interface?
+3. What is the error interface?
+4. When is an interface value nil?
+5. What is a type assertion?
+
+**5-second answer:**
+> An interface is a contract -- a set of method signatures. Types satisfy interfaces implicitly (no `implements` keyword). The `error` interface has one method: `Error() string`. An interface is nil only when BOTH its type and value fields are nil. A nil pointer inside a non-nil interface is NOT nil. Type assertions extract the concrete type: `v, ok := i.(ConcreteType)`.
+
+**Key visual:**
+```
+Interface value: [ type | value ]
+nil interface:   [ nil  | nil   ] → i == nil is TRUE
+typed nil:       [ *Err | nil   ] → i == nil is FALSE  ← THE TRAP
+```
+
+**Traps to remember:**
+- Returning a typed nil pointer through error interface → non-nil error
+- Type assertion without comma-ok panics if wrong type
+- Value T can't satisfy interface with pointer receiver methods
+
+**Weak? Drill deeper** → [[prerequisites/P05 Interfaces Basics]]
+
+---
+
+### [[prerequisites/P06 Function Call Stack]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is the call stack?
+2. What happens when a function is called? When it returns?
+3. Why do deferred calls run in LIFO order?
+4. How can defer modify return values?
+5. What's special about goroutine stacks in Go?
+
+**5-second answer:**
+> The call stack is a LIFO structure of frames, one per active function call. Each frame holds local variables, parameters, and return address. Call pushes a frame, return pops it. Defer runs in reverse (LIFO) because deferred functions sit on a stack within the frame. Named return values live in the caller's frame, so defer can modify them. Go goroutine stacks start small (~2-8 KB) and grow automatically by copying to a larger allocation.
+
+**Key visual:**
+```
+main() calls A() calls B():
+  ┌──────────┐
+  │ B() frame │ ← top (current)
+  ├──────────┤
+  │ A() frame │
+  ├──────────┤
+  │ main()   │ ← bottom
+  └──────────┘
+  Return from B → pop → A is current again
+```
+
+**Traps to remember:**
+- Defer args evaluated at defer statement time, not when defer executes
+- Named return values can be modified by defer (lives in frame, not popped yet)
+- Infinite recursion → stack overflow (frames never pop)
+
+**Weak? Drill deeper** → [[prerequisites/P06 Function Call Stack]]
+
+---
+
 ### [[T07 Pointers & Pointer Semantics]]
 
 **Blurt check** (cover below, answer from memory):
@@ -354,6 +531,98 @@ RIGHT (consumer-defined slim interface):
 - `any` (empty interface) everywhere = no type safety, defeats Go's type system
 
 **Weak? Drill deeper** → [[revision/T12 Interface Design Principles - Revision]]
+
+---
+
+### [[prerequisites/P07 Functions, Closures & Variable Capture]]
+
+**Blurt check** (cover below, answer from memory):
+1. Can you assign a function to a variable in Go?
+2. What is a closure?
+3. Does a closure capture by value or by reference?
+4. What is the loop variable trap with goroutines?
+5. How do you fix the loop variable trap?
+
+**5-second answer:**
+> Functions are first-class values in Go -- assign, pass, return them. A closure is a function that captures variables from its enclosing scope by REFERENCE (pointer to the variable). The loop variable trap: goroutines in a loop all share one loop variable, so they all see the final value. Fix: pass as argument (copy), shadow locally, or use Go 1.22+ loopvar. Captured variables escape to heap.
+
+**Key visual:**
+```
+for i := 0; i < 3; i++ {
+    go func() { fmt.Println(i) }()  // all print 3 (or whatever i ends at)
+}
+Fix: go func(n int) { fmt.Println(n) }(i)  // each gets its own copy
+```
+
+**Traps to remember:**
+- Closure captures the VARIABLE, not the value at that moment
+- Loop variable trap is still asked in interviews (even after Go 1.22 fix)
+- Captured vars escape to heap → GC pressure
+
+**Weak? Drill deeper** → [[prerequisites/P07 Functions, Closures & Variable Capture]]
+
+---
+
+### [[prerequisites/P08 OS Threads vs Green Threads]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is an OS thread? How big is its stack?
+2. What is a context switch and why is it expensive?
+3. What is a green thread?
+4. What is the M:N threading model?
+5. What does GOMAXPROCS control?
+
+**5-second answer:**
+> OS threads are kernel-managed, ~1-8 MB stack, ~1-10 us context switch. Green threads (goroutines) are runtime-managed, ~2-8 KB stack, ~200 ns switch. Go uses M:N model: M goroutines multiplexed onto N OS threads. GOMAXPROCS controls N (defaults to CPU cores). This lets you spawn millions of goroutines cheaply. Goroutine blocking doesn't block the OS thread -- runtime handles it.
+
+**Key visual:**
+```
+OS Thread:   ~1-8 MB stack | ~1-10 us switch | kernel-managed
+Goroutine:   ~2-8 KB stack | ~200 ns switch  | runtime-managed
+
+M:N: [G1 G2 G3 ... G1M] → multiplexed onto → [M1 M2 ... MN]
+     (millions of goroutines)                  (GOMAXPROCS OS threads)
+```
+
+**Traps to remember:**
+- "Goroutine = OS thread" is WRONG (M:N model, much cheaper)
+- CPU-bound goroutine without yields can starve others (preemption helps since 1.14)
+- GOMAXPROCS defaults to NumCPU(), not 1 (changed in Go 1.5)
+
+**Weak? Drill deeper** → [[prerequisites/P08 OS Threads vs Green Threads]]
+
+---
+
+### [[prerequisites/P09 GC Basics & Why It Matters]]
+
+**Blurt check** (cover below, answer from memory):
+1. What is garbage collection?
+2. What are GC roots?
+3. What is tri-color marking? Name the three colors.
+4. What is a write barrier?
+5. What is the #1 way to reduce GC pressure?
+
+**5-second answer:**
+> GC automatically finds and frees unreachable heap objects. Starts from roots (stack vars, globals), marks reachable objects (tri-color: white=unreachable, grey=examining, black=done), sweeps the rest. Go's GC runs mostly concurrently with short STW pauses (~100 us to ~1 ms). Write barriers track pointer updates during concurrent marking. #1 optimization: reduce allocations (stack > heap, reuse objects, sync.Pool).
+
+**Key visual:**
+```
+Roots: [stack vars] [globals]
+         │             │
+         ▼             ▼
+       [obj A]       [obj B] ──▶ [obj C]
+                                     
+       [obj D] ← unreachable → swept (freed)
+
+Colors: White=unvisited  Grey=in-progress  Black=done+children-scanned
+```
+
+**Traps to remember:**
+- `new()` does NOT always allocate on heap (escape analysis decides)
+- GC pauses are sub-millisecond in Go, not seconds
+- Reducing allocations > tuning GOGC (fix the source, not the symptom)
+
+**Weak? Drill deeper** → [[prerequisites/P09 GC Basics & Why It Matters]]
 
 ---
 
