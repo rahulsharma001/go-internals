@@ -421,6 +421,9 @@ func main() {
 
 **Predict before run:** prints `true` or `false`?
 
+> [!success]- Answer
+> Prints `false`. The `==` operator compares the error value directly. `e` is a wrapped error (type `*fmt.wrapError`), not the sentinel `S` itself. Wrapping creates a new error value. To check if `S` is somewhere in the chain, use `errors.Is(e, S)` which returns `true` by walking the unwrap chain.
+
 ### Tier 2: Fix the Bug (5 min)
 
 ```go
@@ -438,6 +441,20 @@ func API() error {
 ```
 
 **Goal:** `API()` should return a nil `error` on success. Fix the typed-nil interface issue.
+
+> [!success]- Answer
+> The problem: `maybeFail` returns `*RepoError`. When `ok` is true, it returns `nil` -- but that's a typed nil `*RepoError`, not a nil `error` interface. When `API()` returns it as `error`, the interface has type=`*RepoError`, value=nil -- so `err != nil` is true.
+>
+> Fix: change `API()` to check explicitly:
+> ```go
+> func API() error {
+>     if err := maybeFail(true); err != nil {
+>         return err
+>     }
+>     return nil  // untyped nil — truly nil error interface
+> }
+> ```
+> Or change `maybeFail` to return `error` instead of `*RepoError`.
 
 ### Tier 3: Build It (15 min)
 

@@ -464,11 +464,36 @@ type SingleGetter interface{ Get(id int) string }
 
 **Hint:** **Pollution** here means *many unrelated methods on one contract* with no evidence that every caller needs the full surface. **Single verb** or **single use** is usually **not** pollution.
 
-> Check your picks against Sections 4 and 5 after you write them down.
+> [!success]- Answer
+> - `Doer` (1 method) -- **fine**. Small, focused, single-verb interface. Classic Go style.
+> - `DataLayer` (5 methods) -- **pollution**. Five unrelated operations in one contract. No single caller likely needs all of them. Should be split: `Querier`, `Saver`, `Migrator`, etc. at the consumer site.
+> - `SingleGetter` (1 method) -- **fine**. Consumer-defined, one method, named for exactly what the caller needs.
 
 ### Tier 2: Refactor a fat interface into consumer-defined narrow interfaces (5 min)
 
 **Given** a **ten-method** `PlatformAPI` in **one** file, **list** the **one-line** **interfaces** you would place in **handler**, **sync**, and **billing** if each only calls **two** **methods** today. **Do** **not** **edit** the **concrete** **impl** **yet** — only **re-home** the **type** **declarations** as **an exercise in naming**.
+
+> [!success]- Answer
+> ```go
+> // package handler -- only needs user lookup
+> type UserFetcher interface {
+>     GetUser(id int) (User, error)
+>     ListUsers(filter Filter) ([]User, error)
+> }
+>
+> // package sync -- only needs data sync
+> type DataSyncer interface {
+>     PullChanges(since time.Time) ([]Change, error)
+>     PushChanges(changes []Change) error
+> }
+>
+> // package billing -- only needs payment
+> type PaymentProcessor interface {
+>     Charge(userID int, amount Money) error
+>     Refund(txID string) error
+> }
+> ```
+> The concrete `PlatformAPI` struct in the `platform` package still has all 10 methods. Each consumer package defines only what it needs. Tests mock 2 methods, not 10.
 
 ### Tier 3: Build it (15 min)
 

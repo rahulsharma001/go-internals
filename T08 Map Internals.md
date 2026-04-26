@@ -459,17 +459,13 @@ fmt.Println(len(m2))
 
 What prints? Think about it before checking.
 
-<details>
-<summary>Answer</summary>
-
-```
-2
-0
-0
-```
-`delete` removes "b", len is 2. Reading from nil map returns zero value. `len` of nil map is 0.
-
-</details>
+> [!success]- Answer
+> ```
+> 2
+> 0
+> 0
+> ```
+> `delete` removes "b", len is 2. Reading from a nil map returns the zero value (0 for int) -- no panic. `len` of a nil map is 0 -- also no panic. Only WRITING to a nil map panics.
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -484,6 +480,19 @@ func countWords(words []string) map[string]int {
 ```
 
 This panics. Fix it.
+
+> [!success]- Answer
+> Initialize the map with `make`:
+> ```go
+> func countWords(words []string) map[string]int {
+>     counts := make(map[string]int)
+>     for _, w := range words {
+>         counts[w]++
+>     }
+>     return counts
+> }
+> ```
+> `var counts map[string]int` declares a nil map. Reading a nil map returns zero values (safe), but WRITING to a nil map panics with `assignment to entry in nil map`. `make` allocates the underlying hmap struct.
 
 ### Tier 3: Build It (15 min)
 

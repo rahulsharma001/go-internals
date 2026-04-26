@@ -494,12 +494,8 @@ func main() {
 
 What prints? Think about it before checking.
 
-<details>
-<summary>Answer</summary>
-
-`[99 2 3 4]` — The pointer lets us modify the original slice header (append updates len) AND the backing array (index 0 changed).
-
-</details>
+> [!success]- Answer
+> `[99 2 3 4]` — The pointer lets us modify the original slice header (append updates len) AND the backing array (index 0 changed). The `*s = append(*s, 4)` dereferences the pointer, appends, and writes the new slice header back. `(*s)[0] = 99` dereferences and modifies the first element of the backing array.
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -520,6 +516,15 @@ func main() {
 ```
 
 Fix the `Connect` method so it actually stores the connection string.
+
+> [!success]- Answer
+> Change the value receiver to a pointer receiver:
+> ```go
+> func (db *DB) Connect(dsn string) {
+>     db.conn = dsn
+> }
+> ```
+> The value receiver `(db DB)` gets a copy of the struct. Setting `db.conn` modifies the copy, not the original. With `(db *DB)`, the method receives the address and modifies the original struct.
 
 ### Tier 3: Build It (15 min)
 

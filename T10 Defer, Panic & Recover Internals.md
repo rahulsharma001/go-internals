@@ -511,11 +511,34 @@ hint row:
   name tag `x`?  return path?  defer order?  (see Key Rules 2–3)
 ```
 
+> [!success]- Answer
+> Prints `11`. Here's why:
+> 1. `return 10` sets the named return value `x = 10`
+> 2. Before the function actually returns, the deferred closure runs
+> 3. The closure does `x += 1`, changing `x` from 10 to 11
+> 4. The function returns the current value of `x`, which is now 11
+>
+> This works because `x` is a **named return value** -- it lives in the stack frame and defer can modify it after `return` sets it but before the function exits.
+
 ### Tier 2: Fix the bug (5 min)
 
 You have a `defer` **inside a `for` loop** over files. The process **runs out of file** descriptors. Rewrite so each file is **closed** before the next file opens, without changing the **outer** `function`’s return behavior more than you must.
 
 > **Hint:** a **function literal** per iteration, or a **named** helper, both build a small **room** the function returns from **each** time, so the **defers** run **per** room, not **once** at the end of the world.
+
+> [!success]- Answer
+> Wrap the body of the loop in an immediately-invoked function literal so defer runs per iteration:
+> ```go
+> for _, path := range files {
+>     func() {
+>         f, err := os.Open(path)
+>         if err != nil { return }
+>         defer f.Close()  // runs when THIS anonymous func returns, not the outer func
+>         // process f...
+>     }()
+> }
+> ```
+> Or extract a named helper: `func processFile(path string) { f, _ := os.Open(path); defer f.Close(); ... }` and call it in the loop. Either way, each iteration gets its own function scope, so `defer f.Close()` fires before the next file opens.
 
 ### Tier 3: Build it (15 min)
 

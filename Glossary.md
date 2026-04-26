@@ -114,6 +114,64 @@
 | Addressable | — | A value whose memory address can be taken with &. Map values and bare return values are NOT addressable |
 | weak.Pointer[T] | Weak pointer (Go 1.24+) | A pointer that doesn't prevent garbage collection — returns nil if the target is collected |
 
+## Struct & Method Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Struct | — | A named bundle of typed fields -- Go's replacement for classes. Value type: assignment copies all fields |
+| Padding | Memory alignment padding | Invisible spacer bytes the compiler inserts between struct fields so each field sits on a CPU-friendly boundary |
+| Alignment | — | The memory address rule: a field of size N must start at an address divisible by N (e.g., int64 at 8-byte boundary) |
+| Anonymous struct | — | A struct type defined inline without a name -- useful for one-off JSON unmarshaling or test tables |
+| Struct tag | — | Metadata string after a field type (e.g., `` `json:"name"` ``) -- read by packages like encoding/json via reflection |
+| Struct embedding | `type Outer struct { Inner }` | Including one struct type inside another without a field name -- promotes Inner's fields and methods to Outer |
+| Promoted field | — | A field from an embedded struct that can be accessed directly on the outer struct without naming the embedded type |
+| Receiver | — | The value or pointer a method is attached to -- appears before the method name: `func (r Receiver) Method()` |
+| Method expression | `T.Method` | A function value that takes the receiver as its first argument -- `T.Method` becomes `func(T)` |
+| Method value | `instance.Method` | A function value bound to a specific receiver instance -- `x.Method` becomes `func()` with x captured |
+
+## Hash & Map Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Hash function | — | A deterministic function that maps any key to a fixed-size number -- same key always gives same number |
+| Collision | Hash collision | When two different keys map to the same hash value -- normal, not a bug, handled by chaining or probing |
+| Chaining | Separate chaining | Collision resolution: each bucket is a linked list of entries that hashed to the same index |
+| Open addressing | — | Collision resolution: on collision, probe the next bucket slot (linear probing, quadratic, etc.) |
+| Load factor | — | Ratio of entries to buckets -- Go maps grow when average entries per bucket exceeds ~6.5 |
+| Hash seed | — | Random value mixed into hash computation -- different per map instance, prevents hash-flooding attacks |
+| aeshash | AES hardware-accelerated hash | Go's hash function for strings on CPUs with AES instructions -- fast and well-distributed |
+
+## Function & Closure Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| First-class function | — | Functions are values: you can assign them to variables, pass as arguments, and return from other functions |
+| Anonymous function | Function literal | A function defined without a name, inline: `func() { ... }` |
+| Closure | — | A function that captures variables from its enclosing scope -- holds references (pointers) to those variables |
+| Capture by reference | — | How Go closures work: the closure gets a pointer to the outer variable, not a copy of its value |
+| Loop variable trap | — | Classic bug: goroutines in a loop all share one loop variable and see its final value, not the value at creation |
+| loopvar | Go 1.22 loop variable fix | Starting Go 1.22, each loop iteration gets its own copy of the variable, eliminating the trap by default |
+
+## OS & Threading Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| OS thread | Kernel thread | Thread managed by the operating system -- has its own stack (~1-8 MB), expensive to create and switch |
+| Context switch | — | Saving one thread's state and loading another's -- costs ~1-10 microseconds for OS threads |
+| Green thread | User-space thread | Thread managed by the language runtime, not the kernel -- cheaper to create and switch than OS threads |
+| M:N model | M-to-N threading | Multiplexing M user-space threads onto N OS threads -- Go's approach with goroutines |
+| TLB | Translation Lookaside Buffer | CPU cache for virtual-to-physical address mappings -- flushed on context switch, making switches expensive |
+
+## Call Stack Terms
+
+| Term | Full Form | Plain-English Meaning |
+|------|-----------|------------------------|
+| Call stack | — | LIFO structure of stack frames, one per active function call -- grows on call, shrinks on return |
+| Stack frame | — | Block of memory holding a function's local variables, parameters, and return address |
+| Stack overflow | — | Error when the call stack exceeds its limit -- usually caused by infinite recursion |
+| Contiguous stack | — | Go's stack model: when a goroutine's stack needs to grow, it's copied to a larger allocation (not segmented) |
+| Named return value | — | Return variable declared in the function signature -- lives in the caller's frame, modifiable by defer |
+
 ## Concurrency Terms
 
 | Term | Full Form | Plain-English Meaning |

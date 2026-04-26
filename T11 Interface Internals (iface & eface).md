@@ -445,11 +445,35 @@ fmt.Println("i1==nil", i1 == nil, "i2==nil", i2 == nil)
 
 Predict before you run. Name **each** word in **iface** for `i1` and `i2`.
 
+> [!success]- Answer
+> Prints: `i1==nil true i2==nil false`
+>
+> - `i1` is a zero-value interface: `iface{ tab: nil, data: nil }` -- both fields nil, so `i1 == nil` is true.
+> - `i2` has a typed nil assigned: `iface{ tab: *itab(Stringer, *strings.Builder), data: nil }` -- the tab field is set (it knows the type), so `i2 == nil` is false even though the concrete pointer is nil.
+>
+> This is the classic **typed nil interface trap**.
+
 ### Tier 2: Fix the bug (5 min)
 
 A function is supposed to return “no error” on success, but **always** returns a non-nil `error` to callers. The body ends with `return someTypedNil` where `someTypedNil` is a `*MyError` that is `nil`, assigned to the named result `err error`. **Fix** it so a **true** success path yields a **nil** `error` for `(error)` interface checks.
 
 > Hint: the **name** and **concrete** nil pointer in an **error**-typed return are not your friend.
+
+> [!success]- Answer
+> The function returns `*MyError(nil)` through an `error` interface. The interface gets `iface{ tab: itab(error, *MyError), data: nil }` -- non-nil because tab is set.
+>
+> Fix: return untyped nil explicitly on the success path:
+> ```go
+> func doWork() error {
+>     var myErr *MyError // nil
+>     // ... logic that might set myErr ...
+>     if myErr != nil {
+>         return myErr
+>     }
+>     return nil  // untyped nil — both iface fields will be nil
+> }
+> ```
+> Never return a typed nil pointer directly through an interface return.
 
 ### Tier 3: Build it (15 min)
 
