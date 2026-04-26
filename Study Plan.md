@@ -52,7 +52,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Prerequisites (complete these first):**
 
-- [ ] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
+- [x] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
 - [ ] [[prerequisites/P02 Methods & Receivers]] (~25 min)
 - [ ] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
 - [ ] [[prerequisites/P04 Hash Functions & Hashing Basics]] (~15 min)
@@ -61,7 +61,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Topics:**
 
-- [ ] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
+- [x] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
 - [ ] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
 - [ ] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
 - [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
