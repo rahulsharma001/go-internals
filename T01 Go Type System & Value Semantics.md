@@ -530,8 +530,11 @@ m["alice"].Name = "Bob" // ❌ COMPILE ERROR: cannot assign to map value
 Why? Map entries physically relocate during growth. Traced through memory:
 
   BEFORE growth (B=0, 1 bucket at 0xC000080000):
-    m on stack → hmap → buckets → 0xC000080000
-    bucket0, slot 0: key="alice", value=User{Name:"Alice"} at 0xC000080030
+    stack 0xC000060000: m = ptr → hmap at 0xC000010000
+    hmap.B=0, hmap.buckets → 0xC000080000
+    hash("alice", hash0) → 0xD4...9E
+    bucket = 0xD4...9E & (2^0 - 1) = 0 → bucket #0 at 0xC000080000
+    tophash 0xD4 at slot 0 → key="alice", value=User{Name:"Alice"} at 0xC000080030
 
   Suppose Go let you do: ptr := &m["alice"]
     ptr = 0xC000080030

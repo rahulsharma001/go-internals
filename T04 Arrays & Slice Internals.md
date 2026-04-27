@@ -662,12 +662,17 @@ buf = nil                      // you THINK you freed the big buffer...
 ```
 
 ```
-buf header ──▶ ┌──────────────────────────────────────┐
-               │  1,000,000 ints  (~8 MB)             │
-               └──────────────────────────────────────┘
-win header ──▶      ↑ (same backing, just len=3, cap=1000000)
+stack 0xC000060000: buf = [ ptr=0xC000100000 | len=1000000 | cap=1000000 ]
+stack 0xC000060018: win = [ ptr=0xC000100000 | len=3       | cap=1000000 ]
+                                ↑ SAME pointer!
+heap 0xC000100000: ┌──────────────────────────────────────┐
+                   │  1,000,000 ints  (~8 MB)             │
+                   └──────────────────────────────────────┘
 
-Even though buf = nil, win keeps the ENTIRE 8 MB alive.
+After buf = nil:
+  buf = [ ptr=nil | len=0 | cap=0 ]
+  win = [ ptr=0xC000100000 | len=3 | cap=1000000 ]  ← still holds 8 MB alive!
+  GC checks 0xC000100000: win still references it → cannot free.
 
 Fix — copy into a tight slice:
   tight := make([]int, 3)

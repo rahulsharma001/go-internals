@@ -994,7 +994,7 @@ fmt.Println(m["a"].Name) // "admin"
 ```
 WHY you can't write m["a"].Name directly — traced through memory:
 
-  Step 1: m on stack → hmap at 0xC000010000 → buckets at 0xC000080000
+  Step 1: stack 0xC000060000: m = ptr → hmap at 0xC000010000 → buckets at 0xC000080000
     hash("a", hash0) → 0xF3...7B
     bucket = 0xF3...7B & (2^0 - 1) = 0 → bucket #0
     tophash 0xF3 found at slot 0 → User{Name:"rahul"} at 0xC000080030
