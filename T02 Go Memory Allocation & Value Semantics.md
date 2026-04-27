@@ -274,6 +274,9 @@ Under the hood, m is a pointer to a runtime.hmap struct:
                                                                       ▼
   heap 0xC000020000: [bucket0 — 8 empty slots]
 
+  When you insert m["key"] = val:
+    hash("key", hash0) → bucket = hash & (2^B - 1) → find slot → store key+val
+
 Passing m to a function copies the 8-byte pointer, NOT the hmap.
   caller:  m = 0xC000010000
   callee:  m = 0xC000010000  ← same address, same hash table
