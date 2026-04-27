@@ -254,21 +254,27 @@ s := make([]int, 3, 5)
 What happens step by step:
 1. Runtime allocates a backing array of 5 ints (40 bytes) on the heap
 2. Zeros all 5 slots
-3. Returns a header: [ ptr → backing | len=3 | cap=5 ]
+3. Returns a 24-byte header on the stack: [ ptr → backing | len=3 | cap=5 ]
 
-Memory:
-  s header: [ ptr | len=3 | cap=5 ]
-                │
-                ▼
-      heap: ┌───┬───┬───┬───┬───┐
-            │ 0 │ 0 │ 0 │ 0 │ 0 │
-            └───┴───┴───┴───┴───┘
-              ◄─ visible ─►
-              ◄──── available ────►
+Memory (with addresses):
+  stack 0xC000060000: s header
+    [ ptr=0xC000080000 | len=3 | cap=5 ]    ← 24 bytes on the stack
+           │
+           ▼
+  heap 0xC000080000: backing array (40 bytes)
+    ┌──────────┬──────────┬──────────┬──────────┬──────────┐
+    │ 0 (8B)   │ 0 (8B)   │ 0 (8B)   │ 0 (8B)   │ 0 (8B)   │
+    └──────────┴──────────┴──────────┴──────────┴──────────┘
+    0x...80000  0x...80008  0x...80010  0x...80018  0x...80020
+      ◄──── visible (len=3) ────►
+      ◄──────────── available (cap=5) ──────────────►
 
-  s[0], s[1], s[2] → valid (within len)
-  s[3], s[4]       → exist but NOT accessible until len grows via append
-  s[5]             → panic: index out of range
+  How s[i] finds the element:
+    s[0] → ptr + 0*8 = 0xC000080000 → valid (within len)
+    s[1] → ptr + 1*8 = 0xC000080008 → valid
+    s[2] → ptr + 2*8 = 0xC000080010 → valid
+    s[3] → ptr + 3*8 = 0xC000080018 → panic (index >= len), but slot exists (within cap)
+    s[5] → ptr + 5*8 = 0xC000080028 → panic: index out of range (beyond cap)
 ```
 
 **Slice literal `[]T{...}`** — creates a backing array and a header over it:
@@ -321,29 +327,29 @@ len=10  cap=16
 
 ```
 BEFORE append(s, 4):
-  s: [ ptr=A | len=4 | cap=4 ]
-             │
-             ▼
-  array A: ┌───┬───┬───┬───┐
-           │ 0 │ 1 │ 2 │ 3 │   ◄── FULL (len == cap)
-           └───┴───┴───┴───┘
+  stack 0xC000060000: s = [ ptr=0xC000080000 | len=4 | cap=4 ]
+                                   │
+                                   ▼
+  heap 0xC000080000: ┌───┬───┬───┬───┐
+                     │ 0 │ 1 │ 2 │ 3 │   ◄── FULL (len == cap)
+                     └───┴───┴───┴───┘
 
   append needs 1 more slot but cap is maxed out...
 
-  Step 1: Allocate new array B with cap=8
-  Step 2: Copy elements 0,1,2,3 from A to B
-  Step 3: Write element 4 into B[4]
-  Step 4: Return NEW header pointing to B
+  Step 1: Allocate new array at 0xC000090000 with cap=8 (64 bytes)
+  Step 2: Copy elements 0,1,2,3 from 0x...80000 to 0x...90000
+  Step 3: Write element 4 at 0xC000090000 + 4*8 = 0xC000090020
+  Step 4: Return NEW header → overwrite s at 0xC000060000
 
 AFTER:
-  s: [ ptr=B | len=5 | cap=8 ]
-             │
-             ▼
-  array B: ┌───┬───┬───┬───┬───┬───┬───┬───┐
-           │ 0 │ 1 │ 2 │ 3 │ 4 │ _ │ _ │ _ │
-           └───┴───┴───┴───┴───┴───┴───┴───┘
+  stack 0xC000060000: s = [ ptr=0xC000090000 | len=5 | cap=8 ]
+                                   │
+                                   ▼
+  heap 0xC000090000: ┌───┬───┬───┬───┬───┬───┬───┬───┐
+                     │ 0 │ 1 │ 2 │ 3 │ 4 │ _ │ _ │ _ │
+                     └───┴───┴───┴───┴───┴───┴───┴───┘
 
-  array A is now orphaned → eligible for garbage collection
+  OLD array at 0xC000080000 → no references → GC eligible
 ```
 
 **Historical note (pre-1.18):** The old formula doubled below 1024, then grew by 1.25x above 1024. The current formula uses 256 as the threshold with a smoother transition. Don't rely on exact capacity values in code — they can change between Go versions.
@@ -556,13 +562,17 @@ Step 3: b[0] = 9
 --- slices ---
 
 Step 1: s := []int{1,2,3}
-  s header: [ ptr | len=3 | cap=3 ]──▶ heap: [1|2|3]
+  stack: s at 0xC000060000 = [ ptr=0xC000080000 | len=3 | cap=3 ]
+  heap 0xC000080000: [1|2|3]
 
-Step 2: t := s   (header copy — same pointer, same backing)
-  s ──▶ [1|2|3] ◄── t       (both point here)
+Step 2: t := s   (copies 24-byte header — same pointer, same backing)
+  stack: t at 0xC000060018 = [ ptr=0xC000080000 | len=3 | cap=3 ]
+  Both s.ptr and t.ptr = 0xC000080000 → same backing array
 
-Step 3: t[0] = 9  (writes through shared pointer)
-  s ──▶ [9|2|3] ◄── t       s[0] and t[0] both read 9
+Step 3: t[0] = 9
+  t.ptr + 0*8 = 0xC000080000 → write 9
+  s[0] reads s.ptr + 0*8 = 0xC000080000 → reads 9 (same address!)
+  heap 0xC000080000: [9|2|3]
 ```
 
 ### 6.2 Append within vs beyond capacity (the append trap)
@@ -578,22 +588,17 @@ s = append(s, 5)       // len must exceed cap → REALLOCATE
 
 ```
 After appending 1,2,3,4 (all fits within cap=4):
-  s: [ ptr=A | len=4 | cap=4 ]
-             │
-             ▼
-  array A: ┌───┬───┬───┬───┐
-           │ 1 │ 2 │ 3 │ 4 │   ◄── full
-           └───┴───┴───┴───┘
+  stack 0xC000060000: s = [ ptr=0xC000080000 | len=4 | cap=4 ]
+  heap 0xC000080000: [1|2|3|4]  ◄── full (len == cap)
 
 After append(s, 5) — no room, must reallocate:
-  s: [ ptr=B | len=5 | cap=8 ]   ◄── new header, new pointer
-             │
-             ▼
-  array B: ┌───┬───┬───┬───┬───┬───┬───┬───┐
-           │ 1 │ 2 │ 3 │ 4 │ 5 │ _ │ _ │ _ │
-           └───┴───┴───┴───┴───┴───┴───┴───┘
+  Step 1: New array at 0xC000090000, cap=8
+  Step 2: Copy 4 elements from 0x...80000 to 0x...90000
+  Step 3: Write 5 at 0xC000090000 + 4*8 = 0xC000090020
 
-  array A → orphaned, will be garbage collected
+  stack 0xC000060000: s = [ ptr=0xC000090000 | len=5 | cap=8 ]   ◄── new pointer
+  heap 0xC000090000: [1|2|3|4|5|_|_|_]
+  OLD  0xC000080000: [1|2|3|4] → no references → GC eligible
 ```
 
 **Stale alias — reallocation splits two slices apart:**
@@ -608,15 +613,20 @@ fmt.Println(b[0])    // still 1 — b is looking at the old array
 
 ```
 Before append:
-  a ──▶ [1|2|3] ◄── b       (same backing)
+  a = [ ptr=0xC000080000 | len=3 | cap=3 ]
+  b = [ ptr=0xC000080000 | len=3 | cap=3 ]   ← same pointer, same backing
+  heap 0xC000080000: [1|2|3]
 
-After a = append(a, 4):
-  a ──▶ [1|2|3|4|_|_]        ◄── NEW array (cap=6 or similar)
-  b ──▶ [1|2|3]              ◄── OLD array (still alive because b points to it)
+After a = append(a, 4):  (cap full → reallocate)
+  a = [ ptr=0xC000090000 | len=4 | cap=6 ]   ← NEW array
+  b = [ ptr=0xC000080000 | len=3 | cap=3 ]   ← still OLD array
+  heap 0xC000090000: [1|2|3|4|_|_]
+  heap 0xC000080000: [1|2|3]  ← kept alive only because b still points here
 
 After a[0] = 999:
-  a ──▶ [999|2|3|4|_|_]      ◄── only a's array changed
-  b ──▶ [1|2|3]              ◄── b doesn't know, doesn't care
+  a.ptr + 0*8 = 0xC000090000 → write 999
+  heap 0xC000090000: [999|2|3|4|_|_]
+  b[0] reads b.ptr + 0*8 = 0xC000080000 → still 1 (different array!)
 ```
 
 **The classic mistake — ignoring `append`'s return value:**
@@ -627,17 +637,18 @@ func good(in []int) []int { return append(in, 99) } // RIGHT: return new header
 ```
 
 ```
-Caller: s = [ptr=A, len=0, cap=0]
+Caller: s = [ptr=nil, len=0, cap=0]  at stack 0xC000060000
 
 bad(s):
-  local copy 'in' = [ptr=A, len=0, cap=0]
-  append allocates: returns [ptr=B, len=1, cap=1]
+  local copy 'in' at 0xC000070000 = [ptr=nil, len=0, cap=0]
+  append allocates: returns [ptr=0xC000080000, len=1, cap=1]
   ...but bad() drops this return value
-  Caller's s is still [ptr=A, len=0, cap=0] → the 99 is lost
+  Caller's s at 0xC000060000 is still [ptr=nil, len=0, cap=0] → 99 is lost
 
 good(s):
-  same thing, but returns the new header
-  Caller does: s = good(s) → now s = [ptr=B, len=1, cap=1] → 99 is there
+  same thing, but returns [ptr=0xC000080000, len=1, cap=1]
+  Caller does: s = good(s) → s at 0xC000060000 = [ptr=0xC000080000, len=1, cap=1]
+  s[0] reads 0xC000080000 → 99 ✓
 ```
 
 ### 6.3 Sub-slice sharing (GC retention + aliasing)
@@ -910,15 +921,19 @@ func consume(lines []string, grow []string) {
 The append split — visualized:
 
   BEFORE realloc:
-    p ──▶ [1|2] ◄── q     (same backing, same view)
+    p = [ ptr=0xC000080000 | len=2 | cap=2 ]
+    q = [ ptr=0xC000080000 | len=2 | cap=2 ]   ← same backing
+    heap 0xC000080000: [1|2]
 
-  q = append(q, 3)  →  realloc!
+  q = append(q, 3)  →  cap full → realloc!
 
   AFTER realloc:
-    p ──▶ [1|2]            (old array, p is stale)
-    q ──▶ [1|2|3|_]        (new array, only q knows)
+    p = [ ptr=0xC000080000 | len=2 | cap=2 ]   ← still old array (STALE)
+    q = [ ptr=0xC000090000 | len=3 | cap=4 ]   ← new array, only q knows
+    heap 0xC000080000: [1|2]         ← p reads from here
+    heap 0xC000090000: [1|2|3|_]     ← q reads from here
 
-  p and q have silently diverged.
+  p and q have silently diverged. Writes to q[0] don't affect p[0].
 ```
 
 ---
