@@ -351,9 +351,22 @@ b.Items[0].Qty = 5
 ```
 MEMORY TRACE (struct copy, slice header):
 
-  a.Items points at backing array 0x9000
-  b := a copies the Order; b.Items still points 0x9000
-  Editing b.Items[0] edits that shared array — a sees it
+  stack 0xC000060000: a = Order{
+    ID: 1,
+    Items: [ ptr=0xC000080000 | len=1 | cap=1 ]  ← slice header (24 bytes)
+  }
+  heap 0xC000080000: [Item{SKU:"A", Qty:1}]  ← backing array
+
+  b := a → copies the entire Order struct (including the 24-byte slice header)
+  stack 0xC000060040: b = Order{
+    ID: 1,
+    Items: [ ptr=0xC000080000 | len=1 | cap=1 ]  ← SAME pointer!
+  }
+
+  b.Items[0].Qty = 5:
+    b.Items.ptr + 0*sizeof(Item) = 0xC000080000 → write Qty=5
+  a.Items[0].Qty:
+    a.Items.ptr + 0*sizeof(Item) = 0xC000080000 → reads 5 (same address!)
 ```
 
 Deep copy line items when you need independence (`slices.Clone`, `append` into a new slice, etc.).
