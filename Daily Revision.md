@@ -480,23 +480,23 @@ key "bob"   → hash(seed, "bob")   → 0x4A2B → same bucket! → chained afte
 > `type error interface { Error() string }` -- exactly one method. Any type with an `Error() string` method is an error. This is Go's entire error handling foundation.
 
 > [!info]- 4. When is an interface value nil?
-> Only when BOTH its internal fields (type and data) are nil. If you assign a typed nil pointer to an interface, the type field is set -- the interface is NOT nil even though the data is nil.
+> Think of an interface as a labeled envelope. It has a **label** (which concrete type is inside) and **contents** (pointer to the actual data). The envelope is nil only when BOTH the label and contents are empty. If you assign a typed nil pointer, the label is set -- the envelope is NOT nil even though the contents are empty.
 
 > [!info]- 5. What is a type assertion? What happens without comma-ok?
-> `v, ok := i.(ConcreteType)` extracts the concrete type from an interface. If the type doesn't match: with comma-ok, ok=false and v is zero value. Without comma-ok (`v := i.(T)`), it panics.
+> `v, ok := i.(ConcreteType)` checks the label on the interface envelope: "is this a ConcreteType?" If yes, you get the contents back. If the label doesn't match: with comma-ok, ok=false and v is zero value. Without comma-ok (`v := i.(T)`), it panics.
 
 > [!info]- 6. What is the typed nil trap?
-> `var p *MyError = nil; var err error = p` -- err is NOT nil because the type field is set to `*MyError`. Always return bare `nil` from error-returning functions, never a typed nil pointer.
+> `var p *MyError = nil; var err error = p` -- err is NOT nil because the envelope's label says `*MyError` even though the contents are empty. Always return bare `nil` from error-returning functions, never a typed nil pointer.
 
 **Key visual:**
 ```
-Interface value: [ type | value ]
-nil interface:   [ nil  | nil   ] → i == nil is TRUE
-typed nil:       [ *Err | nil   ] → i == nil is FALSE  ← THE TRAP
+Interface = labeled envelope:
+  nil interface:   [ label: (none) | contents: (none) ] → i == nil is TRUE
+  typed nil:       [ label: *Err   | contents: (none) ] → i == nil is FALSE  ← THE TRAP
 ```
 
 **Traps to remember:**
-- Returning a typed nil pointer through error interface → non-nil error
+- Returning a typed nil pointer through error interface → non-nil envelope (label is set)
 - Type assertion without comma-ok panics if wrong type
 - Value T can't satisfy interface with pointer receiver methods
 
