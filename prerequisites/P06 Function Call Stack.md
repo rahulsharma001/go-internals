@@ -47,48 +47,54 @@ If your handler calls a service, which calls a database query, you have three tr
 
 ### The mistake that teaches you
 
-Here's a mistake that shows why this matters:
+Here's a bug a fresher would actually write. You call a function to promote a user to admin, but the change never sticks:
 
 ```go
-func GetUser(ctx context.Context, id int64) User {
-    var u User
-    u.Name = "Sam"
-    u.Email = "sam@co.com"
-    return u
+func PromoteUser(u User) {
+    u.IsAdmin = true
+    fmt.Println("inside PromoteUser:", u.IsAdmin) // prints true
 }
 
 func HandleRequest(w http.ResponseWriter, r *http.Request) {
-    user := GetUser(r.Context(), 42)
-    fmt.Println(user.Name)
+    user := User{Name: "Sam", IsAdmin: false}
+    PromoteUser(user)
+    fmt.Println("after PromoteUser:", user.IsAdmin) // prints false!
 }
 ```
 
-When `HandleRequest` calls `GetUser`, Go creates a new tray (frame) for `GetUser`. The variable `u` lives on that tray. When `GetUser` returns, Go copies the result back to `HandleRequest`'s tray, and then throws away `GetUser`'s tray.
+**What you'd expect:** `user.IsAdmin` should be `true` after calling `PromoteUser`.
 
-After `GetUser` returns, the variable `u` inside it is gone. You can't reach it anymore. It lived on `GetUser`'s tray, and that tray has been removed from the stack.
+**What actually happens:** It's still `false`. The promotion was lost.
+
+**Why?** When you call `PromoteUser(user)`, Go creates a new tray (frame) for `PromoteUser` and **copies** the entire `user` struct onto that tray. `PromoteUser` flips `IsAdmin` on its own copy. When it returns, that tray (and the copy) is thrown away. The original `user` on `HandleRequest`'s tray was never touched.
 
 ```
-While GetUser is running:
+Step 1: HandleRequest calls PromoteUser(user) — Go COPIES user to the new tray
 
     ┌──────────────────────────┐  <-- top (running now)
-    │ GetUser's tray           │
-    │   u = {Name:"Sam", ...}  │
-    │   "when done, go back to │
-    │    HandleRequest"        │
+    │ PromoteUser's tray       │
+    │   u = {Name:"Sam",       │
+    │        IsAdmin: true}    │  <-- changed the COPY
     ├──────────────────────────┤
     │ HandleRequest's tray     │
-    │   user = (waiting...)    │
+    │   user = {Name:"Sam",    │
+    │           IsAdmin: false} │  <-- original, untouched
     └──────────────────────────┘
 
-After GetUser returns:
+Step 2: PromoteUser returns — its tray is thrown away
 
     ┌──────────────────────────┐  <-- top (running now)
     │ HandleRequest's tray     │
-    │   user = {Name:"Sam"...} │  <-- Got the copy back
+    │   user = {Name:"Sam",    │
+    │           IsAdmin: false} │  <-- still false!
     └──────────────────────────┘
 
-    GetUser's tray is gone. The variable u no longer exists.
+    PromoteUser's tray is gone. The copy with IsAdmin=true is gone with it.
 ```
+
+**The fix:** Pass a pointer so both functions work on the same data: `func PromoteUser(u *User)` and call `PromoteUser(&user)`. You'll learn more about this in [[T07 Pointers & Pointer Semantics]].
+
+The takeaway: each function call gets its own tray with its own copies. Changes to copies don't affect the original.
 
 ---
 
@@ -141,7 +147,7 @@ func HandleOrder(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-When `HandleOrder` calls `CalculateTotal(50, 3)`, here's what the stack looks like:
+When `HandleOrder` calls `CalculateTotal(50, 3)`, try to picture the stack in your head before reading on. How many frames are there? What's in each one?
 
 ```
 Step 1: HandleOrder is running, about to call CalculateTotal
@@ -191,14 +197,45 @@ Most of the time, you don't choose. The Go compiler figures it out for you. Here
 - If a variable is only used inside the function, it goes on the **stack** (scratch paper — fast, auto-cleanup).
 - If a variable needs to survive after the function returns (like when you return a pointer to it), the compiler moves it to the **heap** (storage locker — survives longer).
 
+Here are two functions that look similar but end up using different memory:
+
 ```go
+func GetUserLocal() User {
+    u := User{Name: "Sam"}
+    return u
+}
+
 func NewUser(name string) *User {
     u := User{Name: name}
     return &u
 }
 ```
 
-Here, `u` can't live on the stack because `NewUser` returns a pointer to it. If `u` was on the scratch paper and the scratch paper got thrown away, that pointer would point to garbage. So the compiler puts `u` on the heap instead, where it survives the function return.
+In `GetUserLocal`, the variable `u` is only used inside the function and returned by copy. It lives on the stack — fast scratch paper, thrown away when the function returns.
+
+In `NewUser`, the function returns `&u` — a pointer to `u`. If `u` was on the scratch paper and the scratch paper got thrown away, that pointer would point to garbage. So the compiler puts `u` on the heap instead, where it survives the function return.
+
+```
+GetUserLocal — u stays on the stack (scratch paper):
+
+    STACK                          HEAP
+    ┌────────────────────┐
+    │ GetUserLocal frame │
+    │   u = {Name:"Sam"} │         (nothing here)
+    └────────────────────┘
+    Function returns → u is COPIED to caller → scratch paper thrown away. Done.
+
+
+NewUser — u moves to the heap (storage locker):
+
+    STACK                          HEAP
+    ┌────────────────────┐         ┌─────────────────────┐
+    │ NewUser frame       │         │ u = {Name:"Sam"}    │
+    │   (pointer) ────────┼────────>│                     │
+    └────────────────────┘         └─────────────────────┘
+    Function returns → frame is gone, but u survives on the heap.
+    Caller gets the pointer. Garbage collector cleans up later.
+```
 
 You don't need to memorize when this happens. Just know: **you write normal code, the compiler decides where things live.**
 
@@ -208,7 +245,25 @@ You don't need to memorize when this happens. Just know: **you write normal code
 
 Let's build up from two frames to four, step by step.
 
-Imagine a request hitting your API server. The request goes through middleware, then your handler, then a service, then a database call.
+Imagine a request hitting your API server. Here's the call chain — each function calls the next one:
+
+```go
+func ServeHTTP(w http.ResponseWriter, r *http.Request) {
+    AuthMiddleware(w, r)
+}
+
+func AuthMiddleware(w http.ResponseWriter, r *http.Request) {
+    // ... check JWT ...
+    GetUser(w, r)
+}
+
+func GetUser(w http.ResponseWriter, r *http.Request) {
+    rows, err := db.QueryContext(r.Context(), `SELECT ...`)
+    // ...
+}
+```
+
+`ServeHTTP` calls `AuthMiddleware`, which calls `GetUser`, which calls `db.QueryContext`. Each call adds a frame. Let's watch the stack grow:
 
 **Two frames (handler calls service):**
 
@@ -281,6 +336,28 @@ Here's what happened step by step:
 3. Go runs `fmt.Println("hello")`. Prints "hello".
 4. Go reaches the end of `SayHello`. Before actually leaving, it runs the deferred call. Prints "goodbye".
 5. Now `SayHello` is truly done.
+
+```
+Step 1: Enter SayHello
+
+    SayHello frame:
+    ┌─────────────────────────────┐
+    │ defer list: (empty)         │
+    └─────────────────────────────┘
+
+Step 2: defer fmt.Println("goodbye") — saved, NOT run yet
+
+    SayHello frame:
+    ┌─────────────────────────────┐
+    │ defer list: [ "goodbye" ]   │  <-- saved for later
+    └─────────────────────────────┘
+
+Step 3: fmt.Println("hello") runs → prints "hello"
+
+Step 4: Function ends → run defer list → prints "goodbye"
+
+Step 5: SayHello is truly done, frame removed
+```
 
 The real reason `defer` is powerful: it works no matter HOW the function exits. Here's a real backend example:
 
@@ -428,10 +505,12 @@ func LoadConfig(path string) (cfg Config, err error) {
 }
 ```
 
+Before reading the walkthrough below, try to answer: when `os.ReadFile` fails and the function hits `return cfg, err`, what does the defer see? What value does the caller end up with?
+
 Here's the step-by-step:
 
 1. Go enters `LoadConfig`. Two named variables exist in this frame: `cfg` (zero value) and `err` (nil).
-2. The defer is registered. It's a closure that can see `err` because `err` is a named return value in the same frame.
+2. The defer is registered. It's a closure — a function defined inside another function. Because `err` is a named return value, it lives in this frame for the whole call. The closure can see it and change it.
 3. Say `os.ReadFile` fails. `err` gets set to something like "file not found."
 4. `return cfg, err` puts the values into the return slots.
 5. **Before the function actually exits**, the defer runs. It sees `err` is not nil, so it wraps it: `err` becomes `LoadConfig "/etc/app.json": file not found`.
