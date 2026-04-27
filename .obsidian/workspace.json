@@ -196,6 +196,8 @@
   },
   "active": "641f593de2936c73",
   "lastOpenFiles": [
+    "T07 Pointers & Pointer Semantics.md",
+    "T08 Map Internals.md",
     "Study Plan.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "revision/T01 Go Type System & Value Semantics - Revision.md",
@@ -221,8 +223,6 @@
     "questions/T11 Interface Internals (iface & eface) - Interview Questions.md",
     "T11 Interface Internals (iface & eface).md",
     "visuals/T11 Interface Internals (iface & eface) - Visual Map.md",
-    "revision/T11 Interface Internals (iface & eface) - Revision.md",
-    "exercises/T11 Interface Internals (iface & eface) - Exercises.md",
     "visuals",
     "revision",
     "questions",
