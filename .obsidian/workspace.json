@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Daily Revision.md",
+                "file": "prerequisites/P04 Hash Functions & Hashing Basics.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Daily Revision"
+              "title": "P04 Hash Functions & Hashing Basics"
             }
           }
         ]
@@ -197,6 +197,8 @@
   "active": "641f593de2936c73",
   "lastOpenFiles": [
     "Study Plan.md",
+    "revision/T01 Go Type System & Value Semantics - Revision.md",
+    "Daily Revision.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites/P05 Interfaces Basics.md",
@@ -221,8 +223,6 @@
     "visuals/T11 Interface Internals (iface & eface) - Visual Map.md",
     "revision/T11 Interface Internals (iface & eface) - Revision.md",
     "exercises/T11 Interface Internals (iface & eface) - Exercises.md",
-    "simplified/T11 Interface Internals (iface & eface) - Simplified.md",
-    "questions/T10 Defer, Panic & Recover Internals - Interview Questions.md",
     "visuals",
     "revision",
     "questions",

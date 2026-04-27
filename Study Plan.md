@@ -42,7 +42,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 - [x] [[T03 Strings, Runes & UTF-8 Internals]] (~1.5 hrs)
 - [x] [[T04 Arrays & Slice Internals]] (~2 hrs)
 - [x] [[frameworks/T05 GIN Framework]] (~1.5 hrs)
-- [x] [[databases/T06 MongoDB]] (~2 hrs)
+- [ ] [[databases/T06 MongoDB]] (~2 hrs)
 
 ---
 
