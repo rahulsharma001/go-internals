@@ -667,13 +667,141 @@ v2, ok2 := flags["beta_api"] // v2 = false, ok2 = false → key missing
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### Example 1: Safe Concurrent Map Access (session or metrics store)
+### Example 1: Basic Map Operations Traced Through Memory
+
+This is the foundation. If you understand what happens in memory for these four operations, everything else (concurrency, struct values, size hints) builds on top.
 
 ```go
-type Session struct {
-    UserID int
+// Create
+hits := make(map[string]int)
+
+// Insert
+hits["/api/users"] = 120
+
+// Update (read + increment + write back internally)
+hits["/api/users"]++
+
+// Lookup with comma-ok
+count, exists := hits["/metrics"]
+```
+
+```
+Step 1: hits := make(map[string]int)
+  stack: [ hits = ptr → hmap ]
+  heap:  hmap{ count:0, B:0, hash0:0xAB12, buckets→[bucket0 (empty)] }
+
+Step 2: hits["/api/users"] = 120
+  hash("/api/users", 0xAB12) → 0xC1..A2
+  bucket #0, slot 0:
+    tophash[0] = 0xC1
+    keys[0]    = "/api/users"
+    values[0]  = 120
+  hmap.count = 1
+
+  bucket #0: [0xC1][0][0][0][0][0][0][0]
+             ["/api/users"][-][-][-][-][-][-][-]
+             [120][-][-][-][-][-][-][-]
+
+Step 3: hits["/api/users"]++
+  hash → same bucket #0 → scan tophash → 0xC1 matches slot 0
+  → compare key → match → read values[0] (120) → write values[0] = 121
+  No new slot used. Just value overwrite in place.
+
+  bucket #0: [0xC1][0][0][0][0][0][0][0]
+             ["/api/users"][-][-][-][-][-][-][-]
+             [121][-][-][-][-][-][-][-]
+                ↑ changed from 120 to 121
+
+Step 4: count, exists := hits["/metrics"]
+  hash("/metrics", 0xAB12) → 0x77..B3
+  bucket #0 → scan tophash for 0x77 → no match → slot 2 is empty (0) → STOP
+  Key not found. Return zero value (0) and exists = false.
+  count = 0, exists = false
+```
+
+### Example 2: Struct Values — the Copy-Edit-Write Pattern
+
+You can't modify a struct field through a map lookup. Here's why and how to work around it.
+
+```go
+type OrderSummary struct {
+    LineItems  int
+    TotalCents int64
 }
 
+cache := map[string]OrderSummary{
+    "ord-1001": {LineItems: 3, TotalCents: 4999},
+}
+
+// cache["ord-1001"].LineItems++  // COMPILE ERROR
+```
+
+```
+WHY the compile error (connects to §4.4):
+  Map values live inside bucket slots. When the map grows, entries
+  physically MOVE to new buckets. A pointer into the old slot would
+  become dangling. Go prevents this by making map values non-addressable.
+  You can't take &cache["ord-1001"], so you can't modify it in place.
+```
+
+The fix — copy, edit, write back:
+
+```go
+sum := cache["ord-1001"]    // copy out
+sum.LineItems++             // edit the copy
+cache["ord-1001"] = sum     // write back
+```
+
+```
+Step 1: sum := cache["ord-1001"]
+  sum is a COPY on the stack: OrderSummary{LineItems: 3, TotalCents: 4999}
+  The map still has its own copy in the bucket.
+
+Step 2: sum.LineItems++
+  stack: sum = OrderSummary{LineItems: 4, TotalCents: 4999}
+  bucket: still OrderSummary{LineItems: 3, ...}  ← UNCHANGED
+
+Step 3: cache["ord-1001"] = sum
+  Overwrites the value in the bucket slot.
+  bucket: OrderSummary{LineItems: 4, TotalCents: 4999}  ← now updated
+
+Alternative: use map[string]*OrderSummary (pointers as values)
+  cache["ord-1001"].LineItems++  // OK — pointer stays valid even if map grows
+  The pointer doesn't move when the map grows. Only the pointer itself
+  (8 bytes) is stored in the bucket. The struct lives separately on the heap.
+```
+
+### Example 3: Size Hint for Performance
+
+```go
+// Without hint: map grows multiple times as entries are added
+orders := make(map[string]*Order)
+
+// With hint: pre-allocates enough buckets for ~10k entries
+orders = make(map[string]*Order, 10_000)
+```
+
+```
+Without hint:
+  B=0 → 1 bucket → grow at ~7 entries → B=1 → grow at ~13 → B=2 → ...
+  Each growth: allocate new array, evacuate old entries incrementally.
+  For 10k entries: ~14 growth events, each with CPU cost.
+
+With hint (10,000):
+  B=11 → 2048 buckets → room for ~13k entries before first growth
+  Zero growths during initial filling → faster bulk load.
+
+When it matters:
+  - Hydrating a cache from a DB snapshot at startup
+  - Building an index after a batch import
+  - Any time you know the approximate count upfront
+```
+
+### Example 4: Safe Concurrent Map Access
+
+This is the pattern you'll use for any shared map (session store, feature flags, metrics). It builds on everything above — you need to understand why maps aren't safe (§4 — bucket array is being modified) before the lock pattern makes sense.
+
+```go
 type SessionStore struct {
     mu   sync.RWMutex
     data map[string]*Session
@@ -683,87 +811,39 @@ func NewSessionStore() *SessionStore {
     return &SessionStore{data: make(map[string]*Session)}
 }
 
-func (s *SessionStore) Get(sessionID string) (*Session, bool) {
+func (s *SessionStore) Get(id string) (*Session, bool) {
     s.mu.RLock()
     defer s.mu.RUnlock()
-    sess, ok := s.data[sessionID]
+    sess, ok := s.data[id]
     return sess, ok
 }
 
-func (s *SessionStore) Put(sessionID string, sess *Session) {
+func (s *SessionStore) Put(id string, sess *Session) {
     s.mu.Lock()
     defer s.mu.Unlock()
-    s.data[sessionID] = sess
+    s.data[id] = sess
 }
 ```
 
 ```
-Multiple readers (many GETs):     Single writer (login / refresh):
-  RLock ✓                           Lock ✓
-  RLock ✓                           (all readers blocked)
-  RLock ✓                           (all other writers blocked)
-  (concurrent reads OK)             Unlock → readers resume
+Multiple readers (many GET /session requests):
+  goroutine 1: RLock ✓ → read bucket → RUnlock
+  goroutine 2: RLock ✓ → read bucket → RUnlock  (concurrent reads OK)
+  goroutine 3: RLock ✓ → read bucket → RUnlock
+
+Single writer (POST /login creates session):
+  goroutine 4: Lock ✓
+    → all readers blocked until Unlock
+    → all other writers blocked until Unlock
+    → write to bucket safely
+    → Unlock → readers resume
+
+WHY RWMutex and not plain Mutex:
+  Feature flags, session lookups, config reads happen on EVERY request.
+  Writes happen rarely (login, config reload). RWMutex lets the common
+  case (reads) stay fast and concurrent. Plain Mutex would serialize
+  all reads too — unnecessary bottleneck.
 ```
-
-For **feature flags** loaded once at startup and read on every request, the same pattern applies: `RWMutex` + `map[string]bool` is the straightforward production shape unless profiling says you need `sync.Map`.
-
-### Example 2: Map with Struct Values (the copy-edit-write pattern)
-
-```go
-type OrderID string
-
-type OrderSummary struct {
-    LineItems int
-    TotalCents int64
-}
-
-cache := map[OrderID]OrderSummary{
-    "ord-1001": {LineItems: 3, TotalCents: 4999},
-}
-
-// Can't do: cache["ord-1001"].LineItems++ // COMPILE ERROR
-// Must do:
-sum := cache["ord-1001"]
-sum.LineItems++
-cache["ord-1001"] = sum // write back
-```
-
-```
-Step 1: sum := cache["ord-1001"]
-  sum is a COPY of OrderSummary{LineItems: 3, TotalCents: 4999}
-
-Step 2: sum.LineItems++
-  sum is now OrderSummary{LineItems: 4, TotalCents: 4999}
-  map still has OrderSummary{LineItems: 3, ...}
-
-Step 3: cache["ord-1001"] = sum
-  map now has OrderSummary{LineItems: 4, ...}
-```
-
-### Example 3: Map Size Hint for Performance
-
-```go
-type OrderID string
-type Order struct { /* line items, totals, etc. */ }
-
-// Without hint: map grows multiple times as entries are added
-orders := make(map[OrderID]*Order)
-
-// With hint: pre-allocates enough buckets for ~10k entries
-orders = make(map[OrderID]*Order, 10_000)
-```
-
-```
-orders := make(map[OrderID]*Order):
-  B=0 → 1 bucket → grow at 7 entries → grow at 14 → grow at 28 → ...
-  Each growth: allocate, evacuate, repeat
-
-orders := make(map[OrderID]*Order, 10_000):
-  B=11 → 2048 buckets → room for ~13k entries before first growth
-  Zero growths during initial filling → faster bulk load
-```
-
-Pre-sizing matters when you know the approximate count — for example hydrating a cache from a nightly snapshot or indexing users after a batch import (`BuildUserIndex`).
 
 ---
 
@@ -828,28 +908,37 @@ Build a **simple in-memory cache with TTL** using a `map[string]cacheEntry` (or 
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Fix |
-|--------|-------------|-----|
-| Concurrent map read + write | `fatal error: concurrent map read and map write` | sync.RWMutex or sync.Map |
-| Concurrent map writes | `fatal error: concurrent map writes` | sync.Mutex |
-| Write to nil map | `panic: assignment to entry in nil map` | Initialize with `make()` |
-| Struct field assignment in map | `cannot assign to struct field in map` | Copy-edit-write or use pointer values |
-| Relying on iteration order | Order changes between runs | Sort keys if order matters |
-| Large map never shrinks | Memory stays allocated after mass deletion | Re-create the map |
-| Map of pointers hides nil | `m[key].Field` panics if value is nil pointer | Check with comma-ok first |
+| Gotcha | What Happens | Because (§4 link) | Fix |
+|--------|-------------|-------------------|-----|
+| Concurrent read + write | `fatal error: concurrent map read and map write` | hmap.flags detects overlap; bucket array is being modified mid-read (§4.1) | sync.RWMutex or sync.Map |
+| Concurrent writes | `fatal error: concurrent map writes` | Two goroutines writing to the same bucket can corrupt tophash/keys/values (§4.2) | sync.Mutex |
+| Write to nil map | `panic: assignment to entry in nil map` | nil map means the hmap pointer is nil — no bucket array exists to write into (§4.1) | Initialize with `make()` |
+| Struct field assignment | `cannot assign to struct field in map` | Values live in bucket slots that move during growth — can't take a stable address (§4.4) | Copy-edit-write or pointer values |
+| Relying on iteration order | Order changes between runs | Iterator picks random start bucket + offset each time; hash0 differs per map (§4.5) | Sort keys if order matters |
+| Large map never shrinks | Memory stays after mass deletion | Growth allocates a bigger bucket array (§4.4). Delete marks slots empty but the array stays. No reverse operation exists. | Re-create the map |
+| Map of pointers hides nil | `m[key].Field` panics if value is nil pointer | Comma-ok returns zero value (nil for pointers); dereferencing nil panics | Check with comma-ok first |
 
-**The "map never shrinks" gotcha:**
+**The "map never shrinks" gotcha — traced through memory:**
 
 ```go
 m := make(map[string]*Session)
 for i := 0; i < 1_000_000; i++ {
     m[fmt.Sprintf("sess-%d", i)] = &Session{}
 }
+// hmap: count=1,000,000  B=17  buckets→[131,072 buckets]  ← ~4MB of bucket memory
+
 for i := 0; i < 1_000_000; i++ {
     delete(m, fmt.Sprintf("sess-%d", i))
 }
-// m is empty BUT still holds memory for a huge bucket table
-// Fix: m = make(map[string]*Session) to reclaim memory
+// hmap: count=0  B=17  buckets→[131,072 buckets, all slots marked empty]
+//                               ↑ STILL allocated! Same 4MB.
+//
+// WHY: delete() marks tophash as "empty" but doesn't free or shrink the
+// bucket array. The runtime has no "reverse growth" operation.
+//
+// Fix: m = make(map[string]*Session)
+//   → new hmap, new tiny bucket array. Old 4MB array is now unreferenced
+//     and eligible for GC.
 ```
 
 > **In plain English:** When you empty all the drawers in a filing cabinet, the cabinet doesn't magically shrink. You need to buy a smaller cabinet (re-create the map) to free the space.
