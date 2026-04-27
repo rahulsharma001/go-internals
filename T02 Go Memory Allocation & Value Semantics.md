@@ -230,25 +230,29 @@ func main() {
 ```
 
 ```
-What IS a slice? A 24-byte header with three fields:
+What IS a slice? A 24-byte header (ptr + len + cap) on the stack:
 
-  data = [ ptr ──▶ [10, 20, 30], len = 3, cap = 3 ]
+  stack 0xC000060000: data = [ ptr=0xC000080000 | len=3 | cap=3 ]
+  heap  0xC000080000: [10, 20, 30]
 
-Step 1: modify(data) — header is COPIED, but ptr still points to same array
-  main stack:   [ ptr ──▶ [10, 20, 30], len=3, cap=3 ]
-  modify stack: [ ptr ──▶ [10, 20, 30], len=3, cap=3 ]  ← copy of header
-                           ↑ SAME array!
+Step 1: modify(data) — header is COPIED (24 bytes), but ptr still points to same array
+  main stack   0xC000060000: [ ptr=0xC000080000 | len=3 | cap=3 ]
+  modify stack 0xC000070000: [ ptr=0xC000080000 | len=3 | cap=3 ]  ← copy of header
+                                      ↑ SAME heap address!
   modify does s[0] = 100:
-  main stack:   [ ptr ──▶ [100, 20, 30], len=3, cap=3 ] ← visible!
+    s.ptr + 0*8 = 0xC000080000 → write 100
+  main reads data[0]: data.ptr + 0*8 = 0xC000080000 → reads 100 ← visible!
 
 Step 2: grow(data) — header is COPIED again
-  main stack: [ ptr ──▶ [100, 20, 30],  len=3, cap=3 ]
-  grow stack: [ ptr ──▶ [100, 20, 30],  len=3, cap=3 ]  ← copy of header
+  main stack 0xC000060000: [ ptr=0xC000080000 | len=3 | cap=3 ]
+  grow stack 0xC000070000: [ ptr=0xC000080000 | len=3 | cap=3 ]  ← copy
   
-  append needs cap=4 but cap=3 → allocates NEW array:
-  grow stack: [ ptr ──▶ [100, 20, 30, 4], len=4, cap=6 ] ← NEW array!
-  main stack: [ ptr ──▶ [100, 20, 30],    len=3, cap=3 ] ← still old array!
-                                                            <-- THIS is why append isn't visible
+  append needs cap=4 but cap=3 → allocates NEW array at 0xC000090000:
+  grow stack 0xC000070000: [ ptr=0xC000090000 | len=4 | cap=6 ] ← NEW array!
+  main stack 0xC000060000: [ ptr=0xC000080000 | len=3 | cap=3 ] ← still old array!
+                                                                  <-- THIS is why append isn't visible
+  heap 0xC000080000: [100, 20, 30]       ← main still reads here
+  heap 0xC000090000: [100, 20, 30, 4, _, _] ← grow's new array (only grow knows)
 ```
 
 > **In plain English:** When a slice runs out of room and `append` builds a bigger one, it's like moving to a bigger apartment. The function that did the moving knows the new address, but anyone who had your old address still shows up at the old place. That's why you must return and reassign the new slice.
@@ -262,10 +266,17 @@ m := make(map[string]int)
 ```
 Under the hood, m is a pointer to a runtime.hmap struct:
 
-  m = [ ptr ──▶ hmap{ count: 0, buckets: [...] } ]
+  stack 0xC000060000: m = [ ptr=0xC000010000 ]  ← 8-byte pointer on the stack
+                                  │
+                                  ▼
+  heap 0xC000010000: hmap{ count:0, B:0, hash0:0x7A3F, buckets → 0xC000020000 }
+                                                                      │
+                                                                      ▼
+  heap 0xC000020000: [bucket0 — 8 empty slots]
 
-Passing m to a function copies the pointer, NOT the hmap.
-Both caller and callee see the same hash table.
+Passing m to a function copies the 8-byte pointer, NOT the hmap.
+  caller:  m = 0xC000010000
+  callee:  m = 0xC000010000  ← same address, same hash table
 No need for *map — it's already a pointer.
 ```
 
@@ -393,10 +404,20 @@ func grow(s []int) {
 **Fix**: return the new slice or pass `*[]int`.
 
 ```
-BEFORE: caller.s ──▶ [10, 20, 30]       (cap=3, full)
-INSIDE: local s  ──▶ [10, 20, 30, 4]    (NEW array allocated — cap exceeded!)
-AFTER:  caller.s ──▶ [10, 20, 30]       ← unchanged, stale
-                                          <-- caller never sees the 4
+BEFORE grow(s):
+  caller stack 0xC000060000: s = [ ptr=0xC000080000 | len=3 | cap=3 ]
+  heap 0xC000080000: [10, 20, 30]  ← full (len == cap)
+
+INSIDE grow(s):
+  grow stack 0xC000070000: s = [ ptr=0xC000080000 | len=3 | cap=3 ]  ← copy
+  append: cap exceeded → new array at 0xC000090000
+  grow stack 0xC000070000: s = [ ptr=0xC000090000 | len=4 | cap=6 ]  ← updated locally
+  heap 0xC000090000: [10, 20, 30, 4, _, _]
+
+AFTER grow returns:
+  caller stack 0xC000060000: s = [ ptr=0xC000080000 | len=3 | cap=3 ]  ← UNCHANGED
+  heap 0xC000080000: [10, 20, 30]    ← caller still reads here
+  heap 0xC000090000: [10, 20, 30, 4] ← orphaned, no one points here → GC
 
 Fix: return the new slice
   func grow(s []int) []int {
@@ -427,16 +448,16 @@ func getFirstThree(data []byte) []byte {
 
 ```
 WITHOUT fix (memory leak):
-  data   = [ ptr ──▶ [A][B][C][D][E]...[1MB data], len=1048576, cap=1048576 ]
-  result = [ ptr ──▶ [A][B][C][D][E]...[1MB data], len=3, cap=1048576 ]
-                      ^^^
-                      You only need 3 bytes, but the entire 1MB stays alive
-                      because result's ptr still references the original array
-                      GC cannot free the 1MB!
+  stack: data   = [ ptr=0xC000100000 | len=1048576 | cap=1048576 ]
+  stack: result = [ ptr=0xC000100000 | len=3       | cap=1048576 ]
+                         ↑ SAME address — result still holds entire 1MB alive!
+  heap 0xC000100000: [A][B][C][D][E]...[1MB data]
+  GC checks: anything still pointing at 0xC000100000? → YES (result) → can't free
 
 WITH fix (independent copy):
-  result = [ ptr ──▶ [A][B][C], len=3, cap=3 ]  ← own tiny array
-  Original 1MB array can now be garbage collected
+  stack: result = [ ptr=0xC000200000 | len=3 | cap=3 ]  ← own tiny array
+  heap 0xC000200000: [A][B][C]          ← 3 bytes only
+  heap 0xC000100000: 1MB → no references remain → GC eligible
 ```
 
 ### Interface nil trap
