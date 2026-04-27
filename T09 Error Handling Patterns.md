@@ -73,76 +73,397 @@ func main() {
 
 ## 4. How It Actually Works (Internals) [INTERMEDIATE → ADVANCED]
 
-Small values, sometimes with an inner `error` linked by `Unwrap()`.
+### 4.1 The `error` Interface — What Lives in Memory
 
-### 4.1 The `error` Interface (Just `Error() string`)
+`error` is an interface. From T11 (Interface Internals), every interface value is a 16-byte container: a type pointer + a data pointer. Understanding this explains every error behavior.
 
 ```go
-// From the spec — roughly what you are matching against
-type error interface {
-	Error() string
+package main
+
+import (
+	"errors"
+	"fmt"
+	"unsafe"
+)
+
+func main() {
+	var err error = errors.New("something broke")
+	fmt.Println("size of error interface:", unsafe.Sizeof(err))  // 16
+	fmt.Println("err:", err)                                       // something broke
+	fmt.Printf("type: %T\n", err)                                 // *errors.errorString
 }
 ```
 
-`string` and `*MyError` are different types, but if both implement `Error() string`, both satisfy `error`.
+```
+Step 1: errors.New("something broke") creates a *errorString on the heap
+  heap 0xC000010040: errorString{ s: "something broke" }
 
-"Error" here means "I can print a one-line message." The language does not care what struct you used to build that line.
+Step 2: var err error = ... stores it in the interface container
+  stack (err): [ type ptr → *errors.errorString | data ptr → 0xC000010040 ]
+                       ↑                               ↑
+                 "what type is inside"          "where the actual value lives"
 
-### 4.2 Sentinel Errors — `errors.New` and `*errorString`
+Step 3: err.Error() → Go reads the type ptr → finds Error() method → calls it
+  Returns "something broke"
 
-```go
-var ErrNotFound = errors.New("not found")
+KEY:
+  err is NOT a string. err is a 16-byte interface box.
+  The box says "I contain a *errors.errorString at address 0xC000010040."
+  When err == nil, BOTH slots are nil: [ type: nil | data: nil ]
 ```
 
-`errors.New` allocates a private pointer type in the standard library, often shown in docs as **`errorString`**. The pointer identity matters: two `errors.New("same")` calls give two **different** sentinels.
+> **In plain English:** An `error` is a labeled box. The label says what type of error is inside (sentinel? custom struct?). The box holds a pointer to the actual error data. When you compare errors, you're comparing boxes — not the messages printed on them.
 
-Two calls to `errors.New("x")` yield **different pointers**, so **`==`** between them is **false**.
+### 4.2 Sentinel Errors — Pointer Identity, Not String Equality
 
-A sentinel is a pre-printed form with a unique serial number. Two forms can say the same words but still be two different papers.
-
-### 4.3 Error Wrapping — `fmt.Errorf` with `%w` and `*fmt.wrapError`
+`errors.New` returns a `*errorString` — a private type with one field: the message string. The critical insight: **identity is by pointer address, not by message text.**
 
 ```go
-import "fmt"
-wrapped := fmt.Errorf("load config: %w", err) // build link to `err`
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNotFound = errors.New("not found")  // sentinel at package level
+var ErrAlsoNotFound = errors.New("not found")  // DIFFERENT sentinel, same text
+
+func main() {
+	fmt.Println(ErrNotFound == ErrAlsoNotFound)  // false!
+	fmt.Printf("ErrNotFound addr:     %p\n", ErrNotFound)      // 0xC000010040
+	fmt.Printf("ErrAlsoNotFound addr: %p\n", ErrAlsoNotFound)  // 0xC000010050
+}
 ```
 
-The **`%w` verb** creates a value that usually implements **`Unwrap() error`**. The concrete type is often documented as **`wrapError`**. The **`%v` verb** only formats text. It does not attach an unwrap target.
+```
+Step 1: var ErrNotFound = errors.New("not found")
+  heap 0xC000010040: errorString{ s: "not found" }
+  ErrNotFound interface: [ type: *errorString | data: 0xC000010040 ]
 
-`%w` is a window in the new envelope. Helpers can look through the window at the old letter. `%v` is a photocopy of the text on the new envelope only — the window is missing.
+Step 2: var ErrAlsoNotFound = errors.New("not found")
+  heap 0xC000010050: errorString{ s: "not found" }    ← DIFFERENT allocation!
+  ErrAlsoNotFound interface: [ type: *errorString | data: 0xC000010050 ]
 
-### 4.4 The Unwrap Chain — `errors.Is` and `errors.As` Walk the Chain
+Step 3: ErrNotFound == ErrAlsoNotFound
+  Same type? Yes (*errorString == *errorString)
+  Same data pointer? 0xC000010040 != 0xC000010050 → FALSE
 
-```go
-errors.Is(err, target)  // is `target` anywhere in the unwrap chain?
-var ve *ValidationError
-errors.As(err, &ve)     // find first error assignable to *ValidationError, set `ve`
+  Even though both say "not found", they are DIFFERENT pointers → not equal.
+
+WHY this design:
+  If equality were by string, any errors.New("not found") anywhere in your
+  codebase would accidentally match YOUR ErrNotFound sentinel.
+  Pointer identity means only YOUR specific sentinel matches.
 ```
 
-**`errors.Is`** compares the chain with equality rules that understand sentinels and **Unwrap** steps.
+> **In plain English:** A sentinel error is like a serial-numbered form. Two forms can say the same thing, but they have different serial numbers (memory addresses). When you check `errors.Is`, you're checking the serial number — not reading the text.
 
-**`errors.As`** tries type assertion at each level of the chain until one matches, then populates the pointer you passed.
+### 4.3 Error Wrapping — `%w` Builds a Linked List
 
-`Is` asks "is this the same bad news, even through several retellings?" `As` asks "does any layer use our company's form?"
-
-### 4.5 Custom Error Types — `Error()` and Optional `Unwrap()`
+When you wrap with `fmt.Errorf("...: %w", err)`, Go creates a `wrapError` struct that holds the formatted message AND a pointer to the original error. This creates a **linked list** of errors.
 
 ```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrDBTimeout = errors.New("database timeout")
+
+func repoCall() error {
+	return ErrDBTimeout
+}
+
+func serviceCall() error {
+	err := repoCall()
+	return fmt.Errorf("load user: %w", err)   // wrap layer 1
+}
+
+func handlerCall() error {
+	err := serviceCall()
+	return fmt.Errorf("GET /users/1: %w", err)  // wrap layer 2
+}
+
+func main() {
+	err := handlerCall()
+	fmt.Println(err)  // GET /users/1: load user: database timeout
+	fmt.Println(errors.Is(err, ErrDBTimeout))  // true — walks the chain
+}
+```
+
+```
+Step 1: repoCall() returns ErrDBTimeout
+  ErrDBTimeout: [ type: *errorString | data: 0xA0 ]
+  heap 0xA0: errorString{ s: "database timeout" }
+
+Step 2: serviceCall() wraps with %w
+  heap 0xB0: wrapError{
+    msg:  "load user: database timeout"
+    err:  → ErrDBTimeout (0xA0)     ← linked list pointer!
+  }
+  Returns: [ type: *wrapError | data: 0xB0 ]
+
+Step 3: handlerCall() wraps again with %w
+  heap 0xC0: wrapError{
+    msg:  "GET /users/1: load user: database timeout"
+    err:  → serviceCall's wrapError (0xB0)     ← another link!
+  }
+  Returns: [ type: *wrapError | data: 0xC0 ]
+
+THE CHAIN IN MEMORY:
+
+  err (from handler)
+  ┌──────────────────────────────────────────────┐
+  │ wrapError at 0xC0                            │
+  │ msg: "GET /users/1: load user: db timeout"   │
+  │ err: ─────────────────────────────────────┐   │
+  └───────────────────────────────────────────│───┘
+                                              ▼
+  ┌──────────────────────────────────────────────┐
+  │ wrapError at 0xB0                            │
+  │ msg: "load user: database timeout"           │
+  │ err: ─────────────────────────────────────┐   │
+  └───────────────────────────────────────────│───┘
+                                              ▼
+  ┌──────────────────────────────────────────────┐
+  │ *errorString at 0xA0                         │
+  │ s: "database timeout"                        │
+  │ (no Unwrap — this is the end of the chain)   │
+  └──────────────────────────────────────────────┘
+
+COMPARE with %v (NO link):
+  fmt.Errorf("load user: %v", err) creates:
+  heap 0xD0: errorString{ s: "load user: database timeout" }
+  ← just a string, NO err pointer, NO Unwrap() method
+  errors.Is(this, ErrDBTimeout) → false — chain is broken
+```
+
+> **In plain English:** `%w` is a window in the envelope — you can reach through it and grab what's inside. `%v` is a photocopy — it prints the same text on the outside, but there's nothing inside to grab. That's why `errors.Is` works with `%w` but fails with `%v`.
+
+### 4.4 How `errors.Is` Walks the Chain — The Algorithm
+
+`errors.Is(err, target)` is a simple loop: compare `err` to `target`, then call `err.Unwrap()` to get the next error, repeat until you find a match or hit the end.
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrAuth = errors.New("unauthorized")
+
+func main() {
+	layer1 := fmt.Errorf("validate token: %w", ErrAuth)
+	layer2 := fmt.Errorf("middleware: %w", layer1)
+	layer3 := fmt.Errorf("handler: %w", layer2)
+
+	fmt.Println(errors.Is(layer3, ErrAuth))  // true
+	fmt.Println(layer3 == ErrAuth)            // false
+}
+```
+
+```
+errors.Is(layer3, ErrAuth) — step by step:
+
+  Iteration 1: compare layer3 with ErrAuth
+    layer3 is wrapError{msg: "handler: ...", err: layer2}
+    layer3 == ErrAuth? NO (different types, different pointers)
+    layer3 has Unwrap() → call it → get layer2
+
+  Iteration 2: compare layer2 with ErrAuth
+    layer2 is wrapError{msg: "middleware: ...", err: layer1}
+    layer2 == ErrAuth? NO
+    layer2 has Unwrap() → call it → get layer1
+
+  Iteration 3: compare layer1 with ErrAuth
+    layer1 is wrapError{msg: "validate token: ...", err: ErrAuth}
+    layer1 == ErrAuth? NO
+    layer1 has Unwrap() → call it → get ErrAuth
+
+  Iteration 4: compare ErrAuth with ErrAuth
+    Same type (*errorString)? YES
+    Same data pointer (0xA0 == 0xA0)? YES
+    → MATCH! Return true.
+
+  layer3 == ErrAuth only compares the OUTER box:
+    layer3 is wrapError at 0xC0, ErrAuth is *errorString at 0xA0
+    Different types → false immediately. No chain walking.
+```
+
+> **In plain English:** `errors.Is` is like a detective opening nested envelopes one by one, checking the serial number at each level. `==` is a lazy clerk who only looks at the outside label and gives up immediately.
+
+### 4.5 How `errors.As` Works — Type Extraction From the Chain
+
+`errors.As(err, &target)` walks the same chain but instead of comparing values, it tries a **type assertion** at each level. When it finds a match, it populates your pointer.
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
 type ValidationError struct {
-	Field, Reason string
+	Field  string
+	Reason string
 }
 
 func (e *ValidationError) Error() string {
-	return "validation: " + e.Field + ": " + e.Reason
+	return fmt.Sprintf("validation: %s: %s", e.Field, e.Reason)
 }
 
-// If this error wraps another:
-func (e *ValidationError) Unwrap() error { return e.cause } // if you store one
+func validate(email string) error {
+	if email == "" {
+		return &ValidationError{Field: "email", Reason: "required"}
+	}
+	return nil
+}
+
+func serviceCall() error {
+	err := validate("")
+	return fmt.Errorf("create user: %w", err)
+}
+
+func main() {
+	err := serviceCall()
+
+	var ve *ValidationError
+	if errors.As(err, &ve) {
+		fmt.Printf("field=%s reason=%s\n", ve.Field, ve.Reason)
+		// field=email reason=required
+	}
+}
 ```
 
-If your type can wrap, implement **`Unwrap`**. Callers can then use **`errors.Is` / `errors.As` through your type.
+```
+errors.As(err, &ve) — step by step:
 
-A custom type is a company-branded case folder. It has extra fields. The folder can still enclose an older letter if you add an inner slot.
+  err is: wrapError{msg: "create user: validation: email: required",
+                     err: → *ValidationError{Field:"email", Reason:"required"}}
+
+  Iteration 1: try type assertion on err
+    err is *wrapError — can it be assigned to *ValidationError? NO
+    err has Unwrap() → call it → get the inner error
+
+  Iteration 2: try type assertion on inner error
+    inner is *ValidationError — can it be assigned to *ValidationError? YES!
+    Set ve = inner (*ValidationError)
+    Return true
+
+  Now ve points at the ValidationError:
+    ve → heap: [ Field: "email" | Reason: "required" ]
+    You can read ve.Field, ve.Reason — the structured data from the original error.
+
+WHY this matters for HTTP handlers:
+  Your handler doesn't unwrap manually. It calls:
+    var ve *ValidationError
+    if errors.As(err, &ve) {
+        http.Error(w, ve.Error(), 400)   ← structured 400 with field info
+        return
+    }
+  The wrapping from service/repo layers is transparent.
+```
+
+> **In plain English:** `errors.As` is like searching through a stack of folders. You're looking for a specific form (e.g., a validation report). You flip through each folder until you find one that matches the shape you need, then you pull out the form and read its fields.
+
+### 4.6 Backend Scenario: Repo → Service → Handler Error Flow
+
+Here's a complete trace of how an error flows through a real service stack:
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type User struct {
+	ID   int
+	Name string
+}
+
+func repoFindUser(id int) (*User, error) {
+	if id == 0 {
+		return nil, ErrNotFound  // sentinel from repo layer
+	}
+	return &User{ID: id, Name: "rahul"}, nil
+}
+
+func serviceGetUser(id int) (*User, error) {
+	user, err := repoFindUser(id)
+	if err != nil {
+		return nil, fmt.Errorf("get user %d: %w", id, err)  // wrap with context
+	}
+	return user, nil
+}
+
+type ValidationError struct {
+	Field, Reason string
+}
+func (e *ValidationError) Error() string {
+	return e.Field + ": " + e.Reason
+}
+
+func handler(id int) {
+	user, err := serviceGetUser(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, ErrNotFound):
+			fmt.Println("404:", err)
+		default:
+			fmt.Println("500:", err)
+		}
+		return
+	}
+	fmt.Printf("200: %+v\n", *user)
+}
+
+func main() {
+	handler(0)  // 404: get user 0: not found
+	handler(1)  // 200: {ID:1 Name:rahul}
+}
+```
+
+```
+handler(0) — error path traced through memory:
+
+  Step 1: repoFindUser(0)
+    id == 0 → return nil, ErrNotFound
+    ErrNotFound: [ type: *errorString | data: 0xA0 ]
+    heap 0xA0: { s: "not found" }
+
+  Step 2: serviceGetUser wraps: fmt.Errorf("get user 0: %w", err)
+    heap 0xB0: wrapError{
+      msg: "get user 0: not found",
+      err: → 0xA0 (ErrNotFound)        ← chain link preserved
+    }
+    Returns: [ type: *wrapError | data: 0xB0 ]
+
+  Step 3: handler checks errors.Is(err, ErrNotFound)
+    Iteration 1: err at 0xB0 == ErrNotFound at 0xA0? NO
+    Unwrap → get ErrNotFound at 0xA0
+    Iteration 2: 0xA0 == 0xA0? YES → match!
+    → prints "404: get user 0: not found"
+
+  The error message is human-readable ("get user 0: not found")
+  AND machine-parseable (errors.Is finds ErrNotFound through the chain).
+
+handler(1) — success path:
+  repoFindUser(1) → returns &User{...}, nil
+  serviceGetUser → user is non-nil, err is nil
+  handler prints user → "200: {ID:1 Name:rahul}"
+```
+
+> **In plain English:** The repo says "not found." The service puts that note in an envelope labeled "get user 0." The handler opens the envelope, checks the note's serial number, and says "yep, that's a 404." The wrapping adds human context without destroying machine-readable identity.
 
 ---
 
@@ -150,34 +471,45 @@ A custom type is a company-branded case folder. It has extra fields. The folder 
 
 ### Rule 1: Always Check `err != nil` Before Using the Result
 
+**WHY (§4.1):** From §4.1, `error` is an interface. When a function returns `(result, error)`, the result is only valid if the error interface is nil (both type and data slots are nil). Using `result` when `err != nil` risks operating on zero values or stale data.
+
 ```go
 f, err := os.Open("cfg.json")
-if err != nil { // do this FIRST
-	return err
+if err != nil {
+	return fmt.Errorf("open config: %w", err)
 }
 defer f.Close()
-// only now safe to read from `f`
 ```
 
-You do not start reading a book before checking someone actually handed you a book. The handle might be empty.
+```
+Step 1: os.Open("cfg.json") returns (f, err)
+  Case A (success): f = *os.File{...}, err = [ type: nil | data: nil ] → nil
+  Case B (failure):  f = nil,          err = [ type: *PathError | data: 0xB0 ] → non-nil
+
+  If you skip the nil check and call f.Read() in Case B:
+    f is nil → f.Read() dereferences nil → PANIC
+
+  The check ensures you only use f when it's actually valid.
+```
+
+> **In plain English:** You don't start reading a book before checking someone actually handed you a book. The handle might be empty.
 
 ### Rule 2: Wrap Errors at Abstraction Boundaries with `%w`
 
-This is the backbone pattern: low-level storage speaks `database/sql`, domain code speaks your sentinels and messages.
+**WHY (§4.3):** From §4.3, `%w` creates a linked list that preserves the original error's identity. Each layer adds context ("what was I doing when this failed?") while keeping the chain walkable by `errors.Is` and `errors.As`.
 
 ```go
 var ErrUserNotFound = errors.New("user not found")
 
-func dbGet(id int) error {
-	// pretend: QueryRow.Scan fails with sql.ErrNoRows when missing
-	return sql.ErrNoRows
+func repoGet(id int) error {
+	return sql.ErrNoRows  // raw database error
 }
 
 func LoadUser(id int) error {
-	_, err := dbGet(id)
+	err := repoGet(id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("load user %d: %w", id, ErrUserNotFound)
+			return fmt.Errorf("load user %d: %w", id, ErrUserNotFound)  // translate + wrap
 		}
 		return fmt.Errorf("load user %d: %w", id, err)
 	}
@@ -185,18 +517,48 @@ func LoadUser(id int) error {
 }
 ```
 
-The moving truck writes your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
+```
+WHY translate sql.ErrNoRows → ErrUserNotFound:
+
+  Without translation:
+    handler imports database/sql to check sql.ErrNoRows
+    → your HTTP layer depends on your database driver. Bad coupling.
+
+  With translation:
+    handler checks errors.Is(err, ErrUserNotFound)
+    → handler doesn't know or care that the repo uses SQL
+
+  Chain in memory after translation:
+    wrapError{ msg: "load user 42: user not found", err: → ErrUserNotFound }
+    Handler checks: errors.Is(err, ErrUserNotFound) → true → 404
+```
+
+> **In plain English:** The moving truck writes your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
 
 ### Rule 2b: Map Errors to HTTP at the Edge (Handler), Not in the Repo
 
-The **repository** should not import `net/http`. The **handler** (or a thin `api` package) decides status codes from error shape:
+**WHY (§4.5, §4.6):** From §4.5, `errors.As` can extract typed errors at any depth. The handler is the right place to decide HTTP status codes because it knows the HTTP contract. The repo should never import `net/http`.
 
-- **`sql.ErrNoRows`** or **`errors.Is(err, ErrUserNotFound)`** → **404 Not Found** (resource missing).
-- **`ValidationError`** (or **`errors.As` into your validation type)** → **400 Bad Request** (client sent bad input).
-- **Auth failures you classify** → **401 / 403** depending on your model.
-- **Everything else** in a public API → **500 Internal Server Error** (log the real chain; return a safe message).
+- **`errors.Is(err, ErrUserNotFound)`** → **404**
+- **`errors.As(err, &validationErr)`** → **400**
+- **Everything else** → **500** (log the real chain; return a safe message)
 
-See **§6 — Handler sketch** for a concrete `switch` on **`errors.Is` / `errors.As`**. That keeps "what happened in the database" separate from "what the client is allowed to know."
+```go
+func (h *Handler) handleErr(w http.ResponseWriter, err error) {
+	var ve *ValidationError
+	switch {
+	case errors.Is(err, ErrUserNotFound):
+		http.Error(w, "not found", 404)
+	case errors.As(err, &ve):
+		http.Error(w, ve.Error(), 400)
+	default:
+		h.log.Error("request failed", "err", err)
+		http.Error(w, "internal error", 500)
+	}
+}
+```
+
+> **In plain English:** The repo writes a medical report. The receptionist (handler) translates it into patient-friendly language. The repo never decides how to talk to the patient.
 
 ### Rule 2c: Middleware — Log Once, Attach Request Context, Then Wrap
 
@@ -204,24 +566,7 @@ A common pattern: generate a **request ID**, put it in **`context`**, and when s
 
 ```go
 type ctxKey string
-
 const reqIDKey ctxKey = "request_id"
-
-func WithRequestID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		id := r.Header.Get("X-Request-ID")
-		if id == "" {
-			id = "gen-" + shortID() // your UUID / snowflake / whatever
-		}
-		ctx := context.WithValue(r.Context(), reqIDKey, id)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func RequestIDFrom(ctx context.Context) string {
-	id, _ := ctx.Value(reqIDKey).(string)
-	return id
-}
 
 func wrapReq(ctx context.Context, msg string, err error) error {
 	if err == nil {
@@ -231,238 +576,366 @@ func wrapReq(ctx context.Context, msg string, err error) error {
 }
 ```
 
-Deep code does `return wrapReq(ctx, "load user", err)` so the unwrap chain is still intact for `errors.Is` / `errors.As`, but logs and dashboards have a correlation handle.
+**WHY (§4.3):** The `%w` keeps the chain intact, so `errors.Is`/`errors.As` still work downstream. The request ID is baked into the message for log correlation, but the chain structure is preserved for programmatic checks.
+
+> **In plain English:** You stamp every envelope with a tracking number. Anyone who opens the envelope can still read the original letter — the stamp doesn't cover anything up.
 
 ### Rule 2d: Retryable vs Non-Retryable
 
 Not every failure deserves a retry loop.
 
-- **Retry:** transient network blips, **deadline exceeded** on an upstream you trust, **503** with **`Retry-After`**, optional **idempotency key** on writes.
-- **Do not retry:** **validation errors**, **4xx** you caused, **business rule violations**, **duplicate key** you cannot fix by hammering the same payload.
-
-One light pattern is a **marker interface or sentinel** the retry middleware understands:
+- **Retry:** transient network blips, deadline exceeded, 503 with Retry-After
+- **Do not retry:** validation errors, 4xx, business rule violations, duplicate key
 
 ```go
 var ErrRetryable = errors.New("retryable")
 
 type TemporaryError struct{ Cause error }
-
 func (e *TemporaryError) Error() string { return "temporary: " + e.Cause.Error() }
 func (e *TemporaryError) Unwrap() error { return e.Cause }
-
-// Wrap: fmt.Errorf("call payments: %w", &TemporaryError{Cause: ctx.Err()})
 ```
 
-The **retry policy** checks `errors.Is(err, ErrRetryable)` or **`errors.As` into `*TemporaryError`**; the **handler** still maps "gave up after retries" to **502/504** as appropriate.
+**WHY (§4.4, §4.5):** Retry middleware uses `errors.Is(err, ErrRetryable)` or `errors.As(err, &temp)` to decide whether to retry. The chain walking from §4.4 means the retry marker can be at any depth — the middleware finds it regardless of how many wraps sit above it.
+
+> **In plain English:** A "temporary" sticker on an envelope means "try sending this again." A "validation failed" sticker means "fix the contents first — resending won't help."
 
 ### Rule 2e: Error Boundary — `*RepoError` Inside, `*APIError` at the Edge
-
-Inside `internal/userrepo`, return errors that make sense for **your team**: operation name, maybe store-specific codes. At the **HTTP boundary**, convert to something safe for **users and frontends**.
 
 ```go
 // internal/userrepo
 type RepoError struct {
-	Op   string
-	Err  error
+	Op  string
+	Err error
 }
-
 func (e *RepoError) Error() string { return e.Op + ": " + e.Err.Error() }
 func (e *RepoError) Unwrap() error { return e.Err }
 
 // api layer
 type APIError struct {
-	Status  int    // HTTP status
-	Public  string // safe for JSON body
-	Cause   error  // for logs only
+	Status int
+	Public string
+	Cause  error
 }
-
 func (e *APIError) Error() string { return e.Public }
 func (e *APIError) Unwrap() error { return e.Cause }
-
-func MapRepoToAPI(err error) *APIError {
-	var re *RepoError
-	if errors.As(err, &re) && errors.Is(re.Err, sql.ErrNoRows) {
-		return &APIError{http.StatusNotFound, "not found", err}
-	}
-	return &APIError{http.StatusInternalServerError, "internal error", err}
-}
 ```
 
-The **public** string is boring on purpose; **Cause** still unwraps for structured logs.
+**WHY (§4.5):** `errors.As` lets the handler extract `*RepoError` to understand what happened, then create an `*APIError` with a safe public message. The Cause field preserves the full chain for logs while Public protects the user from internal details.
+
+> **In plain English:** Inside the hospital, doctors use medical terminology on the chart. At the reception desk, you translate that into "your test results are ready" — not "serum creatinine elevated 2.3 mg/dL."
 
 ### Rule 3: Use `errors.Is` for Sentinels, `errors.As` for Type Extraction
 
+**WHY (§4.4, §4.5):** `errors.Is` walks the chain comparing values (pointer identity for sentinels). `errors.As` walks the chain trying type assertions. Using `==` skips the chain entirely.
+
 ```go
 if errors.Is(err, os.ErrNotExist) {
-	// file missing
+	// file missing — uses §4.4 chain walking
 }
+
 var v *ValidationError
 if errors.As(err, &v) {
-	_ = v.Field
+	_ = v.Field  // uses §4.5 type extraction
 }
 ```
 
-`Is` checks for a known stamp. `As` looks for a specific folder shape and hands you the folder so you can open the extra tabs.
+> **In plain English:** `Is` checks if the same serial-numbered form is inside. `As` checks if any layer uses a specific form template, and hands you the form so you can read the fields.
 
 ### Rule 4: Do Not Wrap Twice with the Same Context
 
-**Bad — messy chain:**
+**WHY (§4.3):** Each `%w` adds a new node to the linked list. Duplicate labels create a chain like `"service: service: service: db error"` — three identical envelopes with no new information, just noise in logs.
 
 ```go
-if err != nil {
-	return fmt.Errorf("service: %w", fmt.Errorf("service: %w", err)) // repeated label
-}
+// BAD — repeated label
+return fmt.Errorf("service: %w", fmt.Errorf("service: %w", err))
+
+// GOOD — one wrap per layer
+return fmt.Errorf("service: %w", err)
 ```
 
-**Better — one wrap at this layer:**
+> **In plain English:** You do not put two identical address labels on the same box. One clear label is enough.
 
-```go
-if err != nil {
-	return fmt.Errorf("service: %w", err)
-}
-```
+### Rule 5: Return `nil` for Success — Avoid the Typed Nil Interface Trap
 
-You do not put two identical address labels on the same box. One clear label is enough.
-
-### Rule 5: Return `nil` for Success; Avoid the Typed Nil Interface Trap
+**WHY (§4.1):** From §4.1, an error interface is nil only when BOTH type and data slots are nil. A `nil` pointer with a concrete type fills the type slot, making the interface non-nil.
 
 ```go
 type AppError struct{ msg string }
 func (e *AppError) Error() string { return e.msg }
 
-// Returns typed nil: pointer value is nil, but type is *AppError
 func f() *AppError { return nil }
 
 func g() error {
-	return f() // BUG: interface = (type *AppError, data nil) — not equal to untyped nil `error`
+	return f()  // BUG: returns [ type: *AppError | data: nil ] — non-nil interface!
 }
 ```
 
-**Fix: convert through `error` the safe way, or return only `error` with an explicit `nil`:**
+```
+What happens in memory:
 
-```go
-func gOK() error {
-	var p *AppError = f() // f returns nil *AppError
-	if p != nil {
-		return p
-	}
-	return nil // untyped nil → real nil `error` interface
-}
+  f() returns nil *AppError
+    stack: [ 0x0 ]   ← nil pointer of type *AppError
+
+  g() assigns to error return:
+    Go wraps: [ type: *AppError | data: nil ]
+    Type slot is NOT nil → interface is NOT nil!
+
+  Caller checks: err != nil → TRUE → thinks there's an error
+
+FIX:
+  func g() error {
+      p := f()
+      if p != nil {
+          return p
+      }
+      return nil  // ← [ type: nil | data: nil ] → truly nil
+  }
 ```
 
-Or avoid returning a **concrete** pointer-typed function into an **`error` result** without that guard. The underlying issue is: an `interface` value is a **pair** of dynamic type and data. A nil pointer with a named type is still a non-nil **interface** value.
+> **In plain English:** A labeled empty tray is not "no tray." The label `*AppError` is still there even though the tray is empty. A truly empty hand — no label — is what `nil` means for `error`.
 
-A labeled empty tray is not "no tray." The label *AppError is still there. A truly empty hand — no type label — is what `nil` means for `error`.
+### Rule 6: The `(*User, *NotFoundError)` Shape — Watch the Promotion
 
-### Rule 6: The `(*User, *NotFoundError)` Shape — `nil, nil` vs `error`
-
-Some teams return **data + typed error pointer** so callers can branch without losing type information:
+Some teams return data + typed error pointer so callers can branch without losing type information. The trap comes when promoting to `error`:
 
 ```go
-type NotFoundError struct{ Resource string }
-
-func (e *NotFoundError) Error() string {
-	return e.Resource + " not found"
-}
-
 func getUser(id string) (*User, *NotFoundError) {
 	if id == "" {
 		return nil, &NotFoundError{Resource: "user"}
 	}
-	return &User{Name: "Ada"}, nil
+	return &User{Name: "Ada"}, nil  // nil *NotFoundError
 }
-```
 
-When nothing is wrong, the second value is **`nil` of type `*NotFoundError`**. That is fine **until** someone promotes it to **`error`** without thinking:
-
-```go
 func LoadForAPI(id string) (*User, error) {
 	u, nf := getUser(id)
-	return u, nf // nf is nil *NotFoundError → non-nil `error` interface!
-}
-
-func main() {
-	_, err := LoadForAPI("valid-id")
-	fmt.Println(err != nil) // true — BUG: success looks like failure
+	return u, nf  // BUG: nil *NotFoundError → non-nil error interface!
 }
 ```
 
-**Fix:** only put a real `error` in the second position when it is non-nil, or change `getUser` to return `(*User, error)` and use **`var err error`** / **`return nil, nil`** through a single `error` typed return.
+**WHY (§4.1, Rule 5):** Same mechanism as Rule 5. The `nil *NotFoundError` fills the type slot when assigned to `error`.
+
+> **In plain English:** Same trap, different disguise. A nil `*NotFoundError` is still a labeled tray. Guard before promoting: `if nf != nil { return u, nf }; return u, nil`.
 
 ---
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### Sentinel Error Pattern
+### Example 1: Sentinel Error — Identity Traced Through Memory
+
+The foundation of Go error handling: create a sentinel, wrap it, and find it again.
 
 ```go
-var ErrUserNotFound = errors.New("user not found")
+package main
 
-func FindUser(id int) error {
-	return ErrUserNotFound
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrDuplicate = errors.New("duplicate entry")
+
+func insert(key string) error {
+	return fmt.Errorf("insert %s: %w", key, ErrDuplicate)
+}
+
+func main() {
+	err := insert("user-123")
+	fmt.Println(err)                             // insert user-123: duplicate entry
+	fmt.Println(errors.Is(err, ErrDuplicate))     // true
+	fmt.Println(err == ErrDuplicate)               // false
 }
 ```
 
-**Trap — compare with `==` after wrap:**
+```
+Step 1: ErrDuplicate created at package init
+  heap 0xA0: errorString{ s: "duplicate entry" }
+  ErrDuplicate: [ type: *errorString | data: 0xA0 ]
 
-```go
-w := fmt.Errorf("repo: %w", ErrUserNotFound)
-_ = w == ErrUserNotFound // false
+Step 2: insert("user-123") wraps with %w
+  heap 0xB0: wrapError{ msg: "insert user-123: duplicate entry", err: → 0xA0 }
+  Returns: [ type: *wrapError | data: 0xB0 ]
+
+Step 3: errors.Is(err, ErrDuplicate)
+  err at 0xB0 → Unwrap() → ErrDuplicate at 0xA0
+  0xA0 == 0xA0 → true!
+
+Step 4: err == ErrDuplicate
+  *wrapError != *errorString → false immediately (different types)
 ```
 
-### Custom Error Type With Extra Fields
+### Example 2: Custom Error Type — `errors.As` Extracts Fields
+
+When you need structured error data (field names, error codes) for 400 responses.
 
 ```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
 type ValidationError struct {
-	Field, Msg string
+	Field  string
+	Reason string
 }
 
 func (e *ValidationError) Error() string {
-	return e.Field + ": " + e.Msg
+	return fmt.Sprintf("%s: %s", e.Field, e.Reason)
 }
 
-// usage
-return &ValidationError{Field: "email", Msg: "invalid"}
-```
-
-### Error Wrapping Chain and Unwrapping
-
-```go
-root := os.ErrNotExist
-layer1 := fmt.Errorf("open config: %w", root)
-layer2 := fmt.Errorf("bootstrap: %w", layer1)
-
-errors.Is(layer2, os.ErrNotExist) // true
-```
-
-### Handler Sketch: `svc.GetUser` → Status Code
-
-```go
-func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id") // 1.22+; or mux.Vars, etc.
-	user, err := h.svc.GetUser(r.Context(), id)
-	if err != nil {
-		h.handleErr(w, err)
-		return
+func validateEmail(email string) error {
+	if email == "" {
+		return &ValidationError{Field: "email", Reason: "required"}
 	}
-	json.NewEncoder(w).Encode(user)
+	return nil
 }
 
-func (h *Handler) handleErr(w http.ResponseWriter, err error) {
+func createUser(email string) error {
+	if err := validateEmail(email); err != nil {
+		return fmt.Errorf("create user: %w", err)  // wrap preserves type
+	}
+	return nil
+}
+
+func main() {
+	err := createUser("")
+
 	var ve *ValidationError
-	switch {
-	case errors.Is(err, ErrUserNotFound) || errors.Is(err, sql.ErrNoRows):
-		http.Error(w, "not found", http.StatusNotFound)
-	case errors.As(err, &ve):
-		http.Error(w, ve.Error(), http.StatusBadRequest)
-	default:
-		h.log.Error("request failed", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if errors.As(err, &ve) {
+		fmt.Printf("Bad field: %s, reason: %s\n", ve.Field, ve.Reason)
+		// Bad field: email, reason: required
 	}
 }
 ```
 
-Your service should **`fmt.Errorf("get user: %w", err)`** and map **`sql.ErrNoRows` → `ErrUserNotFound`** so the handler can use **`errors.Is(err, ErrUserNotFound)`** only — then **`database/sql`** never lands in HTTP packages. The **`sql.ErrNoRows`** branch above is for small services where that tradeoff is acceptable.
+```
+Step 1: validateEmail("") returns *ValidationError
+  heap 0xA0: ValidationError{ Field: "email", Reason: "required" }
+
+Step 2: createUser wraps: fmt.Errorf("create user: %w", err)
+  heap 0xB0: wrapError{ msg: "create user: email: required", err: → 0xA0 }
+
+Step 3: errors.As(err, &ve)
+  err at 0xB0 is *wrapError — assignable to *ValidationError? NO
+  Unwrap → get 0xA0 (*ValidationError)
+  0xA0 is *ValidationError — assignable? YES
+  Set ve = pointer to 0xA0
+  ve.Field = "email", ve.Reason = "required" ✓
+```
+
+### Example 3: Wrapping Chain — Three Layers Deep
+
+The full handler → service → repo pattern with both `errors.Is` and `errors.As`.
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrNotFound = errors.New("not found")
+
+type DBError struct {
+	Query string
+	Err   error
+}
+func (e *DBError) Error() string  { return fmt.Sprintf("db(%s): %s", e.Query, e.Err) }
+func (e *DBError) Unwrap() error  { return e.Err }
+
+func repo() error {
+	return &DBError{Query: "SELECT * FROM users WHERE id=$1", Err: ErrNotFound}
+}
+
+func service() error {
+	return fmt.Errorf("get user: %w", repo())
+}
+
+func main() {
+	err := service()
+
+	fmt.Println(errors.Is(err, ErrNotFound))  // true — 3 levels deep
+
+	var dbe *DBError
+	fmt.Println(errors.As(err, &dbe))         // true
+	fmt.Println("query:", dbe.Query)           // SELECT * FROM users WHERE id=$1
+}
+```
+
+```
+Chain in memory:
+
+  err: wrapError{ msg: "get user: db(...): not found"
+                  err: → DBError{ Query: "SELECT...", Err: → ErrNotFound } }
+
+  errors.Is(err, ErrNotFound):
+    wrapError → Unwrap → DBError → Unwrap → ErrNotFound → MATCH
+
+  errors.As(err, &dbe):
+    wrapError → not *DBError → Unwrap → DBError → MATCH → set dbe
+```
+
+### Example 4: The Typed Nil Trap — Production Bug
+
+The subtle bug that makes success look like failure.
+
+```go
+package main
+
+import "fmt"
+
+type APIError struct {
+	Code int
+	Msg  string
+}
+
+func (e *APIError) Error() string { return fmt.Sprintf("%d: %s", e.Code, e.Msg) }
+
+func validate(name string) *APIError {
+	if name == "" {
+		return &APIError{Code: 400, Msg: "name required"}
+	}
+	return nil
+}
+
+func process(name string) error {
+	return validate(name)  // BUG when name is valid!
+}
+
+func main() {
+	err := process("rahul")
+	fmt.Println(err == nil)  // false! success looks like failure
+	fmt.Printf("type=%T, value=%v\n", err, err)
+	// type=*main.APIError, value=<nil>
+}
+```
+
+```
+Step 1: validate("rahul") → returns nil *APIError
+  stack: [ nil ]  (a nil pointer of type *APIError)
+
+Step 2: process returns this as error
+  Go wraps into interface:
+    [ type: *APIError | data: nil ]
+         ↑                  ↑
+    NOT nil!            nil pointer
+
+Step 3: err == nil checks the interface
+  [ type: *APIError | data: nil ] vs [ type: nil | data: nil ]
+  Type slot differs → NOT equal → false!
+
+  Your handler thinks there's an error even though validation passed.
+
+FIX:
+  func process(name string) error {
+      if apiErr := validate(name); apiErr != nil {
+          return apiErr
+      }
+      return nil  // → [ type: nil | data: nil ] → truly nil
+  }
+```
 
 ---
 
@@ -521,7 +994,7 @@ func API() error {
 **Goal:** `API()` should return a nil `error` on success. Fix the typed-nil interface issue.
 
 > [!success]- Answer
-> Typed **`nil` `*RepoError`** in an **`error`** slot is still a **non-nil interface**. Guard with **`if err != nil { return err }; return nil`**, or return **`error`** from **`maybeFail`**.
+> Typed **`nil` `*RepoError`** in an **`error`** slot is still a **non-nil interface**. Guard with **`if err := maybeFail(true); err != nil { return err }; return nil`**, or return **`error`** from **`maybeFail`**.
 
 ### Tier 4: Build It (15 min)
 
@@ -533,13 +1006,91 @@ Package with a **validation** type (`Error()` + **`errors.As`**), a **`%w`** wra
 
 ## 7. Edge Cases & Gotchas
 
-**The wrapped sentinel you compare with `==`.** You promoted a note into a new envelope, then you hold the envelope up to the light and wonder why it does not look identical to the original stamp. **`errors.Is`** opens the stack; **`==`** does not.
+| Gotcha | What Happens | Because (§4 link) | Fix |
+|--------|-------------|-------------------|-----|
+| `==` after wrapping | `wrapped == ErrNotFound` is false even though the sentinel is inside | §4.3 — `%w` creates a new `wrapError` struct. `==` compares the outer struct, not the chain inside. The sentinel is at a deeper level | Use `errors.Is(err, ErrNotFound)` — it walks the chain (§4.4) |
+| `%v` instead of `%w` | `errors.Is` and `errors.As` can't find the original error | §4.3 — `%v` creates a plain `errorString` with no Unwrap method. The chain link is severed — no linked list pointer | Always use `%w` when callers need to unwrap. Use `%v` only when you deliberately want to hide the inner error |
+| Typed nil `*MyError` returned as `error` | `err != nil` is true even when no error occurred | §4.1 — interface stores `[type: *MyError, data: nil]`. Type slot is non-nil, so the interface is non-nil | Guard: `if p != nil { return p }; return nil`. Or return `error` directly, not `*MyError` |
+| Two `errors.New("not found")` compared with `==` | Always false, even though messages match | §4.2 — each `errors.New` allocates a new `*errorString` on the heap. Identity is pointer address, not message content | Define sentinels once at package level: `var ErrNotFound = errors.New("not found")` |
+| Ignoring error with `_ = f()` | Silent data loss, corrupt state, stale cache | The error value exists but is discarded. No chain walking happens. The failure is invisible | Handle every error. If truly ignorable, document why with a comment naming who accepted the risk |
+| Wrapping the same label twice | `"service: service: db error"` — duplicate context in logs | §4.3 — each `%w` adds a new linked list node. Two identical labels create two nodes with no new information | Wrap once per abstraction boundary. Each layer should add unique context |
 
-**The handler that swears `err == nil` but logging still fires.** Somewhere below, a function returned **`nil` `*MyError`** into an **`error` return**. The interface is non-nil even though the pointer inside is. Fix by returning **`var err error`** and assigning only real failures, or by guarding before you **`return err`**.
+### Gotcha Deep Dive: `%v` Breaks the Chain
 
-**The `%v` wrap that breaks the chain.** You printed the inner text on the outside label and threw away the window. **`errors.Is`** cannot see through **`%v`**. If consumers need to unwrap, use **`%w`**.
+This is the most silent bug — your wrapping looks correct but `errors.Is` silently fails:
 
-**The `_ = f()` line in a hot path review.** That is not "clean code." That is dropping a slip on the floor. If you truly ignore an error, leave a comment that names the human who accepted the risk and why — better, handle it.
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrAuth = errors.New("unauthorized")
+
+func main() {
+	withW := fmt.Errorf("middleware: %w", ErrAuth)   // %w — linked
+	withV := fmt.Errorf("middleware: %v", ErrAuth)   // %v — broken
+
+	fmt.Println(errors.Is(withW, ErrAuth))  // true  ← chain intact
+	fmt.Println(errors.Is(withV, ErrAuth))  // false ← chain broken!
+	fmt.Println(withV)                       // middleware: unauthorized (looks fine!)
+}
+```
+
+```
+%w wrapping:
+  heap 0xB0: wrapError{
+    msg: "middleware: unauthorized",
+    err: → ErrAuth (0xA0)            ← Unwrap() returns ErrAuth
+  }
+  errors.Is walks: 0xB0 → Unwrap → 0xA0 → MATCH
+
+%v wrapping:
+  heap 0xC0: errorString{
+    s: "middleware: unauthorized"     ← just a string, NO err field
+  }
+  errors.Is: 0xC0 has no Unwrap() → chain ends → no match → false
+
+  The printed message looks identical!
+  But the internal structure is completely different.
+```
+
+> **In plain English:** `%w` is a window in the envelope — you can reach through it. `%v` is a photocopy printed on a new envelope — looks the same from outside, but there's nothing inside to reach.
+
+### Gotcha Deep Dive: Two Sentinels With Same Text
+
+```go
+package main
+
+import (
+	"errors"
+	"fmt"
+)
+
+func main() {
+	err1 := errors.New("timeout")
+	err2 := errors.New("timeout")
+
+	fmt.Println(err1 == err2)              // false
+	fmt.Printf("err1 at %p\n", err1)       // 0xC000010040
+	fmt.Printf("err2 at %p\n", err2)       // 0xC000010050
+
+	fmt.Println(errors.Is(err1, err2))      // false — different pointers
+}
+```
+
+```
+err1: heap 0xC000010040: errorString{ s: "timeout" }
+err2: heap 0xC000010050: errorString{ s: "timeout" }
+
+== compares: same type? YES. Same pointer? 0x40 != 0x50 → NO.
+errors.Is: err1 has no Unwrap → chain is just err1 → err1 != err2 → false.
+
+This is BY DESIGN: if string equality worked, any package that
+errors.New("timeout") would accidentally match YOUR sentinel.
+```
 
 ---
 
