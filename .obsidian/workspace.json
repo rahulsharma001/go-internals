@@ -13,8 +13,8 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P04 Hash Functions & Hashing Basics.md",
-                "mode": "source",
+                "file": "Daily Revision.md",
+                "mode": "preview",
                 "source": false,
                 "backlinks": true,
                 "backlinkOpts": {
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P04 Hash Functions & Hashing Basics"
+              "title": "Daily Revision"
             }
           }
         ]
@@ -197,9 +197,9 @@
   "active": "641f593de2936c73",
   "lastOpenFiles": [
     "Study Plan.md",
+    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites/P05 Interfaces Basics.md",
-    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
     "prerequisites/P09 GC Basics & Why It Matters.md",
