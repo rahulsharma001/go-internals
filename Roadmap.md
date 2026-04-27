@@ -28,7 +28,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 
 | # | Topic | Status | Why It Matters |
 |---|-------|--------|----------------|
-| 2.1 | [[Functions, Closures & Anonymous Functions]] | ⏭ SKIP | Closures covered within defer, goroutine, and other topics |
+| 2.1 | [[prerequisites/P07 Functions, Closures & Variable Capture]] | ✅ | Covered as a prerequisite P-note (not a standalone T-note). First-class functions, closure capture by reference, loop variable trap, middleware factories |
 | 2.2 | [[T10 Defer, Panic & Recover Internals]] | ✅ | LIFO order, argument evaluation time, panic unwinding, recover() rules, goroutine isolation |
 | 2.3 | [[T09 Error Handling Patterns]] | ✅ | Error wrapping (%w), errors.Is/As, sentinel errors, custom error types, error as values philosophy |
 | 2.4 | [[Init Functions & Package Initialization]] | ⏭ SKIP | Rarely asked; know "init runs before main, avoid side effects" is enough |

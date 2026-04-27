@@ -55,7 +55,7 @@ If you take the address of a local and return it, or store it somewhere that out
 
 ---
 
-## 5. Memory Traces (Only Two)
+### 4.3 Memory traces
 
 ### Trace 1 — Stack vs heap: `User` on stack vs pointer out
 
@@ -109,7 +109,27 @@ Step 3: response sent, handler returns, no global cache kept
 
 ---
 
-## 6. Why This Shows Up in Production
+## 5. Key Rules & Behaviors
+
+- **Heap allocations** → future GC work. **Rate** matters as much as size.
+- **Stack** values that do not escape are **invisible** to GC sweep — they disappear when the function returns.
+- **Escaping** pointers (`return &local`, storing into globals, interface boxing sometimes) → **heap**.
+- **Fewer, larger, reused** buffers usually beat **many tiny** throwaway allocations on hot paths.
+- **`GOGC`** trades **RAM for GC frequency**. **`GOMEMLIMIT`** (see [[T25 GC Tuning & Memory Limits]]) adds a **soft cap** so the process does not grow without bound — different knob, same family of tradeoffs.
+
+### 5.2 Code smell quick reference
+
+| Smell | Why it hurts | Direction |
+|-------|----------------|-----------|
+| `s += x` in a tight loop | Repeated string reallocations | `strings.Builder` |
+| `fmt.Sprintf` in a hot loop | Allocations per call | format into `Builder`, reduce work |
+| Fresh `[]byte` per JSON write | High alloc rate | `sync.Pool`, reuse buffers |
+| Returning `&T` from helpers everywhere | More heap objects | return values, smaller pointer graphs |
+| Huge pointer-heavy caches | More work for the marker | object pooling, sharding, bounded caches |
+
+---
+
+## 6. Code Examples (Show, Don't Tell)
 
 ### 6.1 The API handler that allocates `[]Order` every request
 
@@ -222,37 +242,7 @@ Correlate **NumGC** rising fast with **traffic** spikes. If **HeapAlloc** is fla
 
 ---
 
-## 7. Story You Can Tell in an Interview
-
-**Scenario A:** "Your API's **p99** went from **5ms** to **50ms**. **`pprof heap`** shows **~80%** of allocations in **JSON serialization**. You add **`sync.Pool`** for encode buffers and reduce extra copying. **p99** lands near **8ms** again."
-
-**Scenario B:** "Every handler builds a **new `[]byte`** for the response body. After **10k RPS**, the allocator and GC are constantly cleaning short-lived objects. Every few hundred ms the runtime **pauses goroutines briefly** to finish a phase. Users see rare **latency spikes** — not CPU saturation, **tail** issues."
-
----
-
-## 8. Key Rules & Behaviors
-
-- **Heap allocations** → future GC work. **Rate** matters as much as size.
-- **Stack** values that do not escape are **invisible** to GC sweep — they disappear when the function returns.
-- **Escaping** pointers (`return &local`, storing into globals, interface boxing sometimes) → **heap**.
-- **Fewer, larger, reused** buffers usually beat **many tiny** throwaway allocations on hot paths.
-- **`GOGC`** trades **RAM for GC frequency**. **`GOMEMLIMIT`** (see [[T25 GC Tuning & Memory Limits]]) adds a **soft cap** so the process does not grow without bound — different knob, same family of tradeoffs.
-
----
-
-## 9. Code Smell Quick Reference
-
-| Smell | Why it hurts | Direction |
-|-------|----------------|-----------|
-| `s += x` in a tight loop | Repeated string reallocations | `strings.Builder` |
-| `fmt.Sprintf` in a hot loop | Allocations per call | format into `Builder`, reduce work |
-| Fresh `[]byte` per JSON write | High alloc rate | `sync.Pool`, reuse buffers |
-| Returning `&T` from helpers everywhere | More heap objects | return values, smaller pointer graphs |
-| Huge pointer-heavy caches | More work for the marker | object pooling, sharding, bounded caches |
-
----
-
-## 10. Practice Checkpoint
+## 6.5. Practice Checkpoint
 
 ### Tier 1 — Handler pressure (2 min)
 
@@ -309,7 +299,7 @@ func UserIDsLine(ids []int64) string {
 
 ---
 
-## 11. Gotchas & Interview Traps
+## 7. Gotchas & Interview Traps
 
 | Trap | Reality |
 |------|---------|
@@ -321,7 +311,13 @@ func UserIDsLine(ids []int64) string {
 
 ---
 
-## 12. Interview Gold Questions (Top 3)
+## 8. Interview Gold Questions (Top 3)
+
+### Interview stories you can tell
+
+**Scenario A:** "Your API's **p99** went from **5ms** to **50ms**. **`pprof heap`** shows **~80%** of allocations in **JSON serialization**. You add **`sync.Pool`** for encode buffers and reduce extra copying. **p99** lands near **8ms** again."
+
+**Scenario B:** "Every handler builds a **new `[]byte`** for the response body. After **10k RPS**, the allocator and GC are constantly cleaning short-lived objects. Every few hundred ms the runtime **pauses goroutines briefly** to finish a phase. Users see rare **latency spikes** — not CPU saturation, **tail** issues."
 
 **Q1: Why does allocation rate matter for a Go API?**
 
@@ -337,7 +333,7 @@ Stack-allocated values live in the goroutine's frame and vanish when the functio
 
 ---
 
-## 13. 30-Second Verbal Answer
+## 9. 30-Second Verbal Answer
 
 Go uses a **tracing garbage collector**: it finds **reachable** heap objects from stacks and globals, then **frees** the rest. You pay for **heap allocations** with **future GC work** — under API load that often hurts **p99** before **p50**. **Escape analysis** decides stack vs heap; **returning pointers** usually forces **heap**. Reduce pressure with **`strings.Builder`**, **fewer `fmt` temps**, and **`sync.Pool`** for **JSON buffers** where profiling proves it helps. Use **`pprof` heap** to find the real hotspots. **`GOGC`** trades **memory for GC frequency** — e.g. **`GOGC=200`** runs fewer cycles but uses more RAM.
 

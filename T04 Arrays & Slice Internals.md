@@ -6,6 +6,14 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+
+---
+
 ## 1. Concept
 
 An **array** in Go is a fixed-size list. The size is part of the type — `[3]int` and `[5]int` are completely different types that cannot be swapped.

@@ -38,6 +38,38 @@ graph LR
 
 > **In plain English:** Think of middleware as security checkpoints at an airport. Your request is the passenger. Each checkpoint (logging, auth, rate limiting) inspects the passenger in order. If they pass all checkpoints, they reach the gate (handler). On the way back, each checkpoint can stamp the boarding pass (add headers, log timing).
 
+### The mistake that teaches you
+
+```go
+func AuthMiddleware() gin.HandlerFunc {
+    return func(c *gin.Context) {
+        token := c.GetHeader("Authorization")
+        if token == "" {
+            c.JSON(401, gin.H{"error": "unauthorized"})
+            // BUG: missing return or c.Abort()
+        }
+        c.Next()
+    }
+}
+```
+
+**What you'd expect:** If there's no auth token, the request is rejected with 401. The handler never runs.
+
+**What actually happens:** The 401 response is written, but execution continues. `c.Next()` still runs, the handler runs, and it may write a second response or access data the unauthenticated request shouldn't see.
+
+**Why:** `c.JSON()` writes the response but does **not** stop the middleware chain. Without `c.Abort()` or a `return` statement, the next middleware/handler still runs. Gin's middleware chain is just a slice of functions — it doesn't know you "meant" to reject the request.
+
+**The fix:**
+
+```go
+if token == "" {
+    c.AbortWithStatusJSON(401, gin.H{"error": "unauthorized"})
+    return
+}
+```
+
+`c.Abort()` sets the chain index to a sentinel value so no more handlers run. The `return` exits your current function immediately. Always pair rejection with both.
+
 ---
 
 ## 4. Architecture & Design

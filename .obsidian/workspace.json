@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "visuals/T05 GIN Framework - Visual Map.md",
+                "file": "T09 Error Handling Patterns.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T05 GIN Framework - Visual Map"
+              "title": "T09 Error Handling Patterns"
             }
           }
         ]
@@ -196,11 +196,12 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
+    "T08 Map Internals.md",
+    "visuals/T05 GIN Framework - Visual Map.md",
     "visuals/T09 Error Handling Patterns - Visual Map.md",
     "visuals/T08 Map Internals - Visual Map.md",
     "prerequisites/P06 Function Call Stack.md",
     "Study Plan.md",
-    "T08 Map Internals.md",
     "exercises/T08 Map Internals - Exercises.md",
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
@@ -222,7 +223,6 @@
     "visuals/T12 Interface Design Principles - Visual Map.md",
     "revision/T12 Interface Design Principles - Revision.md",
     "exercises/T12 Interface Design Principles - Exercises.md",
-    "simplified/T12 Interface Design Principles - Simplified.md",
     "visuals",
     "revision",
     "questions",

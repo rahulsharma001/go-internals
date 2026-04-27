@@ -87,7 +87,7 @@ It does **not** limit how many goroutines exist. You can have **500k** goroutine
 
 ---
 
-## MEMORY TRACE 1 — Stacks: 10k threads vs 10k goroutines
+### 4.7 Memory trace — Stacks: 10k threads vs 10k goroutines
 
 You want **10,000** concurrent pieces of work—say 10k idle HTTP connections or 10k channel-backed jobs.
 
@@ -109,7 +109,7 @@ Same *count* of logical workers. Totally different *memory* story. That is why G
 
 ---
 
-## MEMORY TRACE 2 — Parking: `db.Query` on a request goroutine
+### 4.8 Memory trace — Parking: `db.Query` on a request goroutine
 
 Your **`http.Handler`** runs on a goroutine—call it the **request goroutine**.
 

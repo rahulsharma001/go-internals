@@ -7,6 +7,15 @@
 
 ---
 
+## 0. Prerequisites
+
+This is a foundational topic. No prerequisites are required — T01 is designed to be the first topic you study. However, if you find structs or methods confusing, read these P-notes first:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]] (optional — covers struct basics in more depth)
+- [[prerequisites/P02 Methods & Receivers]] (optional — covers receiver types in more depth)
+
+---
+
 ## 1. Concept
 
 Go's type system — how types are defined, how they relate to each other, and the rules governing identity, assignability, method sets, and composition. The foundation every other Go concept builds on.
@@ -36,6 +45,28 @@ Go is **statically typed** with **structural typing for interfaces** (satisfied 
 3. **What is its method set?** (determines interface satisfaction)
 
 > **In plain English:** Go doesn't care what you call your type — it only cares what methods it has. If it walks like a duck and quacks like a duck, it satisfies the "Duck" interface. No signup form needed.
+
+### The mistake that teaches you
+
+```go
+type UserID int
+type OrderID int
+
+func LookupOrder(id OrderID) { fmt.Println("looking up order", id) }
+
+func main() {
+    uid := UserID(42)
+    LookupOrder(uid) // What happens?
+}
+```
+
+**What you'd expect:** Maybe it works — both are `int` under the hood, right?
+
+**What actually happens:** Compile error: `cannot use uid (variable of type UserID) as OrderID value in argument to LookupOrder`.
+
+**Why:** `UserID` and `OrderID` are **defined types**. Even though both have the same underlying type (`int`), they are completely separate types. Go's type system prevents you from accidentally passing a user ID where an order ID is expected.
+
+**The fix:** If you genuinely need to convert, you must be explicit: `LookupOrder(OrderID(uid))`. The type system forces you to think about whether that conversion makes sense.
 
 ```mermaid
 graph TD

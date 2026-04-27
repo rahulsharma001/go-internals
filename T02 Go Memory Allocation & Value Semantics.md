@@ -7,6 +7,15 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+- [[prerequisites/P06 Function Call Stack]]
+
+---
+
 ## 1. Concept
 
 Go Memory Allocation & Value Semantics — how data is stored on stack vs heap, passed between functions, and shared across goroutines.
@@ -57,6 +66,21 @@ graph TD
 ```
 
 > Stack: ~1-2ns alloc, auto-freed on return. Heap: ~25-50ns alloc + GC scan cost.
+
+### The mistake that teaches you
+
+```go
+func NewUser(name string) *User {
+    u := User{Name: name}
+    return &u // returning a pointer to a local variable
+}
+```
+
+**What you'd expect:** "I'm returning a pointer to a stack variable — won't that be a dangling pointer, like in C?"
+
+**What actually happens:** It works perfectly. Go's escape analysis detects that `u` outlives the function (because you return `&u`) and moves it to the heap automatically. No dangling pointer, no crash.
+
+**Why this matters:** In Go, the compiler decides stack vs heap — not you. You never need to think "should I `malloc` this?" But every time the compiler escapes a variable to the heap, it adds GC work. Run `go build -gcflags="-m"` to see: `moved to heap: u`. That's the trade-off: safety is automatic, but the cost shows up in tail latency under load.
 
 ---
 

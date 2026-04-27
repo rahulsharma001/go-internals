@@ -8,6 +8,14 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]]
+
+---
+
 ## 1. Concept
 
 A Go **string** is an immutable, read-only sequence of bytes — not characters, not runes, not Unicode code points — just raw bytes. The runtime represents it as a two-word **StringHeader** (pointer to byte data + length). Runes (`int32`) decode those bytes into Unicode code points. **UTF-8** is the variable-width encoding that bridges the two: it tells you how many bytes each rune consumes (1-4).
@@ -61,6 +69,41 @@ Now consider a multi-byte string like `"café"`:
 | 4 bytes | U+10000 – U+10FFFF | `😀`, `🎉`, `𝕳` |
 
 > **In plain English:** A Go string is like a film reel — you see frames (bytes), not the movie (characters). The letter "é" takes 2 frames. A Chinese character takes 3 frames. `len()` counts frames, not characters. The `for range` loop is smart enough to group frames back into characters for you.
+
+### The mistake that teaches you
+
+```go
+func Truncate(s string, maxLen int) string {
+    if len(s) > maxLen {
+        return s[:maxLen]
+    }
+    return s
+}
+
+func main() {
+    fmt.Println(Truncate("café", 4))
+}
+```
+
+**What you'd expect:** `"café"` has 4 characters, `maxLen` is 4, so it should print `"café"` unchanged.
+
+**What actually happens:** It prints `"caf\xc3"` — a corrupted string. The `é` is split in half.
+
+**Why:** `len("café")` returns **5** (bytes), not 4. So `len(s) > maxLen` is true, and `s[:4]` slices at byte 4 — right in the middle of the 2-byte `é`. You get the first byte of `é` (`0xC3`) but not the second (`0xA9`).
+
+**The fix:** Truncate by runes, not bytes:
+
+```go
+func Truncate(s string, maxRunes int) string {
+    runes := []rune(s)
+    if len(runes) > maxRunes {
+        return string(runes[:maxRunes])
+    }
+    return s
+}
+```
+
+This is the core lesson: **`len()` counts bytes, not characters. Slicing by byte index can break multi-byte characters.**
 
 ---
 

@@ -34,6 +34,41 @@ graph LR
 
 > **In plain English:** Instead of designing rigid forms (tables) and making everyone fill them out the same way, MongoDB lets each document be its own folder with whatever papers make sense. The key design question isn't "what does my data look like?" — it's "how will I look up and read this data?"
 
+### The mistake that teaches you
+
+```go
+func GetUser(w http.ResponseWriter, r *http.Request) {
+    client, err := mongo.Connect(r.Context(), options.Client().ApplyURI("mongodb://localhost:27017"))
+    if err != nil {
+        http.Error(w, err.Error(), 500)
+        return
+    }
+    defer client.Disconnect(r.Context())
+
+    // use client to query...
+}
+```
+
+**What you'd expect:** Looks clean — connect, use, disconnect. Each request gets its own connection.
+
+**What actually happens:** Under load (say 1000 requests/second), you're creating 1000 TCP connections per second. Each one does a full handshake + auth + TLS negotiation. Your MongoDB server runs out of connections, latency spikes, and eventually requests start timing out.
+
+**Why:** `mongo.Client` is designed to be created **once** at application startup. It manages its own internal connection pool (default 100 connections). Creating a new client per request throws away that pool and forces a cold connection every time.
+
+**The fix:** Create the client once and share it:
+
+```go
+var client *mongo.Client
+
+func main() {
+    var err error
+    client, err = mongo.Connect(context.Background(), options.Client().ApplyURI("mongodb://localhost:27017"))
+    // ... start server, pass client to handlers
+}
+```
+
+One client, one pool, thousands of requests sharing the pooled connections.
+
 ---
 
 ## 4. How It Actually Works (Architecture)

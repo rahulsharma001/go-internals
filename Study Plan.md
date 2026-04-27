@@ -70,6 +70,8 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
 
+> **Status (Apr 28):** Week 1-2 is fully complete (all P-notes and T-notes checked). Move directly to Week 3-4.
+
 **Interview Action:**
 - Update resume with Go-specific bullet points
 - Apply to 10-15 companies (LinkedIn, Naukri, direct)
@@ -107,6 +109,8 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 - [ ] [[T19 Context Package Internals]] (~1.5 hrs)
 
 **Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
+
+> **Pacing note:** P07/P08 are already done. 7 T-notes in 14 days = 1 note every 2 days. Start with T13/T14 (foundation for all concurrency topics) before moving to channels/select.
 
 **Interview Action:**
 - Give 2-3 interviews (these are calibration rounds, not your best shots)
@@ -218,7 +222,7 @@ These topics are marked SKIP in the [[Roadmap]]. They're either rarely asked, to
 | # | Topic | Why Skipped |
 |---|-------|-------------|
 | 1.7 | Struct Layout & Memory Alignment | Rarely asked; know "field ordering affects padding" is enough |
-| 2.1 | Functions, Closures & Anonymous Functions | Closures covered within other topics (defer, goroutines) |
+| 2.1 | Functions, Closures & Anonymous Functions | Covered as P07 prerequisite note (not a standalone T-note) |
 | 2.4 | Init Functions & Package Initialization | Rarely asked; know "init runs before main, avoid side effects" is enough |
 | 3.2 | Type Assertions & Type Switches | Covered within Interface Internals (T11) |
 | 3.4 | Empty Interface (any) & Boxing | Covered within Interface Internals (T11) |
