@@ -113,7 +113,7 @@ What the compiler does with cfg.Validate():
   KEY: the method call is just syntactic sugar for passing the struct as argument #1
 ```
 
-> **In plain English:** When you write `cfg.Validate()`, Go doesn't do anything magical — it just rewrites it as `Validate(cfg)` with the receiver as the first argument. Value receiver means it copies the struct in; pointer receiver means it passes the address.
+> **In plain English:** A method is like a company employee badge. The badge says "I belong to Config." When you swipe the badge (`cfg.Validate()`), the door opens and hands Config to the validator as the first thing. Go doesn't do anything magical — it just rewrites it as `Validate(cfg)` with the receiver as the first argument. Value receiver means it photocopies the struct; pointer receiver means it hands over the actual desk location.
 
 ### 4.2 Value Receiver vs Pointer Receiver — Traced Through Memory
 
@@ -635,7 +635,58 @@ Step 2: ctr.Inc()
 Step 3: main reads ctr.n → 0x6058 → 1 ✓
 ```
 
-### Example 2: HTTPClient Wrapper — Real Service Pattern
+### Example 2: Value Receiver for Small Read-Only Types
+
+When the type is small and you never mutate it, value receivers are cleaner.
+
+```go
+package main
+
+import "fmt"
+
+type UserID string
+
+func (id UserID) IsEmpty() bool {
+	return id == ""
+}
+
+func (id UserID) String() string {
+	if id == "" {
+		return "<empty>"
+	}
+	return string(id)
+}
+
+func main() {
+	var empty UserID
+	known := UserID("usr_abc123")
+
+	fmt.Println(empty.IsEmpty())  // true
+	fmt.Println(known.IsEmpty())  // false
+	fmt.Println(known.String())   // usr_abc123
+}
+```
+
+```
+known.IsEmpty():
+
+  Step 1: known = UserID("usr_abc123")
+    stack: [ string header: ptr + len = 16 bytes ]
+
+  Step 2: IsEmpty() copies the 16-byte string header
+    copy: [ same ptr | same len ]
+    Compares copy == "" → false
+
+  Step 3: Original untouched. Copy is tiny (16 bytes). No pointer needed.
+
+  WHY value receiver is fine here:
+  - UserID is 16 bytes (string header) — tiny
+  - Methods are read-only — no mutation
+  - No shared state — each call is independent
+  - Copying 16 bytes is cheaper than pointer indirection + potential GC overhead
+```
+
+### Example 3: HTTPClient Wrapper — Real Service Pattern
 
 A common pattern: wrapping `*http.Client` with a base URL and shared config.
 
@@ -692,57 +743,6 @@ Step 2: client.Get(ctx, "/users")
   - More importantly: every handler shares ONE HTTPClient instance
   - Value receiver would copy the struct every call — wasteful and wrong if
     you ever add state (rate limiter, circuit breaker)
-```
-
-### Example 3: Value Receiver for Small Read-Only Types
-
-When the type is small and you never mutate it, value receivers are cleaner.
-
-```go
-package main
-
-import "fmt"
-
-type UserID string
-
-func (id UserID) IsEmpty() bool {
-	return id == ""
-}
-
-func (id UserID) String() string {
-	if id == "" {
-		return "<empty>"
-	}
-	return string(id)
-}
-
-func main() {
-	var empty UserID
-	known := UserID("usr_abc123")
-
-	fmt.Println(empty.IsEmpty())  // true
-	fmt.Println(known.IsEmpty())  // false
-	fmt.Println(known.String())   // usr_abc123
-}
-```
-
-```
-known.IsEmpty():
-
-  Step 1: known = UserID("usr_abc123")
-    stack: [ string header: ptr + len = 16 bytes ]
-
-  Step 2: IsEmpty() copies the 16-byte string header
-    copy: [ same ptr | same len ]
-    Compares copy == "" → false
-
-  Step 3: Original untouched. Copy is tiny (16 bytes). No pointer needed.
-
-  WHY value receiver is fine here:
-  - UserID is 16 bytes (string header) — tiny
-  - Methods are read-only — no mutation
-  - No shared state — each call is independent
-  - Copying 16 bytes is cheaper than pointer indirection + potential GC overhead
 ```
 
 ### Example 4: The Interface Wiring Bug — Traced End to End
@@ -873,7 +873,7 @@ func main() {
 | "I mutated in a method but nothing changed" | Value receiver copied the struct; mutation died with the copy | §4.2 — value receiver copies entire struct into new stack slot. Field writes go to the copy, not the original | Use `*Type` receiver when mutating fields |
 | Value type doesn't implement interface | Compile error: missing method | §4.4 — method set of `T` only includes value receiver methods. Pointer receiver methods are on `*T` only. Interface checks method set, not individual calls | Pass `*T` instead, or change receiver to value if the type is small and safe |
 | `v.Method()` works but `var i Interface = v` doesn't | Auto-insert of `&` only works for direct calls, not interface assignment | §4.3 — compiler rewrites `v.Method()` as `(&v).Method()` for convenience, but can't do the same for interface storage because the copy inside the interface has no stable address | Always pass `&v` into interfaces when methods use pointer receivers |
-| Nil receiver panic | Method called on nil pointer, tried to read a field | §4.5 (Rule 4) — nil pointer is address 0x0. Method call is fine, but field access reads 0x0 + offset → unmapped memory → SIGSEGV | Guard with `if r == nil { return ... }` before any field access |
+| Nil receiver panic | Method called on nil pointer, tried to read a field | §4.3 — method call auto-inserts `&` on the nil pointer (call succeeds). But field access reads 0x0 + offset → unmapped memory → SIGSEGV. Same nil crash mechanism as T07 §4.4 | Guard with `if r == nil { return ... }` before any field access |
 | Mixed receivers on same type | Some methods see original, others see copy; interfaces partially satisfied | §4.4 + Rule 5 — method set of `T` includes only value methods, `*T` includes both. Mixed receivers create confusing partial interface matches | One style per type: pointer for service/repo types, value for tiny read-only types |
 
 ### Gotcha Deep Dive: Slice Append in Value Receiver

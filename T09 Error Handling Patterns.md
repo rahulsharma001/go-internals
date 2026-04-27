@@ -75,7 +75,7 @@ func main() {
 
 ### 4.1 The `error` Interface — What Lives in Memory
 
-`error` is an interface. From T11 (Interface Internals), every interface value is a 16-byte container: a type pointer + a data pointer. Understanding this explains every error behavior.
+`error` is an interface. Every interface value in Go is a **16-byte container** with two slots: a **type pointer** (what concrete type is inside?) and a **data pointer** (where does the actual value live?). Understanding this two-slot layout explains every error behavior.
 
 ```go
 package main
@@ -558,6 +558,22 @@ func (h *Handler) handleErr(w http.ResponseWriter, err error) {
 }
 ```
 
+```
+Error flow through layers:
+
+  repo layer:       sql.ErrNoRows
+                         │
+  service layer:    fmt.Errorf("get user: %w", ErrUserNotFound)
+                         │
+  handler layer:    errors.Is(err, ErrUserNotFound)? → 404
+                    errors.As(err, &ve)?             → 400
+                    else                             → 500
+
+  The handler NEVER imports database/sql.
+  The repo NEVER imports net/http.
+  errors.Is / errors.As cross the boundary through the chain.
+```
+
 > **In plain English:** The repo writes a medical report. The receptionist (handler) translates it into patient-friendly language. The repo never decides how to talk to the patient.
 
 ### Rule 2c: Middleware — Log Once, Attach Request Context, Then Wrap
@@ -578,6 +594,15 @@ func wrapReq(ctx context.Context, msg string, err error) error {
 
 **WHY (§4.3):** The `%w` keeps the chain intact, so `errors.Is`/`errors.As` still work downstream. The request ID is baked into the message for log correlation, but the chain structure is preserved for programmatic checks.
 
+```
+Chain after wrapReq:
+
+  wrapError{ msg: "load user (req_id=abc123): ...",
+             err: → original error }
+                    ↑ chain still intact — errors.Is/As can walk through
+                    ↑ req_id is in the MESSAGE for logs, not blocking the chain
+```
+
 > **In plain English:** You stamp every envelope with a tracking number. Anyone who opens the envelope can still read the original letter — the stamp doesn't cover anything up.
 
 ### Rule 2d: Retryable vs Non-Retryable
@@ -596,6 +621,23 @@ func (e *TemporaryError) Unwrap() error { return e.Cause }
 ```
 
 **WHY (§4.4, §4.5):** Retry middleware uses `errors.Is(err, ErrRetryable)` or `errors.As(err, &temp)` to decide whether to retry. The chain walking from §4.4 means the retry marker can be at any depth — the middleware finds it regardless of how many wraps sit above it.
+
+```
+Retry decision via chain walk:
+
+  err: wrapError{ "handler: service: temporary: context deadline exceeded"
+       err: → wrapError{ "service: ..."
+              err: → TemporaryError{ Cause: → context.DeadlineExceeded } } }
+
+  errors.As(err, &temp):
+    wrapError → no → Unwrap
+    wrapError → no → Unwrap
+    TemporaryError → YES → temp.Cause = DeadlineExceeded
+    → retry middleware retries
+
+  errors.As(err, &validationErr):
+    walks entire chain → no ValidationError found → don't retry
+```
 
 > **In plain English:** A "temporary" sticker on an envelope means "try sending this again." A "validation failed" sticker means "fix the contents first — resending won't help."
 
@@ -622,6 +664,18 @@ func (e *APIError) Unwrap() error { return e.Cause }
 
 **WHY (§4.5):** `errors.As` lets the handler extract `*RepoError` to understand what happened, then create an `*APIError` with a safe public message. The Cause field preserves the full chain for logs while Public protects the user from internal details.
 
+```
+Error boundary translation:
+
+  INTERNAL (repo layer):
+    RepoError{ Op: "findUser", Err: → sql.ErrNoRows }
+              ↓ errors.As extracts RepoError
+  API EDGE (handler):
+    APIError{ Status: 404, Public: "not found", Cause: → RepoError{...} }
+              ↑ Public: safe for JSON body
+              ↑ Cause: full chain preserved for structured logs
+```
+
 > **In plain English:** Inside the hospital, doctors use medical terminology on the chart. At the reception desk, you translate that into "your test results are ready" — not "serum creatinine elevated 2.3 mg/dL."
 
 ### Rule 3: Use `errors.Is` for Sentinels, `errors.As` for Type Extraction
@@ -639,6 +693,23 @@ if errors.As(err, &v) {
 }
 ```
 
+```
+errors.Is vs errors.As — what each does at each chain level:
+
+  err → wrapError → wrapError → *ValidationError → ErrNotFound(sentinel)
+
+  errors.Is(err, ErrNotFound):
+    level 1: wrapError == ErrNotFound? NO → Unwrap
+    level 2: wrapError == ErrNotFound? NO → Unwrap
+    level 3: *ValidationError == ErrNotFound? NO → Unwrap
+    level 4: ErrNotFound == ErrNotFound? YES → return true
+
+  errors.As(err, &v):
+    level 1: wrapError assignable to *ValidationError? NO → Unwrap
+    level 2: wrapError assignable to *ValidationError? NO → Unwrap
+    level 3: *ValidationError assignable? YES → set v, return true
+```
+
 > **In plain English:** `Is` checks if the same serial-numbered form is inside. `As` checks if any layer uses a specific form template, and hands you the form so you can read the fields.
 
 ### Rule 4: Do Not Wrap Twice with the Same Context
@@ -651,6 +722,17 @@ return fmt.Errorf("service: %w", fmt.Errorf("service: %w", err))
 
 // GOOD — one wrap per layer
 return fmt.Errorf("service: %w", err)
+```
+
+```
+BAD chain:
+  wrapError{ "service: service: db error"
+    err: → wrapError{ "service: db error"    ← redundant node, no new info
+           err: → errorString{"db error"} } }
+
+GOOD chain:
+  wrapError{ "service: db error"
+    err: → errorString{"db error"} }         ← one wrap, one new label
 ```
 
 > **In plain English:** You do not put two identical address labels on the same box. One clear label is enough.
@@ -1012,7 +1094,7 @@ Package with a **validation** type (`Error()` + **`errors.As`**), a **`%w`** wra
 | `%v` instead of `%w` | `errors.Is` and `errors.As` can't find the original error | §4.3 — `%v` creates a plain `errorString` with no Unwrap method. The chain link is severed — no linked list pointer | Always use `%w` when callers need to unwrap. Use `%v` only when you deliberately want to hide the inner error |
 | Typed nil `*MyError` returned as `error` | `err != nil` is true even when no error occurred | §4.1 — interface stores `[type: *MyError, data: nil]`. Type slot is non-nil, so the interface is non-nil | Guard: `if p != nil { return p }; return nil`. Or return `error` directly, not `*MyError` |
 | Two `errors.New("not found")` compared with `==` | Always false, even though messages match | §4.2 — each `errors.New` allocates a new `*errorString` on the heap. Identity is pointer address, not message content | Define sentinels once at package level: `var ErrNotFound = errors.New("not found")` |
-| Ignoring error with `_ = f()` | Silent data loss, corrupt state, stale cache | The error value exists but is discarded. No chain walking happens. The failure is invisible | Handle every error. If truly ignorable, document why with a comment naming who accepted the risk |
+| Ignoring error with `_ = f()` | Silent data loss, corrupt state, stale cache | §4.1 — the error interface value (16 bytes: type + data) is created and returned, but discarded by `_`. The chain from §4.3 exists but is never walked — the failure is invisible | Handle every error. If truly ignorable, document why with a comment naming who accepted the risk |
 | Wrapping the same label twice | `"service: service: db error"` — duplicate context in logs | §4.3 — each `%w` adds a new linked list node. Two identical labels create two nodes with no new information | Wrap once per abstraction boundary. Each layer should add unique context |
 
 ### Gotcha Deep Dive: `%v` Breaks the Chain

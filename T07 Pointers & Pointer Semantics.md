@@ -592,11 +592,29 @@ You almost never need `*UserStore` (pointer to interface). The interface value i
 **WHY (§4.1):** An interface value is 16 bytes: a type pointer (8B) + a data pointer (8B). It already carries a pointer to your concrete type. Adding `*` wraps a pointer around something that's already pointer-like — useless indirection.
 
 ```go
+package main
+
+import "fmt"
+
+type UserStore interface {
+	Save(name string)
+}
+
+type MemStore struct{ data []string }
+func (m *MemStore) Save(name string) { m.data = append(m.data, name) }
+
 // WRONG — extra indirection, confuses every reader
-func RegisterRoutes(store *UserStore) { ... }
+func registerWrong(store *UserStore) { (*store).Save("alice") }
 
 // RIGHT — interface already carries a pointer to the concrete store
-func RegisterRoutes(store UserStore) { ... }
+func registerRight(store UserStore) { store.Save("bob") }
+
+func main() {
+	var s UserStore = &MemStore{}
+	registerWrong(&s)
+	registerRight(s)
+	fmt.Println(s.(*MemStore).data) // [alice bob]
+}
 ```
 
 ```
@@ -956,8 +974,8 @@ Implement **`WalkMiddleware`**: a tiny stack of `func(http.Handler) http.Handler
 | Comparing `*User` with `==` | Compares addresses, not fields | §4.1 — a pointer IS an address (8 bytes). `==` on two pointers checks if both hold the same address, not whether the structs they point at have equal fields | Compare IDs explicitly, or use `reflect.DeepEqual`, or dereference and compare `*a == *b` (only works if all fields are comparable) |
 | Returning typed nil `*APIError` as `error` | `if err != nil` is true even though data pointer is nil | §4.4 — the interface wraps `[type: *APIError, data: nil]`. The type slot is non-nil, so the interface is non-nil | Always `return nil` for the no-error path; never return a typed nil pointer through an interface |
 | `&i` in `for` loop (pre-Go 1.22) | Every pointer aliases the same loop variable | §4.2 — `&i` gives the address of `i`. Pre-1.22, there's ONE `i` variable reused each iteration, so every `&i` is the same address | Upgrade to Go 1.22+, or copy: `v := i; ptrs = append(ptrs, &v)` |
-| `&m["key"]` on a map value | Compile error: can't take address | Map values don't have stable addresses — the runtime moves values during map growth (evacuation, rehashing). A pointer to a map value would become dangling after growth | Copy to local: `u := m["key"]`; edit; write back `m["key"] = u` |
-| Writing to a nil map | `panic: assignment to entry in nil map` | A nil map pointer has no underlying `hmap` struct allocated — there are no buckets to write to | Initialize with `make(map[K]V)` or a literal `map[K]V{}` before first store |
+| `&m["key"]` on a map value | Compile error: can't take address | §4.2 — `&` gives a stable address, but map values get relocated during growth/evacuation (runtime moves values between buckets). A pointer from `&` would become dangling after growth | Copy to local: `u := m["key"]`; edit; write back `m["key"] = u` |
+| Writing to a nil map | `panic: assignment to entry in nil map` | §4.4 — a nil pointer has no backing structure. A nil map has no underlying `hmap` allocated — no buckets to write to. Dereferencing nil storage triggers the same class of crash as nil pointer | Initialize with `make(map[K]V)` or a literal `map[K]V{}` before first store |
 
 ### Gotcha Deep Dive: Map Value Addressability
 
@@ -1037,6 +1055,39 @@ SAFE PATTERN:
   }
   // user is guaranteed non-nil here
   json.NewEncoder(w).Encode(user)
+```
+
+### Gotcha Deep Dive: Typed Nil Pointer Returned as `error`
+
+```go
+func validate(name string) error {
+    var apiErr *APIError // nil pointer, but typed
+    if name == "" {
+        apiErr = &APIError{Code: 400, Msg: "name required"}
+    }
+    return apiErr // BUG when name is valid!
+}
+```
+
+```
+validate("rahul") — name is valid, apiErr stays nil:
+
+  Step 1: var apiErr *APIError → stack: [ nil (0x0) ]
+  Step 2: name != "" → skip if block → apiErr is still nil
+
+  Step 3: return apiErr → Go wraps into error interface:
+    interface: [ type: *APIError | data: nil ]
+                       ↑               ↑
+                  NOT nil!         nil pointer
+
+  Step 4: caller checks err != nil
+    [ type: *APIError | data: nil ]  ← type slot is non-nil
+    [ type: nil        | data: nil ]  ← what nil error looks like
+    Different → err != nil is TRUE → caller thinks there's an error!
+
+FIX:
+  if apiErr != nil { return apiErr }
+  return nil  // → [ type: nil | data: nil ] → truly nil
 ```
 
 ---
