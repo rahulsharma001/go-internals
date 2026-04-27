@@ -382,13 +382,19 @@ Step 3: svc.CreateUser("rahul", "r@test.com")
     s.repo → follows 0x10038 → gets repo pointer 0x10028
     (*UserRepo).Save(0x10028, u)
     Save's receiver r = 0x10028
-    r.store[u.ID] = u → map now stores pointer 0x14040
+    r.store[u.ID] = u
+      store is a map → r.store on stack = ptr → hmap at 0xC000012000
+      hmap.B=0 → 1 bucket at 0xC000014000
+      hash(1, hash0) → 0xA7...3C
+      bucket = 0xA7...3C & (2^0 - 1) = 0 → bucket #0, find empty slot 0
+      Write: keys[0]=1, values[0]=0x14040 (pointer to User)
 
 Step 4: returns u (0x14040) to main
-  main, svc, repo, and the map entry ALL reference the same User at 0x14040
+  main, svc, repo, and the map's bucket slot ALL reference the same User at 0x14040
 
-POINTER CHAIN:
-  main → svc(0x10038) → svc.repo(0x10028) → repo.store[1](0x14040) = User
+POINTER CHAIN (every hop shown):
+  main → svc(0x10038) → svc.repo(0x10028) → repo.store → hmap(0xC000012000)
+    → buckets(0xC000014000) → bucket0.values[0] = 0x14040 → User on heap
   main → user(0x14040) = same User
   
   One User struct. Multiple pointers. Every layer mutates through the same address.
