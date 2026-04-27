@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P04 Hash Functions & Hashing Basics.md",
+                "file": "T08 Map Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P04 Hash Functions & Hashing Basics"
+              "title": "T08 Map Internals"
             }
           }
         ]
@@ -88,8 +88,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "06b9fd80f4139a7a",
@@ -198,9 +197,9 @@
   "active": "641f593de2936c73",
   "lastOpenFiles": [
     "Study Plan.md",
+    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "revision/T01 Go Type System & Value Semantics - Revision.md",
     "Daily Revision.md",
-    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites/P05 Interfaces Basics.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
