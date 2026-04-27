@@ -37,12 +37,12 @@
 
 These 6 topics are done. They're in your Daily Revision rotation already.
 
-- [x] [[T01 Go Type System & Value Semantics]] (~2 hrs)
-- [x] [[T02 Go Memory Allocation & Value Semantics]] (~2 hrs)
+- [ ] [[T01 Go Type System & Value Semantics]] (~2 hrs)
+- [ ] [[T02 Go Memory Allocation & Value Semantics]] (~2 hrs)
 - [x] [[T03 Strings, Runes & UTF-8 Internals]] (~1.5 hrs)
 - [x] [[T04 Arrays & Slice Internals]] (~2 hrs)
 - [x] [[frameworks/T05 GIN Framework]] (~1.5 hrs)
-- [x] [[databases/T06 MongoDB]] (~2 hrs)
+- [ ] [[databases/T06 MongoDB]] (~2 hrs)
 
 ---
 
@@ -53,20 +53,20 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 **Prerequisites (complete these first):**
 
 - [x] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
-- [x] [[prerequisites/P02 Methods & Receivers]] (~25 min)
-- [x] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
+- [ ] [[prerequisites/P02 Methods & Receivers]] (~25 min)
+- [ ] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
 - [x] [[prerequisites/P04 Hash Functions & Hashing Basics]] (~15 min)
-- [x] [[prerequisites/P05 Interfaces Basics]] (~20 min)
-- [x] [[prerequisites/P06 Function Call Stack]] (~15 min)
+- [ ] [[prerequisites/P05 Interfaces Basics]] (~20 min)
+- [ ] [[prerequisites/P06 Function Call Stack]] (~15 min)
 
 **Topics:**
 
 - [x] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
 - [x] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
-- [x] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
-- [x] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
-- [x] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05
-- [x] [[T12 Interface Design Principles]] (~1.5 hrs) -- needs T11
+- [ ] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
+- [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
+- [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05
+- [ ] [[T12 Interface Design Principles]] (~1.5 hrs) -- needs T11
 
 **Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
 

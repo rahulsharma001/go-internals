@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T09 Error Handling Patterns.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T09 Error Handling Patterns"
+              "title": "Study Plan"
             }
           }
         ]
@@ -196,6 +196,15 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
+    "Roadmap.md",
+    "T03 Strings, Runes & UTF-8 Internals.md",
+    "T01 Go Type System & Value Semantics.md",
+    "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
+    "revision/T01 Go Type System & Value Semantics - Revision.md",
+    "revision/T02 Go Memory Allocation & Value Semantics - Revision.md",
+    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
+    "prerequisites/P01 Structs & Struct Memory Layout.md",
+    "T09 Error Handling Patterns.md",
     "T08 Map Internals.md",
     "visuals/T05 GIN Framework - Visual Map.md",
     "visuals/T09 Error Handling Patterns - Visual Map.md",
@@ -205,24 +214,15 @@
     "exercises/T08 Map Internals - Exercises.md",
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
-    "revision/T01 Go Type System & Value Semantics - Revision.md",
     "Daily Revision.md",
     "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites/P05 Interfaces Basics.md",
-    "prerequisites/P01 Structs & Struct Memory Layout.md",
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
     "prerequisites/P09 GC Basics & Why It Matters.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
-    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "prerequisites/P02 Methods & Receivers.md",
     "prerequisites",
-    "Roadmap.md",
-    "questions/T12 Interface Design Principles - Interview Questions.md",
-    "T12 Interface Design Principles.md",
-    "visuals/T12 Interface Design Principles - Visual Map.md",
-    "revision/T12 Interface Design Principles - Revision.md",
-    "exercises/T12 Interface Design Principles - Exercises.md",
     "visuals",
     "revision",
     "questions",
