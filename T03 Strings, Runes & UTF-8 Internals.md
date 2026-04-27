@@ -111,19 +111,24 @@ This is the core lesson: **`len()` counts bytes, not characters. Slicing by byte
 
 ### 4.1 The StringHeader Runtime Struct
 
-Every Go string is represented at runtime by `reflect.StringHeader` (deprecated in favor of `unsafe.StringData` in Go 1.20+):
+When you hold a string in Go, you're holding something like a bookmark in a library book. The bookmark has two pieces of information: where the text starts (a pointer) and how many bytes long it is. That's the entire string — two numbers, 16 bytes on a 64-bit machine.
+
+When you pass a string to a function, Go copies this tiny bookmark — never the actual text. That's why string passing is cheap and why there's no need for `*string` parameters.
+
+Here's the actual runtime struct (historically exposed via `reflect.StringHeader`, now accessed through `unsafe.StringData` since Go 1.20):
 
 ```go
-// reflect package (pre-1.20 view)
 type StringHeader struct {
     Data uintptr  // pointer to UTF-8 byte data
     Len  int      // byte length (NOT rune count)
 }
 ```
 
-On 64-bit systems: `sizeof(StringHeader) = 16 bytes` always.
+**What each field means:**
+- `Data` — points to the first byte of the string's text in memory
+- `Len` — the number of bytes (not characters). For `"café"`, Len is 5, not 4
 
-When you pass a string to a function, Go copies this 16-byte header — never the underlying bytes. This is why string passing is cheap and why there's no need for `*string` parameters.
+On 64-bit systems: `sizeof(StringHeader) = 16 bytes` always.
 
 ### 4.2 Where String Data Lives
 
@@ -137,12 +142,16 @@ When you pass a string to a function, Go copies this 16-byte header — never th
 
 ### 4.3 Immutability Enforcement
 
-Go enforces string immutability at the compiler level. There is no runtime check — the compiler simply refuses to generate code that writes to a string's backing array. The only way around this is `unsafe.Pointer`, which breaks the immutability contract.
+Once a string exists, you cannot change its bytes. Think of it like text carved in stone — you can read it, copy it, slice a section of it, but you cannot chisel one letter into a different one. If you need a modified version, you create a new string entirely.
+
+Go enforces this at the compiler level. The compiler refuses to generate code that writes to a string's backing array:
 
 ```go
 s := "hello"
 s[0] = 'H' // COMPILE ERROR: cannot assign to s[0] (strings are immutable)
 ```
+
+**What Go does:** The compiler sees `s[0] = 'H'` and says "no — `s` is a string, and strings are read-only." This is a compile-time check, not a runtime one. The error happens before your program ever runs.
 
 ### 4.4 UTF-8 Encoding Internals
 

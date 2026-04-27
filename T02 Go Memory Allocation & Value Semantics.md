@@ -88,9 +88,9 @@ func NewUser(name string) *User {
 
 ### Escape Analysis: The Compiler's Decision Engine
 
-Escape analysis uses **static data-flow analysis** on the AST (Abstract Syntax Tree). The compiler examines your code BEFORE it runs and decides: can this variable safely live on the stack, or must it go to the heap?
+The Go compiler is like a smart warehouse manager. Before your code runs, it looks at every variable and asks: "Will this box be needed after this function returns? If yes, put it in long-term storage (heap). If no, keep it on the quick shelf (stack) and toss it when we're done."
 
-> **In plain English:** The Go compiler is like a smart warehouse manager who decides: "Will this box be needed after this function returns? If yes, put it in long-term storage (heap). If no, keep it on the quick shelf (stack) and toss it when we're done."
+This decision process is called **escape analysis**. The compiler examines your code's data flow at compile time and decides: can this variable safely live on the stack, or must it "escape" to the heap?
 
 **Does it escape? Walk this checklist:**
 
@@ -146,9 +146,22 @@ WHITE = not reached yet (will be freed if still white at end)
 
 ### Write Barrier
 
-During a GC cycle, every **pointer write to the heap** goes through a write barrier — a hidden runtime check preserving the tri-color invariant.
+Imagine a librarian reorganizing shelves (the GC scanning objects). While the librarian works, you're allowed to keep reading books — but if you move a book to a different shelf, you have to leave a note saying "I moved this." That note is the **write barrier**.
 
-> Pointer writes are more expensive than value writes during GC.
+During a GC cycle, every **pointer write to the heap** goes through a write barrier — a small runtime check that tells the garbage collector "this pointer changed, you need to re-check it." This preserves the tri-color invariant so the GC doesn't accidentally free something you're still using.
+
+```go
+type Node struct {
+    Next *Node
+}
+
+var head *Node = &Node{}
+head.Next = &Node{} // during GC, this write goes through the barrier
+```
+
+**What happens at `head.Next = &Node{}`:** The runtime intercepts this pointer assignment, marks the new `Node` as "still reachable" in the GC's bookkeeping, then completes the write. Without the barrier, the GC might think the new `Node` is unreachable and free it.
+
+> **The takeaway:** Pointer writes are more expensive than value writes during GC — each one triggers the barrier. This is one reason why fewer pointers means less GC overhead.
 
 ---
 

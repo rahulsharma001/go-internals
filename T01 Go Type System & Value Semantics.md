@@ -94,10 +94,14 @@ Method set rules:
 
 ### Defined Types vs Type Aliases
 
+Go gives you two ways to name a type, and they work very differently. A **defined type** is like creating a new brand of coffee — it's still coffee inside, but you can't accidentally mix it with tea. You get your own label, your own method set, and the compiler treats it as a separate thing. A **type alias** is a nickname — same coffee, different label on the bag.
+
 ```go
 type Celsius float64       // DEFINED TYPE — new type, own method set
 type Temperature = float64 // TYPE ALIAS — same type, no own methods
 ```
+
+**What Go does with each line:**
 
 ```
 Defined type:  type Celsius float64
@@ -107,12 +111,10 @@ Defined type:  type Celsius float64
   You CAN attach methods to Celsius
 
 Type alias:  type Temperature = float64
-  Temperature IS float64 — just another name
+  Temperature IS float64 — another name for the same type
   No conversion needed: var t Temperature = 3.14
-  You CANNOT attach methods to Temperature
+  You CANNOT attach methods to Temperature (they'd go on float64)
 ```
-
-> **In plain English:** A defined type is like creating a new brand of coffee — it's still coffee inside, but you can't accidentally mix it with tea. A type alias is just a nickname — same coffee, different label.
 
 | Feature | Defined Type (`type X T`) | Type Alias (`type X = T`) |
 |---|---|---|
@@ -124,7 +126,9 @@ Type alias:  type Temperature = float64
 
 ### Underlying Types
 
-Every type has an underlying type. For predeclared types (int, string, bool), the underlying type is itself. For defined types, it's the type in the definition:
+Think of the underlying type as the raw material a type is made from. A `Celsius` is made from `float64` the way a wooden chair is made from wood — the chair has its own identity, but you can always ask "what is it made of?"
+
+For built-in types (`int`, `string`, `bool`), the underlying type is itself. For defined types, it's the type on the right side of the definition:
 
 ```go
 type Celsius float64         // underlying: float64
@@ -132,9 +136,11 @@ type Point struct{X, Y int}  // underlying: struct{X, Y int}
 type Weights []float64       // underlying: []float64
 ```
 
-> Two types are **identical** only if they have the same name in the same package, or if they're both unnamed with identical structure.
+**Why this matters:** Two types are **identical** only if they have the same name in the same package, or if they're both unnamed with identical structure. The underlying type determines what **conversions** are legal.
 
 ### Type Identity vs Assignability
+
+Go is strict about which types can talk to each other. Even if two types are made from the same raw material, they're different types. Think of it like two different airlines using the same model of airplane — you can't use a Delta boarding pass on a United flight even though the plane is identical.
 
 ```go
 type MyInt int
@@ -204,6 +210,8 @@ Pointer receiver: func (t *T) M()
 ```
 
 ### Struct Embedding (Composition, NOT Inheritance)
+
+Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. The Hospital gets credit for having the capability, but the Doctor is always the one doing it. In Go, when you embed a type inside a struct, its fields and methods get "promoted" — you can call them directly on the outer struct.
 
 ```go
 type Animal struct {
