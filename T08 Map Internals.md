@@ -115,11 +115,11 @@ It doesn't silently corrupt data — it panics.
 
 ## 4. How It Actually Works (Internals) [INTERMEDIATE → ADVANCED]
 
-This section is still the material interviewers expect (`hmap`, `bmap`, load factor, evacuation). The goal is not to recite `runtime/map.go` line by line, but to know what each piece *does* and why it matters when you are debugging latency, memory, or a prod panic.
+This section is what interviewers expect you to know: `hmap`, `bmap`, load factor, evacuation. The goal is not to recite `runtime/map.go` line by line, but to know what each piece *does* and why it matters when you are debugging latency, memory, or a prod panic.
 
 ### 4.1 The hmap Struct
 
-Every `map[K]V` is a pointer to an `hmap` struct. **hmap is basically the brain of the map** — it knows how many items there are, where the buckets live, whether a grow is in progress, and what seed to use for hashing.
+Every `map[K]V` variable is a pointer to an `hmap` struct. hmap is the brain of the map — it knows how many items there are, where the buckets live, whether a grow is in progress, and what seed to use for hashing.
 
 ```go
 // runtime/map.go (simplified)
@@ -136,25 +136,113 @@ type hmap struct {
 }
 ```
 
-```
-hmap (header, sits on stack or heap):
-┌─────────────────────────────────────────┐
-│ count: 5     │ B: 2 (4 buckets)         │
-│ hash0: 0x7A3E │ flags: 0                │
-│ buckets ──→ [bucket0][bucket1][bucket2][bucket3] │
-│ oldbuckets: nil (not growing)           │
-└─────────────────────────────────────────┘
+**Trace it through a real scenario.** You're building a session store for an HTTP server:
+
+```go
+sessions := make(map[string]*Session)
 ```
 
-**Why you care:** `count` and `B` are what drive growth decisions. When someone asks "why did my map allocation spike mid-request?", the answer often starts here: the table got fuller than the runtime liked, so it doubled buckets and started incremental work.
+```
+Step 1: Runtime allocates an hmap struct on the heap
+Step 2: Generates a random hash seed (hash0 = 0x7A3E) for THIS map instance
+Step 3: Sets B=0 → 2^0 = 1 bucket (minimum)
+Step 4: Allocates 1 bucket (bmap) with 8 empty slots
+Step 5: Returns a POINTER to this hmap
 
-Key detail: `map` variables are already pointers. When you pass a map to a function, you're passing a copy of the pointer — both point to the same `hmap`. That's why modifications inside a function are visible to the caller (handy for `RegisterRoute`, bad if you forget you're sharing one map across handlers).
+What's in memory now:
 
-> **In plain English:** The map variable is like a business card with the address of the filing cabinet. Everyone who has the business card goes to the same cabinet.
+  sessions (stack variable, 8 bytes — it's just a pointer):
+  ┌───────────────┐
+  │ ptr = 0xC0001 │──────┐
+  └───────────────┘      │
+                         ▼
+  hmap (heap):
+  ┌───────────────────────────────────────────┐
+  │ count: 0       │ B: 0 (1 bucket)          │
+  │ hash0: 0x7A3E  │ flags: 0                 │
+  │ buckets ──→ [bucket0 (8 empty slots)]     │
+  │ oldbuckets: nil (not growing)              │
+  └───────────────────────────────────────────┘
+```
+
+Now a user logs in and you store their session:
+
+```go
+sessions["abc-123"] = &Session{UserID: 42}
+```
+
+```
+Step 1: Hash the key using this map's seed
+  hash("abc-123", seed=0x7A3E) → 0xA3F7_8B2C_4D1E_0042
+
+Step 2: Pick the bucket
+  bucket_index = hash & (2^B - 1) = 0x0042 & 0 = 0
+  → bucket #0 (only one bucket exists right now)
+
+Step 3: Find an empty slot in bucket #0
+  Scan tophash array: [0][0][0][0][0][0][0][0]  ← all empty
+  → use slot 0
+
+Step 4: Write the entry
+  tophash[0] = top 8 bits of hash = 0xA3
+  keys[0]    = "abc-123"
+  values[0]  = pointer to Session{UserID: 42} on heap
+  hmap.count++ → count = 1
+
+After the insert:
+
+  hmap: count=1, B=0
+  bucket #0:
+  ┌────────────────────────────────────────────────────────┐
+  │ tophash: [0xA3][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ]  │
+  │ keys:    ["abc-123"][ - ][ - ][ - ][ - ][ - ][ - ][ - ]│
+  │ values:  [ptr→Session{42}][ - ][ - ][ - ][ - ][ - ][ - ][ - ]│
+  │ overflow: nil                                           │
+  └────────────────────────────────────────────────────────┘
+```
+
+**Why `sessions` behaves like a reference when you pass it to a function:**
+
+```go
+func RegisterSession(store map[string]*Session, id string, s *Session) {
+    store[id] = s
+}
+```
+
+```
+main's sessions variable:   [ptr = 0xC0001] ──┐
+                                               ├──▶ SAME hmap on heap
+RegisterSession's store:    [ptr = 0xC0001] ──┘
+
+Both are 8-byte pointer copies. Both point to the same hmap.
+Modification through either pointer updates the same bucket array.
+That's why changes inside RegisterSession are visible to the caller.
+```
+
+**Why each map gets its own random seed (hash0):**
+
+```go
+m1 := map[string]int{"a": 1, "b": 2}  // hash0 = 0x7A3E
+m2 := map[string]int{"a": 1, "b": 2}  // hash0 = 0xB1D4
+
+m1 hashing "a": hash("a", 0x7A3E) = 0x...F2 → bucket #2, tophash 0xC1
+m2 hashing "a": hash("a", 0xB1D4) = 0x...A1 → bucket #1, tophash 0x8F
+
+Same key, different bucket, different tophash.
+→ Iteration walks buckets sequentially from a random start
+→ m1 and m2 yield "a" and "b" in different orders
+→ Even re-ranging the SAME map can differ (random start bucket each time)
+
+WHY: If an attacker could predict bucket placement, they could craft
+thousands of keys that all land in bucket #0 → O(n) lookup per request
+→ denial of service. Random seed per map makes this unpredictable.
+```
+
+> **In plain English:** The map variable is like a business card with the address of a filing cabinet. Passing it to a function copies the card, not the cabinet. Everyone holding a copy of the card goes to the same cabinet.
 
 ### 4.2 The Bucket (bmap) Struct
 
-Each bucket stores 8 entries, organized for cache efficiency. **bmap is the physical drawer** — the thing you actually scan when a request looks up a session ID or an order ID.
+Each bucket stores 8 entries. bmap is the physical drawer — the thing you actually scan when looking up a session or an order.
 
 ```go
 // runtime/map.go (simplified)
@@ -170,7 +258,7 @@ type bmap struct {
 ```
 Single bucket memory layout (keys and values are SEPARATE arrays):
 ┌──────────────────────────────────┐
-│ tophash: [h0][h1][h2][h3][h4][h5][h6][h7] │  ← 8 bytes, fits one cache line scan
+│ tophash: [h0][h1][h2][h3][h4][h5][h6][h7] │  ← 8 bytes, fits one cache line
 ├──────────────────────────────────┤
 │ keys:    [k0][k1][k2][k3][k4][k5][k6][k7] │  ← all keys together
 ├──────────────────────────────────┤
@@ -181,71 +269,176 @@ Single bucket memory layout (keys and values are SEPARATE arrays):
 
 WHY keys and values are separated (not key0,val0,key1,val1,...):
   If key is int64 (8B) and value is bool (1B):
-    Interleaved: [8B key][1B val][7B padding][8B key][1B val]... ← wasted padding
-    Separated:   [8B][8B][8B]...[1B][1B][1B]...                 ← no padding waste
+    Interleaved: [8B key][1B val][7B pad][8B key][1B val]... ← wasted padding
+    Separated:   [8B][8B][8B]...[1B][1B][1B]...              ← no padding waste
 ```
 
-**Why you care:** When you store `map[string]*Order`, the map holds pointers in the value array; the `Order` structs themselves live elsewhere. That layout choice is why pointer-valued maps feel natural for caches — you mutate through the pointer without the map moving your struct.
+**Trace an INSERT into bucket #0.** Continuing from 4.1, a second user logs in:
 
-> **In plain English:** Instead of alternating shirts and socks in a drawer (wasting space with padding), you put all shirts on one side and all socks on the other. Less wasted space.
+```go
+sessions["xyz-789"] = &Session{UserID: 99}
+```
+
+```
+Step 1: hash("xyz-789", seed=0x7A3E) → 0x5B12_..._0000
+Step 2: bucket_index = 0x0000 & 0 = 0 → bucket #0 (same bucket as "abc-123")
+Step 3: tophash = 0x5B
+Step 4: Scan tophash: [0xA3][0][0][0][0][0][0][0]
+         Slot 0 is taken (0xA3). Slot 1 is empty (0). → use slot 1.
+
+Step 5: Write:
+  tophash[1] = 0x5B
+  keys[1]    = "xyz-789"
+  values[1]  = ptr → Session{99}
+
+bucket #0 after two inserts:
+┌────────────────────────────────────────────────────────┐
+│ tophash: [0xA3][0x5B][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ][ 0 ]  │
+│ keys:    ["abc-123"]["xyz-789"][ - ][ - ][ - ][ - ][ - ][ - ]│
+│ values:  [ptr→{42}][ptr→{99}][ - ][ - ][ - ][ - ][ - ][ - ]│
+│ overflow: nil                                           │
+└────────────────────────────────────────────────────────┘
+```
+
+**Trace a LOOKUP.** A request comes in with session ID "abc-123":
+
+```go
+sess, ok := sessions["abc-123"]
+```
+
+```
+Step 1: hash("abc-123", seed=0x7A3E) → 0xA3F7_..._0042
+Step 2: bucket #0 (same hash as before → same bucket)
+Step 3: tophash to find = 0xA3
+
+Step 4: Scan tophash array:
+  slot 0: tophash[0] = 0xA3 → MATCH! (fast — just 1 byte comparison)
+  
+Step 5: Compare full key:
+  keys[0] = "abc-123" == "abc-123" → MATCH!
+  
+Step 6: Return values[0] = ptr → Session{UserID: 42}
+  sess = &Session{UserID: 42}, ok = true
+
+If tophash didn't match (say we looked up "def-456" with tophash 0x77):
+  Scan: [0xA3] no → [0x5B] no → [0] empty → STOP. Key not found.
+  No full string comparisons needed. The tophash filter saved us.
+```
+
+> **In plain English:** Instead of alternating shirts and socks in a drawer (wasting space with padding), you put all shirts on one side and all socks on the other. And each slot has a color-coded label — you glance at labels first before reading the full nametag.
 
 ### 4.3 Hash Function and Bucket Selection
 
-```
-Full hash of key: 0xA3F7_8B2C_4D1E_0042  (64 bits)
+This is the pipeline every map operation runs through. Let's trace two different keys landing in different buckets.
 
-Step 1: Select bucket
-  bucket_index = hash & (2^B - 1)
-  If B=2: bucket_index = hash & 0b11 = 0x42 & 0b11 = 2  → bucket #2
+```go
+hits := make(map[string]int, 8) // B=1, 2 buckets to start (runtime picks based on hint)
 
-Step 2: Fast filter within bucket
-  tophash = hash >> 56 = 0xA3
-  Scan the 8-byte tophash array for 0xA3 (one cache line, very fast)
-
-Step 3: Full key comparison
-  Only if tophash matches → compare full key (avoids expensive comparisons)
+hits["/api/users"]++   // key 1
+hits["/api/orders"]++  // key 2
 ```
 
-The **hash0** field is a random seed unique to each map instance. Identical keys hash to different buckets in different maps, which matters if someone tries to craft many keys that collide in *your* idempotency-key map — they cannot reuse a recipe from another process.
+```
+Map state: B=1, so 2 buckets. Mask = 2^1 - 1 = 0b1 (last 1 bit selects bucket).
 
-**Why you care:** Per-request maps and global singleton maps both pay this hash cost on every access. Hot paths (feature flags read per request) are why people sometimes wrap a `map[string]bool` in `RWMutex` and pre-load once at startup.
+Key "/api/users":
+  hash("/api/users", seed) → 0xC1F3_..._00A2
+  bucket = 0x00A2 & 0b1 = 0  → bucket #0
+  tophash = 0xC1
+  Find empty slot in bucket #0, write tophash=0xC1, key="/api/users", value=1
+
+Key "/api/orders":
+  hash("/api/orders", seed) → 0x8F27_..._00B3
+  bucket = 0x00B3 & 0b1 = 1  → bucket #1   ← different bucket!
+  tophash = 0x8F
+  Find empty slot in bucket #1, write tophash=0x8F, key="/api/orders", value=1
+
+After both inserts:
+
+  bucket #0:                              bucket #1:
+  ┌─────────────────────────────┐         ┌─────────────────────────────┐
+  │ tophash: [0xC1][0]...[0]   │         │ tophash: [0x8F][0]...[0]   │
+  │ keys:    ["/api/users"][…]  │         │ keys:    ["/api/orders"][…] │
+  │ values:  [1][…]             │         │ values:  [1][…]             │
+  └─────────────────────────────┘         └─────────────────────────────┘
+
+Now hits["/api/users"]++:
+  1. Hash → same hash → bucket #0
+  2. Scan tophash → slot 0 matches 0xC1
+  3. Compare key → "/api/users" == "/api/users" ✓
+  4. Read value (1), increment, write back (2)
+```
+
+> **In plain English:** Think of the low bits as a floor number and the tophash as a room label. You go to floor 0, scan room labels for 0xC1, and when you find it, check the full guest name to be sure.
 
 ### 4.4 Map Growth and Evacuation
 
-When the **load factor** (roughly entries per bucket) exceeds **6.5**, or there are too many overflow buckets, the map grows.
+When the **load factor** (count / 2^B, roughly entries per bucket) exceeds **6.5**, or there are too many overflow buckets, the map grows. Let's watch it happen with a session store.
 
-**Load factor is the knob that trades memory for speed.** While the map is overcrowded, lookups walk longer overflow chains — so p99 latency creeps up. After Go grows the table and spreads entries out, **the same code path often gets faster** because chains shrink. That is the "why you care" behind load factor: it is not trivia, it is why a bursty write phase can leave you with a snappier read phase afterward.
-
-```
-BEFORE GROWTH (B=2, 4 buckets, load > 6.5):
-  buckets: [bucket0][bucket1][bucket2][bucket3]
-                                ↑ overflow chains getting long
-
-GROWTH TRIGGERED:
-  1. Allocate new bucket array: 2x size (B=3, 8 buckets)
-  2. Set oldbuckets = current buckets
-  3. Set buckets = new (empty) array
-  4. On each subsequent read/write, evacuate 1-2 old buckets → new buckets
-
-DURING GROWTH (incremental evacuation):
-  oldbuckets: [bucket0][bucket1][bucket2*][bucket3]
-                                    ↑ evacuated
-  buckets:    [b0][b1][b2][b3][b4][b5][b6][b7]
-                          ↑ entries moved here
-
-AFTER GROWTH:
-  oldbuckets: nil (freed)
-  buckets:    [b0][b1][b2][b3][b4][b5][b6][b7]
-  Load factor back to normal. Overflow chains shortened.
+```go
+sessions := make(map[string]*Session) // B=0, 1 bucket, 8 slots
 ```
 
-Growth is **incremental** — Go does not stop the world to rehash everything. Each map operation evacuates a slice of old work. **Evacuation is the "copying in the background" you might see in CPU profiles** during a traffic spike that fills a big `map[string]int` of endpoint hit counts: a chunk of CPU time is literally migrating entries from `oldbuckets` into the wider table.
+```
+Filling up the single bucket:
+
+Insert session 1: bucket #0, slot 0. count=1
+Insert session 2: bucket #0, slot 1. count=2
+...
+Insert session 7: bucket #0, slot 6. count=7
+
+Load factor = count / 2^B = 7 / 1 = 7.0  ← EXCEEDS 6.5!
+
+Insert session 8 triggers GROWTH:
+
+  BEFORE (B=0, 1 bucket):
+  hmap: count=7, B=0
+  ┌──────────────────────┐
+  │ buckets ──→ [bucket0] │  ← 7 entries crammed in, load=7.0
+  │ oldbuckets: nil       │
+  └──────────────────────┘
+
+  Step 1: Allocate new bucket array with B=1 → 2 buckets
+  Step 2: hmap.oldbuckets = hmap.buckets (save old array)
+  Step 3: hmap.buckets = new 2-bucket array
+  Step 4: hmap.B = 1
+  Step 5: hmap.nevacuate = 0 (nothing evacuated yet)
+
+  DURING GROWTH (B=1, old + new arrays both exist):
+  hmap: count=7, B=1
+  ┌────────────────────────────────────────────┐
+  │ oldbuckets ──→ [old-bucket0 (7 entries)]   │
+  │ buckets    ──→ [new-bucket0][new-bucket1]   │
+  │ nevacuate: 0                                │
+  └────────────────────────────────────────────┘
+
+  Step 6: Insert session 8.
+    Runtime first evacuates old-bucket0:
+    - Rehash each of the 7 keys with the NEW mask (0b1 instead of 0b0)
+    - Keys whose low bit = 0 → new-bucket0
+    - Keys whose low bit = 1 → new-bucket1
+    Then insert session 8 into the appropriate new bucket.
+
+  Step 7: hmap.nevacuate = 1. Old bucket0 is done.
+    Since that was the only old bucket, oldbuckets = nil. Growth complete.
+
+  AFTER GROWTH:
+  hmap: count=8, B=1
+  ┌────────────────────────────────────────────┐
+  │ oldbuckets: nil (freed, eligible for GC)    │
+  │ buckets ──→ [new-bucket0][new-bucket1]      │
+  │              ~4 entries     ~4 entries       │
+  │ Load factor: 8/2 = 4.0 ← healthy again     │
+  └────────────────────────────────────────────┘
+```
+
+Growth is **incremental** — if there were many old buckets, Go only evacuates 1-2 per map operation, spreading the work. You might see extra CPU in profiles during a traffic spike that fills a big map. That's the runtime migrating entries from `oldbuckets` into the wider table — normal, not a leak.
 
 > **In plain English:** When the filing cabinet is overflowing, you buy a bigger one. But you don't move everything at once — every time someone opens a drawer, you move one old drawer's contents to the new cabinet. Eventually, the old cabinet is empty and gets thrown away.
 
-### 4.5 Iteration Randomness
+### 4.5 Iteration Internals
 
-Go **deliberately randomizes** map iteration order. Each `for range` loop picks a random starting bucket and a random offset within that bucket.
+Go **deliberately randomizes** map iteration order. Understanding the mechanism matters because it explains Rule 4 (why adding keys during iteration is undefined).
 
 ```go
 endpoints := map[string]int{
@@ -253,13 +446,37 @@ endpoints := map[string]int{
     "/api/orders": 87,
     "/health":     4000,
 }
-
+for k, v := range endpoints {
+    fmt.Println(k, v)
+}
 // Run 1: /health, /api/users, /api/orders
 // Run 2: /api/orders, /health, /api/users
-// NEVER rely on map order when emitting metrics or logs
 ```
 
-This prevents code from accidentally depending on insertion order when dumping a label set or iterating feature flags. It is a feature, not a bug.
+**How the iterator works internally:**
+
+```
+When you write `for k, v := range m`:
+
+Step 1: Pick a random starting bucket (e.g., bucket #2 out of 4)
+Step 2: Pick a random starting slot offset within that bucket (e.g., slot 5)
+Step 3: Walk forward sequentially:
+        bucket #2 slots 5,6,7 → bucket #3 slots 0-7 →
+        bucket #0 slots 0-7 → bucket #1 slots 0-7 →
+        bucket #2 slots 0,1,2,3,4 → DONE (back to where we started)
+
+The iterator tracks:
+  - startBucket: where we began (so we know when to stop)
+  - offset:      starting slot within each bucket
+  - currentBucket + currentSlot: where we are right now
+
+It skips empty slots (tophash == 0) and evacuated markers.
+It walks ALL buckets exactly once, wrapping around.
+```
+
+This prevents code from accidentally depending on insertion order. If you need sorted output (for metrics labels, API responses), collect the keys into a slice and sort them.
+
+> **In plain English:** Imagine you're in a library and you start scanning shelves, but each time you visit, you start at a random shelf and walk around until you're back where you started. You always see every book, but never in the same order twice.
 
 ---
 
@@ -347,9 +564,9 @@ Fix: flags = make(map[string]bool)  // or load from config into a real map
 
 > **In plain English:** Looking at an empty shelf is fine — you see nothing. Trying to put a book on a shelf that doesn't exist crashes. Build the shelf first with `make()`.
 
-### Rule 4: Delete During Iteration Is Safe
+### Rule 4: Delete During Iteration Is Safe; Adding Is Not
 
-Go guarantees that deleting keys during `for range` is safe. The deleted key won't appear in subsequent iterations.
+**Deleting** keys during `for range` is safe. Go guarantees the deleted key won't reappear.
 
 ```go
 pending := map[string]struct{}{
@@ -359,14 +576,77 @@ pending := map[string]struct{}{
 }
 for k := range pending {
     if k == "idemp-bbb" {
-        delete(pending, k) // safe
+        delete(pending, k) // safe — won't see "idemp-bbb" again
     }
 }
 ```
 
-But **adding** keys during iteration has undefined behavior — the new key may or may not appear.
+```
+WHY delete is safe:
+  delete() marks the slot's tophash as "evacuated empty" (special value).
+  The iterator checks tophash before yielding a key.
+  Marked slot → skip it. Simple.
+```
 
-> **In plain English:** You can throw books off the shelf while scanning it — you just won't see those books again. But if someone adds books while you're scanning, you might miss them or see them twice.
+**Adding** keys during iteration is undefined — the new key **may or may not** appear. Here's **why**:
+
+```go
+m := map[string]int{"a": 1, "b": 2, "c": 3}  // B=1, 2 buckets
+for k, v := range m {
+    if k == "a" {
+        m["z"] = 99  // will "z" appear in this loop?
+    }
+    fmt.Println(k, v)
+}
+```
+
+```
+Recall from §4.5: the iterator picks a random starting bucket and walks
+forward until it circles back. It tracks "I'm at bucket X, slot Y."
+
+Scenario A: "z" APPEARS
+  Iterator started at bucket #0, walking → bucket #1.
+  "z" hashes to bucket #1 (not visited yet).
+
+  Walk order:  [#0 (current)] → [#1]
+                                  ↑ "z" lands here → WILL be visited → "z" APPEARS
+
+Scenario B: "z" does NOT appear
+  Iterator started at bucket #1, walking → bucket #0.
+  "z" hashes to bucket #1 (already visited).
+
+  Walk order:  [#1 (already done)] → [#0 (current)]
+                ↑ "z" lands here → already passed → "z" SKIPPED
+
+Scenario C: "z" triggers GROWTH
+  Adding "z" pushes count past load factor 6.5 → map doubles buckets.
+  ALL entries rehash to new positions (old bucket → could split into
+  two new buckets). The iterator has logic to handle growth
+  (checks oldbuckets), but "z"'s position in the new layout is
+  unpredictable relative to where the iterator is.
+```
+
+The outcome depends on three runtime factors:
+1. Which bucket the iterator randomly started at
+2. Which bucket the new key hashes to (depends on the random seed)
+3. Whether the insert triggers growth (rehashes everything)
+
+Since all three are unpredictable, the language spec says: **don't rely on it.**
+
+```go
+// SAFE pattern: collect keys to add, then add after the loop
+var toAdd []string
+for k := range m {
+    if shouldExpand(k) {
+        toAdd = append(toAdd, k+"-expanded")
+    }
+}
+for _, k := range toAdd {
+    m[k] = computeValue(k)
+}
+```
+
+> **In plain English:** You're scanning a library shelf by shelf, starting at a random shelf and going forward. If someone adds a book to a shelf you already passed, you won't see it. If they add it ahead of you, you will. Since you started at a random shelf and the book could land anywhere, you genuinely can't predict the answer.
 
 ### Rule 5: The Comma-Ok Idiom Distinguishes Missing from Zero
 
