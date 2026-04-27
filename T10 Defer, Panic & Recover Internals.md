@@ -116,57 +116,426 @@ for _, ord := range orders {
 
 ## 4. How It Actually Works (Internals) [INTERMEDIATE → ADVANCED]
 
-> **In plain English:** The runtime does not magically remember your wishes. It tracks what to run on the way out.
+### 4.1 The Defer Chain — A Linked List Per Goroutine
 
-**What you need to know:** Go keeps a **linked list of defers per running function** (conceptually: a chain hanging off the current call). When the function **returns** or **panics**, the runtime **walks that list from newest to oldest** and runs each deferred call. That is **LIFO** in practice.
-
-You do **not** need the struct field names from `runtime`, open-coded defer optimizations, or a frame-by-frame unwind narrative for interviews. If someone presses for "how does panic find defers?" — **same list, walked while unwinding that goroutine's stack** until something `recover`s or the program exits.
-
-> **In plain English:** The runtime keeps a **clothesline of hooks** on **this worker** only. You clip the newest tag next to your hand. When you back out, you unclip from the hand side first.
-
-**Tiny closure reminder (still "Key Rules" territory, but it lives next to internals in every codebase):**
+The runtime keeps a **linked list of `_defer` records** attached to the current goroutine (`g`). Each `defer` statement creates a new record and pushes it onto the front of the list. When the function exits (return or panic), the runtime walks the list from front to back — that's why execution is LIFO.
 
 ```go
-func f() {
-	x := 1
-	defer func() { println(x) }()
-	x = 2
+package main
+
+import "fmt"
+
+func main() {
+	fmt.Println("start")
+	defer fmt.Println("A")
+	defer fmt.Println("B")
+	defer fmt.Println("C")
+	fmt.Println("end")
 }
-// prints 2: the closure reads x from the frame at run time, not a copy at defer time
+// Output: start, end, C, B, A
 ```
+
+```
+Step 1: fmt.Println("start") → prints "start"
+
+Step 2: defer fmt.Println("A")
+  Runtime creates _defer record:
+    { fn: fmt.Println, args: ["A"], link: nil }
+  Goroutine's defer chain: → [A]
+
+Step 3: defer fmt.Println("B")
+  New record pushed to FRONT:
+    { fn: fmt.Println, args: ["B"], link: → [A] }
+  Chain: → [B] → [A]
+
+Step 4: defer fmt.Println("C")
+  New record pushed to FRONT:
+    { fn: fmt.Println, args: ["C"], link: → [B] → [A] }
+  Chain: → [C] → [B] → [A]
+
+Step 5: fmt.Println("end") → prints "end"
+
+Step 6: main() returns → runtime walks the chain front-to-back:
+  [C].fn("C") → prints "C"
+  [B].fn("B") → prints "B"
+  [A].fn("A") → prints "A"
+
+THE CHAIN IN MEMORY (goroutine g):
+
+  g._defer ──→ ┌────────────────┐    ┌────────────────┐    ┌────────────────┐
+                │ fn: Println    │    │ fn: Println    │    │ fn: Println    │
+                │ args: ["C"]   │──→ │ args: ["B"]   │──→ │ args: ["A"]   │──→ nil
+                │ (newest)      │    │                │    │ (oldest)      │
+                └────────────────┘    └────────────────┘    └────────────────┘
+                     ran 1st              ran 2nd              ran 3rd
+```
+
+> **In plain English:** The runtime keeps a clothesline of hooks on each worker (goroutine). You clip the newest tag next to your hand. When you back out, you unclip from the hand side first — that's LIFO.
+
+### 4.2 Argument Evaluation — Snapshot at the `defer` Line
+
+When Go hits a `defer` statement, it evaluates ALL arguments **right then** and stores copies in the `_defer` record. The deferred function sees the snapshotted values, not whatever the variables hold at exit time.
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+	x := 10
+	defer fmt.Println("deferred x =", x) // x is evaluated NOW → 10 stored
+	x = 20
+	defer fmt.Println("deferred x =", x) // x is evaluated NOW → 20 stored
+	x = 30
+	fmt.Println("live x =", x) // 30
+}
+// Output:
+// live x = 30
+// deferred x = 20    ← LIFO: second defer runs first, with snapshot of 20
+// deferred x = 10    ← first defer runs second, with snapshot of 10
+```
+
+```
+Step 1: x := 10
+
+Step 2: defer fmt.Println("deferred x =", x)
+  Runtime evaluates args: "deferred x =", 10   ← snapshot of x RIGHT NOW
+  _defer record A: { fn: Println, args: ["deferred x =", 10], link: nil }
+  Chain: → [A: x=10]
+
+Step 3: x = 20
+
+Step 4: defer fmt.Println("deferred x =", x)
+  Runtime evaluates args: "deferred x =", 20   ← snapshot of x RIGHT NOW
+  _defer record B: { fn: Println, args: ["deferred x =", 20], link: → A }
+  Chain: → [B: x=20] → [A: x=10]
+
+Step 5: x = 30
+
+Step 6: fmt.Println("live x =", x) → prints "live x = 30"
+
+Step 7: return → walk chain:
+  B runs: Println("deferred x =", 20)   ← stored snapshot, not current x=30!
+  A runs: Println("deferred x =", 10)   ← stored snapshot from earlier
+
+CONTRAST WITH CLOSURE (no argument snapshot):
+
+  defer func() { fmt.Println("closure x =", x) }()
+  ← closure captures the VARIABLE x, not its value
+  ← at exit time, x = 30, so prints "closure x = 30"
+```
+
+> **In plain English:** A `defer` with arguments is like placing a phone order — the kitchen writes down "no onions" from the current menu. If you change the menu board later, the ticket doesn't update. A closure is like a waiter who checks the menu board at serving time — they always read the latest version.
+
+### 4.3 Named Returns — Why Defer Can Modify the Return Value
+
+When a function has named return parameters, `return expr` is a two-step process:
+1. Assign `expr` to the named variable
+2. Run deferred functions (which can read/write the named variable)
+3. Return the current value of the named variable
+
+```go
+package main
+
+import "fmt"
+
+func double() (result int) {
+	defer func() {
+		result = result * 2 // modifies the named return variable
+	}()
+	return 21 // Step 1: result = 21, Step 2: defer runs: result = 42
+}
+
+func main() {
+	fmt.Println(double()) // 42
+}
+```
+
+```
+Step 1: double() starts executing
+  stack frame:
+    result: 0   ← named return, zero-initialized, lives in the stack frame
+
+Step 2: defer func() { result = result * 2 }()
+  Registers a closure. The closure captures `result` — the VARIABLE, not a copy.
+  _defer chain: → [closure that reads/writes &result]
+
+Step 3: return 21
+  Go splits this into:
+    3a: result = 21          ← assign to named variable
+    stack frame: result: 21
+
+    3b: run deferred functions
+    closure runs: result = result * 2 = 21 * 2 = 42
+    stack frame: result: 42
+
+    3c: actually return → caller receives result = 42
+
+WHY this works:
+  Named return `result` is a real variable in the stack frame.
+  The closure has a reference to that variable (not a copy).
+  Between step 3a and 3c, the defer can modify it.
+
+WITHOUT named return (anonymous return):
+  func double() int {
+      x := 21
+      defer func() { x = x * 2 }()
+      return x  // copies x into an anonymous return slot
+                // defer changes x, but the anonymous slot is already set
+  }
+  → returns 21, not 42. The defer modified x, but x is NOT the return slot.
+```
+
+> **In plain English:** A named return is a labeled mailbox on your desk. `return 21` drops a letter (21) into the mailbox. On the way out, the defer opens the mailbox, reads the letter, doubles it, and puts 42 back. The mailman picks up whatever is in the mailbox at that point. Without a named return, the letter goes into a sealed anonymous dropbox that defer can't reach.
+
+### 4.4 Panic and Unwind — What Happens Step by Step
+
+When `panic(v)` is called, the runtime:
+1. Stops normal execution
+2. Walks the current goroutine's defer chain, running each deferred function
+3. If a deferred function calls `recover()`, the panic stops and execution resumes after the `recover` call
+4. If no `recover` is called, after all defers run, the runtime prints the panic value and stack trace, then kills the entire program
+
+```go
+package main
+
+import "fmt"
+
+func riskyWork() {
+	fmt.Println("step 1")
+	panic("something broke")
+	fmt.Println("step 2") // never runs
+}
+
+func main() {
+	defer fmt.Println("main: defer A")
+	defer fmt.Println("main: defer B")
+
+	defer func() {
+		if v := recover(); v != nil {
+			fmt.Println("recovered:", v)
+		}
+	}()
+
+	riskyWork()
+	fmt.Println("after riskyWork") // never runs — panic unwound past here
+}
+// Output:
+// step 1
+// recovered: something broke
+// main: defer B
+// main: defer A
+```
+
+```
+Step 1: main starts, registers 3 defers
+  Chain: → [recover-closure] → [Println "B"] → [Println "A"]
+
+Step 2: riskyWork() runs
+  Prints "step 1"
+  panic("something broke") → runtime enters panic mode
+
+Step 3: Runtime unwinds riskyWork's stack frame
+  riskyWork has no defers → nothing to run
+  Returns to main's frame
+
+Step 4: Runtime walks main's defer chain (LIFO):
+  First: recover-closure runs
+    recover() → returns "something broke" (the panic value)
+    v != nil → prints "recovered: something broke"
+    recover() stops the panic → normal execution resumes in this defer
+
+  The remaining defers still run (panic is stopped, but chain continues):
+    Println("main: defer B") → prints
+    Println("main: defer A") → prints
+
+Step 5: main returns normally (panic was recovered)
+
+WITHOUT the recover:
+  Step 4: Chain runs, no recover() called
+  Step 5: All defers done, still panicking
+  Step 6: Runtime prints stack trace + "something broke"
+  Step 7: os.Exit(2) — entire program dies
+```
+
+> **In plain English:** Panic is the fire alarm. Everyone stops what they're doing and heads for the exit. On the way out, you execute every sticky note (defer) you posted on the door. If one of those notes says "check if the fire extinguisher works" (recover), and it does, the alarm stops and the building stays open. If nobody has an extinguisher, the building is evacuated (program dies).
+
+### 4.5 Goroutine Isolation — Why Parent Can't Catch Child's Panic
+
+Each goroutine has its own defer chain. When a child goroutine panics, the runtime walks THAT goroutine's chain. The parent's defer chain is on a completely separate goroutine — it never sees the child's panic.
+
+```go
+package main
+
+import (
+	"fmt"
+	"time"
+)
+
+func main() {
+	defer func() {
+		if v := recover(); v != nil {
+			fmt.Println("parent recovered:", v) // NEVER prints
+		}
+	}()
+
+	go func() {
+		panic("child panic") // crashes the WHOLE program
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+	fmt.Println("parent continues") // never reaches here
+}
+// Output: panic: child panic (then stack trace, then program exits)
+```
+
+```
+main goroutine (G1):
+  Defer chain: → [recover-closure]
+  
+child goroutine (G2):
+  Defer chain: → (empty — no defers registered)
+
+Step 1: G2 panics with "child panic"
+  Runtime walks G2's defer chain → empty → nothing to run
+  No recover() was called → panic is unrecovered
+  Runtime kills ENTIRE program (not just G2)
+
+Step 2: G1's recover-closure NEVER runs for G2's panic
+  G1's defer chain belongs to G1 only
+  The two chains are completely separate
+
+  G1's defer chain: → [recover-closure]    ← only runs when G1 itself panics or returns
+  G2's defer chain: → (empty)              ← G2's panic walks this, not G1's
+
+FIX: child must recover itself:
+  go func() {
+      defer func() {
+          if v := recover(); v != nil {
+              fmt.Println("child recovered:", v)
+              // send error on channel to parent
+          }
+      }()
+      panic("child panic") // now caught by child's own recover
+  }()
+```
+
+> **In plain English:** A smoke alarm in your apartment does not silence a fire in the neighbor's unit. Each goroutine has its own apartment with its own alarm system. If the neighbor's fire isn't handled by their own extinguisher, the whole building (program) is evacuated.
+
+### 4.6 Backend Scenario: Transaction Rollback With Defer
+
+The most common production use of defer — guaranteeing a database transaction is always cleaned up:
+
+```go
+package main
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+)
+
+func TransferFunds(ctx context.Context, db *sql.DB, from, to int64, amount int64) (err error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback() // error path: undo everything
+		}
+	}()
+
+	_, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance - $1 WHERE id = $2", amount, from)
+	if err != nil {
+		return fmt.Errorf("debit: %w", err) // defer runs → rollback
+	}
+
+	_, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance + $1 WHERE id = $2", amount, to)
+	if err != nil {
+		return fmt.Errorf("credit: %w", err) // defer runs → rollback
+	}
+
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit: %w", err) // defer runs → rollback (commit failed)
+	}
+	return nil // err is nil → defer skips rollback
+}
+```
+
+```
+SUCCESS path (no errors):
+
+  Step 1: BeginTx → tx created
+  Step 2: defer registers: func() { if err != nil { tx.Rollback() } }
+    Chain: → [rollback-if-err closure]
+    Closure captures `err` — the NAMED return variable
+  Step 3: Debit exec → success
+  Step 4: Credit exec → success
+  Step 5: Commit → success, err = nil
+  Step 6: return nil
+    Deferred closure runs: err == nil → skip rollback ✓
+    Transaction committed, money transferred.
+
+ERROR path (debit fails):
+
+  Step 1: BeginTx → tx created
+  Step 2: defer registers closure (captures &err)
+  Step 3: Debit exec → fails! err = "debit: connection reset"
+  Step 4: return fmt.Errorf("debit: %w", err)
+    3a: named return `err` = "debit: connection reset"
+    3b: deferred closure runs: err != nil → tx.Rollback()
+        Both debit and any partial writes are undone ✓
+    3c: return the error to caller
+
+  Without defer, you'd need tx.Rollback() before EVERY return statement.
+  With 5 possible error points, that's 5 Rollback calls to maintain.
+  Defer handles ALL of them with ONE line.
+
+PANIC path (something truly broke):
+
+  Step 3: Debit exec → triggers a panic deep in the driver
+  Runtime enters panic mode → walks defer chain
+  Closure runs: err is whatever was set → tx.Rollback()
+  Transaction cleaned up even during a panic ✓
+```
+
+> **In plain English:** `defer tx.Rollback()` is insurance — it pays out on every bad exit (error, panic, early return). On the happy path where you committed, the rollback is a no-op. You write the insurance policy once and forget about it, instead of remembering to cancel at every possible failure point.
 
 ---
 
 ## 5. Key Rules & Behaviors
 
-### Rule 1: Defer arguments are evaluated at the `defer` line, not at exit time
+### Rule 1: Defer Arguments Are Evaluated at the `defer` Line, Not at Exit Time
+
+**WHY (§4.2):** From §4.2, the runtime creates a `_defer` record with snapshotted argument values. The record stores copies of the evaluated expressions, not references to variables.
 
 ```go
 func main() {
 	i := 0
-	defer fmt.Println("defer prints:", i) // argument list evaluated NOW
+	defer fmt.Println("defer prints:", i) // evaluates i NOW → stores 0
 	i++
 	fmt.Println("after:", i) // 1
 }
-// prints: after: 1, then "defer prints: 0" (evaluated 0)
+// prints: after: 1, then "defer prints: 0"
 ```
 
 ```
-Step: hit `defer fmt.Println("defer prints:", i)`
-  evaluate fmt.Println, string constant, and **current i**  → 0
-  those values are **stored for the deferred call**
+defer fmt.Println("defer prints:", i):
+  _defer record: { fn: Println, args: ["defer prints:", 0] }
+                                                        ↑ snapshot
 
-Step: i++  →  i is 1 in the frame
+i++ → i is 1 in the frame, but the _defer record still says 0
 
-Step: on return
-  run deferred call with **captured 0**
+On return:
+  Println("defer prints:", 0)  ← reads from the record, not from i
 ```
 
-> **In plain English:** A **phone order** is taken the moment you say `defer` — the kitchen writes down **"no onions"** from **today's** list. You can change the whiteboard after that. The old ticket does not rewrite itself.
+> **In plain English:** A phone order is taken the moment you say `defer` — the kitchen writes down "no onions" from today's list. Changing the whiteboard after doesn't update the ticket.
 
----
+### Rule 2: LIFO — Last `defer` Registered Runs First
 
-### Rule 2: LIFO — last `defer` registered runs first
+**WHY (§4.1):** From §4.1, each `defer` pushes to the FRONT of the linked list. Walking the list from front to back means the newest runs first.
 
 ```go
 func main() {
@@ -178,52 +547,64 @@ func main() {
 ```
 
 ```
-registration order: 1, then 2, then 3
-stack:   top   3
-              2
-              1
-execution: 3 → 2 → 1
+After all defers registered:
+  Chain: → [3] → [2] → [1]
+              ↑ newest          ↑ oldest
+
+Walk front-to-back:
+  [3] → print "3 "
+  [2] → print "2 "
+  [1] → print "1 "
 ```
 
-> **In plain English:** The last **Post-it** you stack on the pile is the first one you peel when you clean the desk. That is **LIFO** order.
+> **In plain English:** The last Post-It you stack on the pile is the first one you peel when you clean the desk.
 
----
+### Rule 3: Named Return Values Can Be Written by Deferred Functions
 
-### Rule 3: Named return values can be written by deferred functions (the "double return")
+**WHY (§4.3):** From §4.3, `return expr` assigns to the named variable first, then defers run. The closure captures the named variable by reference, so it can read and write the current value.
 
 ```go
-func f() (n int) { // n is a **named** result; addressable on the way out
-	defer func() { n++ }()
-	return 42  // 1) n := 42  2) defers: n++  3) RET with n=43
+func addErrorContext() (err error) {
+	defer func() {
+		if err != nil {
+			err = fmt.Errorf("addErrorContext: %w", err)
+		}
+	}()
+	return doWork() // if doWork fails, defer wraps the error
 }
 ```
 
 ```
-sequence:
-1) `return 42` assigns **n = 42**
-2) defers: **n++**  →  n = 43
-3) the **final** n is 43
+If doWork() returns an error:
+  Step 1: err = doWork() → err = "connection refused"
+  Step 2: defer closure runs: err != nil → err = "addErrorContext: connection refused"
+  Step 3: return err → caller gets the wrapped error
+
+This is the "double return" pattern — the defer adds context to ANY error
+from ANY return path in the function, without repeating the wrapping logic.
 ```
 
-> **In plain English:** A **name tag** is stuck on a box the whole office shares for **this** shipment. A cleanup crew on the way out can still **relabel** the box, because the label is a **shared** physical slot.
+> **In plain English:** A named return is a labeled mailbox. The defer can open it and relabel the contents before the mailman picks it up.
 
-**Trap:** the trick needs **named** result parameters. Do not "clever" this in real APIs unless your team loves Easter eggs.
+### Rule 4: `recover` Must Be Called Inside a Deferred Function
 
----
-
-### Rule 4: `recover` must be called **inside a deferred function**; awkward placements return `nil`
-
-**Broken pattern: `recover()` not in a deferred function**
+**WHY (§4.4):** From §4.4, `recover()` only works during panic unwinding when called from a deferred function. Called anywhere else, it returns `nil`. The runtime checks: "am I currently executing a deferred function during a panic unwind?" If not, recover is a no-op.
 
 ```go
+// BROKEN: recover not in defer
 func bad() {
-	recover() // not inside defer → always useless here
+	recover() // returns nil — useless outside defer during panic
 }
-```
 
-**Safe idiom:** a **`defer` function literal** that calls `recover` **inside** the literal.
+// BROKEN: recover in a nested function called from defer
+func alsoBad() {
+	defer func() {
+		innerRecover() // recover inside innerRecover doesn't count
+	}()
+}
+func innerRecover() { recover() } // wrong depth — must be directly in the defer
 
-```go
+// CORRECT: recover directly in the deferred function
 func good() (caught string) {
 	defer func() {
 		if v := recover(); v != nil {
@@ -231,103 +612,113 @@ func good() (caught string) {
 		}
 	}()
 	panic("oops")
-	return ""
 }
 ```
 
-> **In plain English:** The extinguisher's **bracket** is the **`func() { ... }`**. You do not balance the can on the floor and hope the inspector approves.
+```
+WHY the nesting matters:
 
----
+  The runtime checks the call depth when recover() is called:
+    defer func() {
+        recover()  ← called at depth 1 from the deferred function → WORKS
+    }()
 
-### Rule 5: Panics are **goroutine-isolated**; parent cannot "catch" child
+    defer func() {
+        helper()   ← helper is at depth 2
+    }()
+    func helper() { recover() }  ← depth 2 → runtime says "not directly in defer" → nil
+
+  The rule: recover() must be called DIRECTLY inside the deferred function body,
+  not inside a function called by the deferred function.
+```
+
+> **In plain English:** The fire extinguisher must be mounted ON the door (directly in the defer). If you hide it in a closet behind the door (nested function), the fire inspector (runtime) won't count it.
+
+### Rule 5: Panics Are Goroutine-Isolated — Parent Cannot Catch Child
+
+**WHY (§4.5):** From §4.5, each goroutine has its own defer chain. The runtime walks only the panicking goroutine's chain. The parent goroutine's chain is on a separate linked list that is never consulted during the child's panic.
 
 ```go
 func main() {
 	defer func() {
-		if v := recover(); v != nil {
-			fmt.Println("parent caught:", v)
-		}
+		recover() // only catches panics in main's goroutine
 	}()
-	go func() { panic("child") }()
-	time.Sleep(100 * time.Millisecond)
-	// Child's panic is NOT recovered here. Default: **whole process dies**.
+	go func() {
+		panic("child") // main's recover NEVER sees this
+	}()
+	time.Sleep(time.Second)
 }
+// program crashes — child's panic is unrecovered
 ```
 
-> **In plain English:** A smoke alarm in **your** apartment does not silence a fire in **the neighbor's** unit. Each goroutine has its own defer chain; the parent does not subsume the child's panic.
+```
+G1 (main):   defer chain → [recover-closure]
+G2 (child):  defer chain → (empty)
 
-**Worker pool pattern:** the **child** recovers (or never panics) and sends `error` / status on a channel. The parent selects on results and keeps serving.
+G2 panics → runtime walks G2's chain → empty → no recover → PROGRAM DIES
+
+G1's recover-closure was never consulted because it's on G1's chain, not G2's.
+```
+
+The fix is always: the child goroutine must carry its own `defer + recover`, then signal the parent through a channel or `errgroup`.
+
+> **In plain English:** A smoke alarm in your apartment does not silence a fire in the neighbor's unit. Each goroutine is a separate apartment.
 
 ---
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### The three defers you will actually type in backend Go
+### Example 1: Defer Execution Order — Traced Through the Chain
 
-**1. `defer rows.Close()`** — arguably the single most common `defer` after you run `Query`.
-
-```go
-rows, err := db.QueryContext(ctx, `SELECT id, status FROM orders WHERE batch_id = $1`, batchID)
-if err != nil {
-	return fmt.Errorf("query orders: %w", err)
-}
-defer rows.Close()
-
-for rows.Next() {
-	var id int64
-	var status string
-	if err := rows.Scan(&id, &status); err != nil {
-		return fmt.Errorf("scan: %w", err)
-	}
-	// ...
-}
-if err := rows.Err(); err != nil {
-	return fmt.Errorf("rows: %w", err)
-}
-return nil
-```
-
-If you forget `rows.Close()`, you leak connections from the pool until the GC finalizer path runs — which is **not** something you want to rely on under load.
-
-**2. Transactions: `defer tx.Rollback()` + happy-path `Commit()`**
-
-This is the standard "always release the tx" pattern. If you return early with an error, **`Rollback`** runs. If you commit successfully, **`Rollback`** after **`Commit`** is a no-op on `database/sql` (safe).
+The foundation: see how the linked list determines execution order.
 
 ```go
-func DebitWallet(ctx context.Context, db *sql.DB, userID int64, cents int64) error {
-	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
-	if err != nil {
-		return fmt.Errorf("begin: %w", err)
-	}
-	defer tx.Rollback() // safe if Commit succeeds; catches all early returns
+package main
 
-	if _, err := tx.ExecContext(ctx, `UPDATE wallets SET balance = balance - $1 WHERE user_id = $2`, cents, userID); err != nil {
-		return fmt.Errorf("debit: %w", err)
-	}
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err)
-	}
-	return nil
+import "fmt"
+
+func cleanup() {
+	fmt.Println("step 1")
+	defer fmt.Println("defer A")
+
+	fmt.Println("step 2")
+	defer fmt.Println("defer B")
+
+	fmt.Println("step 3")
+	defer fmt.Println("defer C")
+
+	fmt.Println("step 4 (last)")
 }
+
+func main() {
+	cleanup()
+}
+// Output: step 1, step 2, step 3, step 4 (last), defer C, defer B, defer A
 ```
 
-**3. Tracing / observability: `defer span.End()`**
+```
+Execution trace:
 
-```go
-ctx, span := tracer.Start(ctx, "orders.ProcessBatch")
-defer span.End()
-// ... work; child spans can fork from ctx
+  Println("step 1") → output
+  defer Println("A") → chain: → [A]
+
+  Println("step 2") → output
+  defer Println("B") → chain: → [B] → [A]
+
+  Println("step 3") → output
+  defer Println("C") → chain: → [C] → [B] → [A]
+
+  Println("step 4") → output
+
+  Function returns → walk chain:
+    [C] → prints "defer C"
+    [B] → prints "defer B"
+    [A] → prints "defer A"
 ```
 
-Same idea as `Close`: pair acquisition with release on **every** exit path without spelling `End()` five times.
+### Example 2: Argument Snapshot vs Closure Capture
 
----
-
-### LIFO ordering and the "value changes" surprise
-
-**A: plain LIFO** — same three-defers example as **Rule 2** (`3 2 1`).
-
-**B: closure sees live variable vs stamped argument**
+The difference that trips up everyone in interviews.
 
 ```go
 package main
@@ -335,147 +726,125 @@ package main
 import "fmt"
 
 func main() {
-	i := 0
-	defer func() { fmt.Println("defer:", i) }() // closure reads **i** at exit
-	i = 1
-	fmt.Println("before return:", i)
+	x := 0
+
+	defer fmt.Println("arg snapshot:", x)          // copies x=0 into _defer record
+	defer func() { fmt.Println("closure sees:", x) }() // captures &x, reads at exit
+
+	x = 100
+	fmt.Println("live x:", x) // 100
 }
-// before return: 1, then "defer: 1"
+// Output:
+// live x: 100
+// closure sees: 100    ← closure reads current x
+// arg snapshot: 0      ← _defer record stored x=0
 ```
 
-> **In plain English:** A closure **follows** the person; `defer fmt.Println(i)` would have **photocopied** the number at breakfast.
+```
+Step 1: x := 0
 
-**C: loop + closure — use `i := i` when you mean per-iteration capture**
+Step 2: defer fmt.Println("arg snapshot:", x)
+  _defer record A: { args: ["arg snapshot:", 0] }   ← 0 stored NOW
+  Chain: → [A: snapshot 0]
 
-```go
-for i := 0; i < 3; i++ {
-	i := i
-	defer func() { fmt.Print(i) }()
-}
-// Go 1.22+ also gives a fresh `i` per iteration in `for` loops, but the copy pattern still shows up in older codebases
+Step 3: defer func() { ... }()
+  _defer record B: { fn: closure referencing &x }   ← no snapshot, reads x later
+  Chain: → [B: closure(&x)] → [A: snapshot 0]
+
+Step 4: x = 100
+
+Step 5: return → walk chain:
+  B runs: closure reads x → x is 100 → prints "closure sees: 100"
+  A runs: Println("arg snapshot:", 0) → prints "arg snapshot: 0"
 ```
 
----
+### Example 3: `defer rows.Close()` — The Pattern You Type Daily
 
-### Named return modification (double return)
+The most common production defer: ensuring database rows are closed on every exit path.
 
 ```go
-func readTwice() (n int, err error) {
-	defer func() {
-		if err != nil {
-			return
+func ListUsers(ctx context.Context, db *sql.DB) ([]User, error) {
+	rows, err := db.QueryContext(ctx, "SELECT id, name FROM users")
+	if err != nil {
+		return nil, fmt.Errorf("query: %w", err)
+	}
+	defer rows.Close() // runs on EVERY return path below
+
+	var users []User
+	for rows.Next() {
+		var u User
+		if err := rows.Scan(&u.ID, &u.Name); err != nil {
+			return nil, fmt.Errorf("scan: %w", err) // rows.Close() still runs!
 		}
-		n = n * 2
-	}()
-	return 21, nil
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows: %w", err) // rows.Close() still runs!
+	}
+	return users, nil // rows.Close() runs on success too
 }
-// caller sees n=42, err=nil
 ```
 
----
+```
+Without defer:
+  You'd need rows.Close() before EVERY return:
+    return nil, fmt.Errorf("scan: %w", err)   ← need Close() before this
+    return nil, fmt.Errorf("rows: %w", err)   ← need Close() before this
+    return users, nil                           ← need Close() before this
+  That's 3 places to remember. Miss one → connection leak under load.
 
-### HTTP middleware: request ID, structured panic log, JSON error body
+With defer:
+  ONE defer after the successful Query. Covers ALL 3 returns + any future returns.
+  If someone adds a new error check later, it's already covered.
+```
+
+### Example 4: HTTP Middleware Recover — Keeping the Server Alive
+
+The standard pattern for turning handler panics into 500 responses instead of crashing the server.
 
 ```go
-package main
-
-import (
-	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"encoding/json"
-	"log/slog"
-	"net/http"
-)
-
-type ctxKey string
-
-const requestIDKey ctxKey = "request_id"
-
-func randomRequestID() string {
-	b := make([]byte, 8)
-	_, _ = rand.Read(b)
-	return hex.EncodeToString(b)
-}
-
-type errPayload struct {
-	Error     string `json:"error"`
-	RequestID string `json:"request_id"`
-}
-
-func withRequestID(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rid := r.Header.Get("X-Request-ID")
-		if rid == "" {
-			rid = randomRequestID()
-		}
-		ctx := context.WithValue(r.Context(), requestIDKey, rid)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
 func withRecover(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if v := recover(); v != nil {
-				rid, _ := r.Context().Value(requestIDKey).(string)
-				slog.Error("handler panic", "panic", v, "path", r.URL.Path, "request_id", rid)
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusInternalServerError)
-				_ = json.NewEncoder(w).Encode(errPayload{
-					Error:     "internal_error",
-					RequestID: rid,
-				})
+				slog.Error("handler panic",
+					"panic", v,
+					"path", r.URL.Path,
+					"stack", string(debug.Stack()),
+				)
+				http.Error(w, "internal error", 500)
 			}
 		}()
 		next.ServeHTTP(w, r)
 	})
 }
-
-// Wire: http.Handle("/api/", withRequestID(withRecover(apiHandler)))
-// withRequestID must run *outside* recover so r.Context() in the defer still carries requestIDKey.
 ```
 
-> **In plain English:** A **reception** desk puts a **net** at the **door** to your suite. A tantrum in the **hall** still hits the **net** in **this** suite. In production you also emit metrics, tie the request ID to traces, and never log sensitive fields. Wrap **`withRequestID` outside `withRecover`** so the `*http.Request` the recover closure sees already has the ID in `Context()`.
-
----
-
-### Worker pool: unhandled panic in a child goroutine kills the **whole program**
-
-There is no "just this worker died." Unless that worker **`recover`s**, the runtime aborts the process after printing stacks.
-
-```go
-// BUG: panic inside the loop takes down the whole process.
-func worker(ctx context.Context, jobs <-chan Job, results chan<- Result) {
-	defer close(results)
-	for j := range jobs {
-		processOne(ctx, j)
-	}
-}
-
-// Safer: per-job scope with recover → surface as Result.Err on the channel.
-func workerSafe(ctx context.Context, jobs <-chan Job, results chan<- Result) {
-	defer close(results)
-	for j := range jobs {
-		res := Result{JobID: j.ID}
-		func() {
-			defer func() {
-				if v := recover(); v != nil {
-					res.Err = fmt.Errorf("panic: %v", v)
-				}
-			}()
-			res.Payload = processOne(ctx, j)
-		}()
-		select {
-		case <-ctx.Done():
-			return
-		case results <- res:
-		}
-	}
-}
 ```
+Normal request (no panic):
+  Step 1: defer registers recover-closure
+  Step 2: next.ServeHTTP handles request normally
+  Step 3: handler returns → defer runs → recover() returns nil → skip
+  Result: normal response
 
-The parent **cannot** `recover` across goroutine boundaries — the child must **`recover` or not panic**.
+Panicking request:
+  Step 1: defer registers recover-closure
+  Step 2: next.ServeHTTP → handler panics deep in the call stack
+  Step 3: Runtime unwinds back to this function's defer chain
+  Step 4: recover-closure runs:
+    recover() returns the panic value (e.g., "nil pointer dereference")
+    v != nil → log the error with stack trace
+    Write 500 response to client
+    Panic is stopped — server continues serving other requests
+
+  Chain: → [recover-closure]
+  Panic unwinds FROM handler's stack frame BACK TO this frame
+  recover() intercepts → server stays alive
+
+LIMITATION: if the handler spawns a goroutine and THAT panics,
+this recover does NOT catch it (§4.5 — goroutine isolation).
+The spawned goroutine must have its own defer+recover.
+```
 
 ---
 
@@ -504,7 +873,7 @@ func main() { fmt.Println(f()) }
 > 3. The closure does `x += 1`, changing `x` from 10 to 11
 > 4. The function returns the current value of `x`, which is now 11
 >
-> This works because `x` is a **named return value** — it lives in the stack frame and defer can modify it after `return` sets it but before the function exits.
+> This works because `x` is a **named return value** — it lives in the stack frame and defer can modify it after `return` sets it but before the function exits (§4.3).
 
 ### Tier 2: Fix the bug (5 min)
 
@@ -525,7 +894,7 @@ You have a `defer` **inside a `for` loop** over database connections (like `Proc
 >     if err != nil { return err }
 > }
 > ```
-> Or extract `func processOneOrder(ctx context.Context, db *sql.DB, ord Order) error` and call it from the loop.
+> Or extract `func processOneOrder(ctx context.Context, db *sql.DB, ord Order) error` and call it from the loop. The key: defer binds to the enclosing FUNCTION, not the loop iteration (§4.1).
 
 ### Tier 3: Build it (15 min)
 
@@ -537,28 +906,116 @@ Build a small **`StartWorker(fn func())` helper** that **starts `fn` in a new go
 
 ## 7. Edge Cases & Gotchas
 
-**The loop full of defers.** You open resources in a `for` loop and write `defer res.Close()`. Every iteration adds another cleanup that runs only when the **outer** function ends. Under real traffic you exhaust file descriptors, DB pool slots, or ephemeral ports. The story is always: **narrow the scope** so each iteration returns from its **own** function.
+| Gotcha | What Happens | Because (§4 link) | Fix |
+|--------|-------------|-------------------|-----|
+| `defer` in a `for` loop | All N defers fire at outer function return, not per iteration. N connections/files stay open simultaneously | §4.1 — defer pushes to the function's chain, not the loop's. The chain only runs when the function exits | Wrap loop body in IIFE or extract to helper function so each iteration is a separate function scope |
+| `recover()` outside `defer` | Returns `nil` — no panic is caught | §4.4 — runtime only honors recover() when called directly inside a deferred function during panic unwind | Always use `defer func() { if v := recover(); ... }()` pattern |
+| `recover()` in nested function inside defer | Returns `nil` — wrong call depth | §4.4 — recover must be at depth 1 from the deferred function, not depth 2+ | Call recover() directly in the `defer func()` body, not in a helper |
+| Parent tries to catch child goroutine's panic | Unrecovered panic crashes the entire program | §4.5 — each goroutine has its own defer chain. Parent's chain is never consulted for child's panic | Child must carry its own defer+recover and send errors on a channel |
+| `os.Exit(n)` bypasses all defers | Deferred functions never run — process terminates immediately | §4.1 — os.Exit calls the OS exit syscall directly. The runtime doesn't walk the defer chain | Return from main() instead, or do explicit cleanup before os.Exit |
+| `defer` in `init()` | Defers run when `init` ends, not at program shutdown | §4.1 — defer binds to the enclosing function. `init` is a function that runs once at startup | Don't use init() defers for global cleanup. Use explicit shutdown hooks |
+| Closure vs argument in `defer` | Closure reads current value at exit; argument reads snapshot from defer line | §4.2 — arguments are evaluated and copied into the _defer record immediately. Closures capture variable references | Use `defer f(x)` for snapshots; use `defer func() { f(x) }()` when you need the latest value |
 
-**`recover` sitting in ordinary code.** Someone calls `recover()` in the middle of a function, not inside a `defer`ed closure. It returns `nil` and creates false confidence. The fix is boring: **`defer func() { if v := recover(); v != nil { ... } }()`**.
-
-**Assuming the parent catches a worker panic.** A goroutine is not a `try` block. If a handler spawns work and that goroutine panics without `recover`, your process exits — your middleware `recover` never runs for that stack. Wrap **inside** the worker, or use `errgroup` / explicit error returns.
-
-**`os.Exit` bypasses defers.** You call `os.Exit(0)` during shutdown. Every `defer` still pending in `main` is skipped — the process just stops. Tear down explicitly before exiting, or return from `main` and let defers run.
-
-**`defer` in `init`.** `init` functions can use `defer`, but those defers run when **`init` ends**, not at program shutdown. Do not pretend `init` defers are global cleanup for the whole process.
-
-**Mini step-through: `os.Exit` vs `return`**
+### Gotcha Deep Dive: `os.Exit` Skips All Defers
 
 ```go
-import "os"
+package main
+
+import (
+	"fmt"
+	"os"
+)
 
 func main() {
-	defer println("deferred in main")
-	os.Exit(0) // **no** "deferred in main"
+	defer fmt.Println("this never prints")
+	fmt.Println("about to exit")
+	os.Exit(0)
+}
+// Output: about to exit
+// "this never prints" is NEVER printed
+```
+
+```
+Step 1: defer registers Println("this never prints")
+  Chain: → [Println("this never prints")]
+
+Step 2: fmt.Println("about to exit") → prints
+
+Step 3: os.Exit(0)
+  os.Exit calls the OS-level exit syscall directly
+  The Go runtime does NOT walk the defer chain
+  Process terminates immediately
+
+  Chain → [Println("this never prints")]   ← never walked!
+
+FIX:
+  func main() {
+      defer fmt.Println("cleanup runs")
+      if err := run(); err != nil {
+          fmt.Fprintln(os.Stderr, err)
+          os.Exit(1)  // only exit after explicit cleanup
+      }
+      // returning from main() DOES run defers
+  }
+
+  Or restructure so main() returns normally and defers run:
+  func main() {
+      defer fmt.Println("cleanup runs")
+      // ... work ...
+  }  // defers run when main returns
+```
+
+> **In plain English:** `os.Exit` is pulling the main breaker in a building. It doesn't wait for you to close windows or turn off lights — the building goes dark instantly. Return from main() instead, and the building's automated shutdown sequence (defer chain) runs properly.
+
+### Gotcha Deep Dive: Defer in a Loop — Connection Pool Exhaustion
+
+The most expensive production bug from misunderstanding defer:
+
+```go
+func ProcessAllOrders(ctx context.Context, db *sql.DB) error {
+	orders := getOrders() // 1000 orders
+	for _, ord := range orders {
+		conn, err := db.Conn(ctx)
+		if err != nil {
+			return err
+		}
+		defer conn.Close() // BUG: all 1000 Close() calls wait until outer function returns
+		process(conn, ord)
+	}
+	return nil
 }
 ```
 
-> **In plain English:** A **main breaker** does not wait for you to close each window; the building goes dark.
+```
+Iteration 0: conn₀ opened. defer chain: → [Close(conn₀)]
+Iteration 1: conn₁ opened. defer chain: → [Close(conn₁)] → [Close(conn₀)]
+Iteration 2: conn₂ opened. defer chain: → [Close(conn₂)] → [Close(conn₁)] → [Close(conn₀)]
+...
+Iteration 999: 1000 connections open simultaneously!
+
+  DB pool default: max 25 connections
+  Iteration 26: db.Conn(ctx) blocks waiting for a free connection
+  All 25 connections are held by THIS function's defer chain
+  DEADLOCK: function waits for connection, connections wait for function to end
+
+  The chain in memory:
+  g._defer → [Close₉₉₉] → [Close₉₉₈] → ... → [Close₁] → [Close₀]
+  ← 1000 _defer records, 1000 open connections
+
+FIX: IIFE per iteration:
+  for _, ord := range orders {
+      err := func() error {
+          conn, err := db.Conn(ctx)
+          if err != nil { return err }
+          defer conn.Close()  // runs at END OF THIS func(), not the loop
+          return process(conn, ord)
+      }()
+      if err != nil { return err }
+  }
+  ← each iteration opens 1 connection, processes, closes, then next iteration
+```
+
+> **In plain English:** Writing "close connection at the end" inside a loop is like hiring 1000 people and telling them all "leave at 5 PM." At 3 PM you have 1000 people in a room built for 25. The IIFE pattern is like processing one person at a time — they leave before the next one enters.
 
 ---
 
