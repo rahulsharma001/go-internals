@@ -1191,11 +1191,40 @@ errors.New("timeout") would accidentally match YOUR sentinel.
 
 ## 8. Performance & Tradeoffs
 
-Wrapping with **`%w`** allocates a small wrapper and adds one more pointer hop when you walk the chain. In normal HTTP and service code, that cost is **noise next to I/O**: one database round trip or TLS handshake dominates your latency budget thousands of times over.
+### Where this hits you in production
 
-What **does** hurt is **logging every unwrap layer on every request**, serializing huge stacks to Splunk, or building giant `fmt.Errorf` strings with expensive `Sprintf` work in a tight loop. Keep wraps **short and structured**; log **once** at the boundary with the **request ID**; let metrics aggregate error codes instead of printing novels.
+Your order service handles 3k RPM. A failed Stripe charge returns an error that gets wrapped three times — `repo` adds context, `service` adds the order ID, `handler` adds the request ID. Three `fmt.Errorf("...: %w", err)` calls. Each one allocates a small struct on the heap (~64 bytes). At 3k RPM with a 2% error rate, that's 60 errors/sec times 3 wraps = 180 tiny allocations per second. Your Stripe round trip is 80ms. Those 180 allocations are invisible in pprof — you'd never find them unless you went looking.
 
-Sentinels stay cheap — one pointer compare after `Is` walks a short chain. Custom types cost a little more but buy you **`As`** and fields for **400** responses. If a boundary already exposes a stable, meaningful error and another sentence adds nothing, returning as-is is fine.
+Now compare that to what your structured logger does when it calls `err.Error()` on a 4-layer wrapped error. It walks the full chain, builds the concatenated string with every `: ` separator, and your logging middleware feeds that string into `json.Marshal` for Datadog. At 60 errors/sec, that's 60 string builds + 60 JSON encodes your handler didn't need. **That** shows up in `alloc_objects`.
+
+| Pattern | What it costs | You'd see this in... | Verdict |
+|---------|--------------|---------------------|---------|
+| `fmt.Errorf("...: %w", err)` | ~64B heap alloc per wrap | Repo wrapping a DB error, service adding order ID | Noise next to any I/O call. Use freely. |
+| `errors.Is(err, ErrNotFound)` | One pointer compare per chain link | Handler checking if repo returned "not found" for a 404 | Essentially free — a short chain means 2-4 pointer hops. |
+| `errors.As(err, &target)` | Pointer compare + type check per link | Middleware extracting `*APIError` to set HTTP status | Slightly more work than `Is` but still trivial for typical 3-layer chains. |
+| `%v` instead of `%w` | Zero — but **breaks the chain** | Accidentally cutting off `Is`/`As` for upstream callers | Free in CPU but costs you debuggability. A false economy. |
+| Logging `err.Error()` every layer | String build at each layer, then the caller builds again | Each middleware layer logging the error before passing it up | Real cost. Log **once** at the boundary. Use request ID to correlate. |
+| `fmt.Errorf` in a tight loop | `Sprintf` parsing + heap alloc per iteration | Validating 10k rows in a CSV import, wrapping per-row errors | Measurable. Pre-allocate an error slice, or use a `ValidationErrors` collector. |
+
+### What actually hurts
+
+The anti-pattern that burns real CPU: your error middleware calls `err.Error()` to log the error, then your response writer calls `err.Error()` again to build the JSON body, then your metrics middleware calls `err.Error()` a third time to extract a label. Each call walks the full chain and allocates a new string. At 2k errors/min on a high-traffic endpoint, that's 6k string builds per minute — and each one does `fmt.Sprintf` work under the hood.
+
+The fix is boring: call `err.Error()` once at the handler boundary, stash the string, and reuse it for logging, response, and metrics. Or better — log the **structured fields** (order ID, error code, layer) instead of the concatenated message.
+
+### What to measure
+
+```bash
+# Benchmark sentinel vs wrapped error check
+go test -bench=BenchmarkErrorIs -benchmem ./pkg/errors/
+
+# Find error-related allocations in a load test
+go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
+# Then: top 20 -cum | grep "fmt\|errors\|Errorf"
+
+# Quick check: how many allocs does your error path make?
+go test -run=TestOrderPaymentFailure -benchmem -count=1 ./service/
+```
 
 ---
 
