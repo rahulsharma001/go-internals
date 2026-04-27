@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P06 Function Call Stack.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P06 Function Call Stack"
+              "title": "Study Plan"
             }
           }
         ]
@@ -196,6 +196,7 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
+    "prerequisites/P06 Function Call Stack.md",
     "Study Plan.md",
     "T08 Map Internals.md",
     "exercises/T08 Map Internals - Exercises.md",
@@ -210,7 +211,6 @@
     "prerequisites/P09 GC Basics & Why It Matters.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
-    "prerequisites/P06 Function Call Stack.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "prerequisites/P02 Methods & Receivers.md",
     "prerequisites",
