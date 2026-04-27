@@ -196,6 +196,7 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
+    "exercises/T08 Map Internals - Exercises.md",
     "T08 Map Internals.md",
     "T07 Pointers & Pointer Semantics.md",
     "Study Plan.md",
@@ -222,7 +223,6 @@
     "simplified/T12 Interface Design Principles - Simplified.md",
     "questions/T11 Interface Internals (iface & eface) - Interview Questions.md",
     "T11 Interface Internals (iface & eface).md",
-    "visuals/T11 Interface Internals (iface & eface) - Visual Map.md",
     "visuals",
     "revision",
     "questions",
