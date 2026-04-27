@@ -22,7 +22,7 @@ Complete these before starting this topic:
 
 A **pointer** is a variable that holds the memory address of another variable. In Go, `*T` is "pointer to T" and `&x` gives you the address of `x`.
 
-Go is **always pass-by-value**. Every function call copies the argument. Pointers let you share data efficiently by copying a small address (8 bytes on 64-bit) instead of copying an entire struct — think of handing someone a sticky note with your house address instead of moving the whole house onto their desk. Anyone with that note can visit the same place and change what’s inside.
+Go is **always pass-by-value**. Every function call copies the argument. Pointers let you share data efficiently by copying a small address (8 bytes on 64-bit) instead of copying an entire struct — think of handing someone a sticky note with your house address instead of moving the whole house onto their desk. Anyone with that note can visit the same place and change what's inside.
 
 ---
 
@@ -140,94 +140,286 @@ func main() {
 
 ### 4.1 Pointer Size and Layout
 
-On a 64-bit system, every pointer is exactly **8 bytes** regardless of what it points to. A `*User` with twenty fields is still the same 8 bytes as a `*int`. The sticky note is always the same size; whether it points at a tiny counter or a fat DTO, you’re still copying one address through your API boundary.
-
-```
-*int:      [ 8 bytes: memory address ]  ──→  [ 8 bytes: int value ]
-*User:     [ 8 bytes: memory address ]  ──→  [ N bytes: User struct fields ]
-```
-
-### 4.2 The & and * Operators Under the Hood
-
-`&x` — the compiler generates a `LEA` (Load Effective Address) instruction that puts x's memory address into a register.
-
-`*p` — the compiler generates a `MOV` through the pointer. It reads the address stored in p, then loads the value at that address.
+On a 64-bit system, every pointer is exactly **8 bytes** regardless of what it points to. A `*User` with twenty fields is still the same 8 bytes as a `*int`.
 
 ```go
-x := 42
-p := &x      // p now holds x's address
-fmt.Println(*p)  // dereference: follow the address, read 42
-*p = 100     // dereference + write: follow the address, write 100
-fmt.Println(x)   // 100 — x changed because p pointed at it
-```
+package main
 
-```
-Step 1: x := 42
-  stack: [ x = 42 ]  at address 0xA0
+import (
+    "fmt"
+    "unsafe"
+)
 
-Step 2: p := &x
-  stack: [ x = 42 ]  at 0xA0
-         [ p = 0xA0 ] at 0xA8    ◄── p holds x's address
+type User struct {
+    Name  string // 16 bytes (ptr + len)
+    Email string // 16 bytes
+    Age   int    // 8 bytes
+}
 
-Step 3: *p = 100
-  follow p (0xA0) ──→ write 100
-  stack: [ x = 100 ]  at 0xA0   ◄── x changed
-         [ p = 0xA0 ] at 0xA8   ◄── p unchanged
-```
+func main() {
+    u := User{Name: "rahul", Email: "r@test.com", Age: 28}
+    p := &u
 
-### 4.3 Escape Analysis and Pointers
-
-The Go compiler decides whether a variable lives on the **stack** (fast, auto-freed) or **heap** (slower, GC-managed). The key rule:
-
-**If a pointer to a local variable escapes the function, the variable is moved to the heap.**
-
-```go
-func newUser() *User {
-    u := User{Name: "rahul"}  // looks local, but...
-    return &u                  // pointer escapes! u moves to heap
+    fmt.Println("Size of User:", unsafe.Sizeof(u))   // 40
+    fmt.Println("Size of *User:", unsafe.Sizeof(p))   // 8
+    fmt.Printf("u lives at: %p\n", &u)               // 0xC000012040
+    fmt.Printf("p holds:    %p\n", p)                 // 0xC000012040 (same!)
+    fmt.Printf("p lives at: %p\n", &p)                // 0xC000012060 (p itself is elsewhere)
 }
 ```
 
 ```
-Without escape:                 With escape (pointer returned):
-┌──────────────────┐            ┌──────────────────┐
-│ STACK             │            │ STACK             │
-│ u = User{...}    │            │ (pointer to heap) │
-│ auto-freed ✓     │            └──────────────────┘
-└──────────────────┘                    │
-                                        ▼
-                                ┌──────────────────┐
-                                │ HEAP              │
-                                │ u = User{...}    │
-                                │ GC-managed        │
-                                └──────────────────┘
+Step 1: u := User{...}
+  stack 0xC000012040: [ "rahul" | "r@test.com" | 28 ]    ← 40 bytes
+
+Step 2: p := &u
+  stack 0xC000012060: [ 0xC000012040 ]                    ← 8 bytes (just the address of u)
+                        │
+                        └──→ same 40-byte User above
+
+KEY INSIGHT:
+  Passing u to a function:  copies all 40 bytes into callee's stack frame
+  Passing p to a function:  copies 8 bytes (the address) → callee sees same struct
 ```
 
-Check what escapes with:
-```bash
-go build -gcflags="-m" main.go
-# output: ./main.go:5:2: moved to heap: u
-```
+> **In plain English:** Every sticky note is the same size — a Post-It that says "check locker 5" and one that says "check warehouse building 3" are both tiny slips of paper. The pointer is the Post-It. What it points at might be 40 bytes or 4000 bytes, but the note is always 8.
 
-If you promise the caller a pointer to data you created inside the function, Go can’t leave that data on a stack frame that disappears — it promotes the value to the heap so the pointer stays valid after you return. Same vibe as moving the book to a permanent shelf because you handed out its address.
+### 4.2 The & and * Operators Under the Hood
 
-### 4.4 Nil Pointers
-
-Every pointer's zero value is `nil`. Dereferencing a nil pointer causes a **panic** — Go's equivalent of a crash.
+`&x` means "give me the address of x." The CPU generates a `LEA` (Load Effective Address) instruction.
+`*p` means "follow this address and read/write what's there." The CPU generates a `MOV` through the pointer.
 
 ```go
-var p *int       // nil — not pointing anywhere
-fmt.Println(*p)  // PANIC: runtime error: invalid memory address or nil pointer dereference
+package main
+
+import "fmt"
+
+func main() {
+    x := 42
+    p := &x         // p now holds x's address
+    fmt.Println(*p) // 42 — dereference: follow the address, read the value
+    *p = 100        // dereference + write: follow the address, overwrite
+    fmt.Println(x)  // 100 — x changed because p pointed at it
+}
 ```
 
 ```
-  p ──→ nil (address 0x0)
+Step 1: x := 42
+  stack: [ x = 42 ]  at 0xA0
 
-  *p: "Go, please read what's at address 0x0"
-  Go: "There's nothing there." → PANIC
+Step 2: p := &x    (LEA instruction — "load address of x into p")
+  stack: [ x = 42 ]  at 0xA0
+         [ p = 0xA0 ] at 0xA8       ← p is its own variable, holding x's address
+
+Step 3: *p = 100   (MOV through pointer — "write 100 at the address p holds")
+  CPU reads p → gets 0xA0
+  CPU writes 100 at 0xA0
+  stack: [ x = 100 ] at 0xA0        ← x changed!
+         [ p = 0xA0 ] at 0xA8       ← p unchanged — it still points at the same x
+
+Step 4: fmt.Println(x) → reads 0xA0 → prints 100
 ```
 
-The runtime catches this at the OS level. Address 0x0 is always unmapped memory, so the CPU triggers a segfault that Go converts to a panic.
+> **In plain English:** `&` is like asking "what's the street address of this building?" You get a number. `*` is like driving to that street address and walking inside. You can read what's there (`*p`) or change what's there (`*p = 100`).
+
+### 4.3 Escape Analysis and Stack vs Heap (Where Pointers Really Matter)
+
+The Go compiler decides whether a variable lives on the **stack** (fast, auto-freed when function returns) or **heap** (slower, garbage-collected). The core rule:
+
+**If a pointer to a local variable outlives the function, the variable is moved to the heap.**
+
+```go
+package main
+
+import "fmt"
+
+type Config struct {
+    Addr        string
+    ReadTimeout int
+}
+
+func newConfig() *Config {
+    c := Config{Addr: ":8080", ReadTimeout: 30}
+    return &c // c escapes! compiler moves it to heap
+}
+
+func localOnly() int {
+    x := 42
+    p := &x   // p does NOT escape — stays within this function
+    *p += 8
+    return *p // returns the value, not the pointer — x stays on stack
+}
+
+func main() {
+    cfg := newConfig()
+    fmt.Println(cfg.Addr) // ":8080"
+
+    val := localOnly()
+    fmt.Println(val) // 50
+}
+```
+
+```
+newConfig() — pointer ESCAPES:
+
+  Step 1: c := Config{...}
+    Compiler sees: "you're returning &c — this pointer outlives the function"
+    Decision: allocate c on HEAP, not stack
+
+  Step 2: return &c
+    heap 0xC000014040: [ Addr: ":8080" | ReadTimeout: 30 ]
+    Returns pointer 0xC000014040 to caller
+    Stack frame of newConfig() is gone, but the data survives on the heap
+
+  Step 3: main's cfg = 0xC000014040
+    cfg ──→ heap: [ Addr: ":8080" | ReadTimeout: 30 ]   ← alive, GC tracks it
+
+localOnly() — pointer does NOT escape:
+
+  Step 1: x := 42, p := &x
+    stack: [ x = 42 ] [ p = 0x... (x's stack addr) ]
+
+  Step 2: *p += 8 → x becomes 50
+
+  Step 3: return *p → returns the VALUE 50 (not the pointer)
+    Stack frame dies. x and p are gone. No heap allocation needed.
+
+DIFFERENCE:
+  newConfig: returned a pointer → heap alloc → GC cost
+  localOnly: kept pointer local → stack only → zero GC cost
+```
+
+You can verify this yourself:
+```bash
+go build -gcflags="-m" main.go
+# ./main.go:12:2: moved to heap: c       ← newConfig's c escaped
+# ./main.go:17:2: x does not escape      ← localOnly's x stayed on stack
+```
+
+> **In plain English:** Your function's stack frame is like a hotel room — checkout happens automatically when you return. If you hand someone a key card (pointer) to that room and they try to use it after checkout, the room is gone. So Go moves the data to a permanent apartment (heap) whenever it detects you're handing out keys that outlive your stay. The apartment costs more (GC has to clean it), but the data survives.
+
+### 4.4 Nil Pointers — What Actually Happens at the Hardware Level
+
+Every pointer's zero value is `nil`. Dereferencing `nil` causes a **panic**.
+
+```go
+package main
+
+import "fmt"
+
+type User struct {
+    Name string
+}
+
+func greet(u *User) string {
+    return "Hello, " + u.Name // if u is nil → PANIC
+}
+
+func main() {
+    var u *User // declared but never assigned — nil
+    fmt.Println(u == nil) // true
+    fmt.Println(greet(u)) // PANIC: nil pointer dereference
+}
+```
+
+```
+Step 1: var u *User
+  stack: [ u = nil (0x0) ]     ← u exists, but holds address 0x0
+
+Step 2: greet(u)
+  Go copies u (8 bytes: 0x0) into greet's parameter
+  greet's u: [ 0x0 ]
+
+Step 3: u.Name
+  CPU tries to read memory at address 0x0 + offset_of(Name)
+  Address 0x0 is UNMAPPED memory — the OS never assigns real data to address 0
+  CPU triggers a SIGSEGV (segmentation fault)
+  Go runtime catches the signal → converts to panic:
+    "runtime error: invalid memory address or nil pointer dereference"
+
+SAFE PATTERN:
+  func greet(u *User) string {
+      if u == nil {
+          return "Hello, stranger"
+      }
+      return "Hello, " + u.Name
+  }
+```
+
+> **In plain English:** A nil pointer is a sticky note that says "check locker 0" — but there is no locker 0. When you walk over and try to open it, the building security (the OS) stops you. Go catches that and turns it into a panic instead of crashing the whole process silently.
+
+### 4.5 Passing Pointers Through Function Calls — A Backend Scenario
+
+Here's what actually happens in memory when your HTTP handler calls a service that calls a repository — all sharing the same `User` via pointers:
+
+```go
+package main
+
+import "fmt"
+
+type User struct {
+    Name  string
+    Email string
+}
+
+func handler() {
+    u := &User{Name: "rahul", Email: "old@test.com"}
+    fmt.Printf("handler: u at %p, u.Email = %s\n", u, u.Email)
+    service(u)
+    fmt.Printf("handler: u.Email = %s\n", u.Email) // sees the change!
+}
+
+func service(u *User) {
+    fmt.Printf("service: u at %p (same address!)\n", u)
+    u.Email = "new@test.com"
+    repo(u)
+}
+
+func repo(u *User) {
+    fmt.Printf("repo:    u at %p (still same!)\n", u)
+    u.Name = "Rahul K"
+}
+
+func main() {
+    handler()
+}
+// Output:
+// handler: u at 0xC000010030, u.Email = old@test.com
+// service: u at 0xC000010030 (same address!)
+// repo:    u at 0xC000010030 (still same!)
+// handler: u.Email = new@test.com
+```
+
+```
+Step 1: handler creates User on heap (escape analysis — &User{} literal escapes)
+  heap 0xC000010030: [ Name: "rahul" | Email: "old@test.com" ]
+
+  handler's stack: [ u = 0xC000010030 ]   ← 8-byte pointer
+
+Step 2: service(u) — Go copies the 8-byte pointer
+  service's stack: [ u = 0xC000010030 ]   ← DIFFERENT stack slot, SAME address
+                          │
+                          └──→ heap: [ Name: "rahul" | Email: "old@test.com" ]
+
+Step 3: u.Email = "new@test.com" — service writes through the pointer
+  heap 0xC000010030: [ Name: "rahul" | Email: "new@test.com" ]   ← changed!
+  Both handler's u and service's u point here → both see the change
+
+Step 4: repo(u) — another 8-byte copy
+  repo's stack: [ u = 0xC000010030 ]      ← THIRD copy of the address, same target
+  u.Name = "Rahul K"
+  heap 0xC000010030: [ Name: "Rahul K" | Email: "new@test.com" ]
+
+Step 5: Back in handler
+  handler reads u.Email → follows 0xC000010030 → "new@test.com" ← repo + service changes visible
+
+THREE STACK FRAMES, THREE COPIES OF THE POINTER, ONE SHARED USER:
+  handler stack: [ u = 0xC000010030 ] ──┐
+  service stack: [ u = 0xC000010030 ] ──┤──→ heap: [ "Rahul K" | "new@test.com" ]
+  repo    stack: [ u = 0xC000010030 ] ──┘
+```
+
+> **In plain English:** Think of a patient's medical chart in a hospital. The chart lives in one place (the heap). When the patient moves from reception → doctor → lab, each person gets a note saying "chart is in room 3." They each have their own copy of the note, but they all read and write the same chart. That's how handler → service → repo shares a `*User`.
 
 ---
 
@@ -235,253 +427,464 @@ The runtime catches this at the OS level. Address 0x0 is always unmapped memory,
 
 ### Rule 1: Pointer Receiver vs Value Receiver
 
-A **value receiver** gets a copy. A **pointer receiver** gets the address and can modify the original — what you want when a service method bumps an in-memory counter or updates repository state.
+A **value receiver** gets a copy of the struct. A **pointer receiver** gets the address and can modify the original.
+
+**WHY this matters (§4.1, §4.5):** From §4.1, we know a struct might be 40+ bytes. A value receiver copies all of it into a new stack slot. A pointer receiver copies 8 bytes (the address). But more importantly — from §4.5 — only the pointer receiver writes to the *same* memory the caller holds.
 
 ```go
-type RequestCount struct {
+package main
+
+import "fmt"
+
+type Counter struct {
     n int
 }
 
-func (c RequestCount) ValueSeen() {
-    c.n++  // increments the copy, original unchanged
+func (c Counter) ValueInc() {
+    c.n++
+    fmt.Printf("  inside ValueInc: c.n = %d (at %p — this is a COPY)\n", c.n, &c)
 }
 
-func (c *RequestCount) PointerSeen() {
-    c.n++  // increments the original
+func (c *Counter) PointerInc() {
+    c.n++
+    fmt.Printf("  inside PointerInc: c.n = %d (at %p — this is the ORIGINAL)\n", c.n, c)
 }
+
+func main() {
+    c := Counter{n: 0}
+    fmt.Printf("before: c.n = %d (at %p)\n", c.n, &c)
+
+    c.ValueInc()
+    fmt.Printf("after ValueInc: c.n = %d\n", c.n) // still 0!
+
+    c.PointerInc()
+    fmt.Printf("after PointerInc: c.n = %d\n", c.n) // 1
+}
+// Output:
+// before: c.n = 0 (at 0xC0000A6058)
+// inside ValueInc: c.n = 1 (at 0xC0000A6070 — this is a COPY)
+// after ValueInc: c.n = 0
+// inside PointerInc: c.n = 1 (at 0xC0000A6058 — this is the ORIGINAL)
+// after PointerInc: c.n = 1
 ```
 
 ```
-c := RequestCount{n: 0}
+c.ValueInc():
+  main's c at 0x58: [ n: 0 ]
+  ValueInc's c at 0x70: [ n: 0 ] ← COPY (different address!)
+  c.n++ → copy becomes [ n: 1 ]
+  Return → copy dies, main's c still [ n: 0 ]
 
-c.ValueSeen():
-  copy: [ n: 0 ] → [ n: 1 ]  ← copy dies, c.n still 0
-
-c.PointerSeen():
-  &c: ──→ [ n: 0 ] → [ n: 1 ]  ← original modified, c.n is now 1
+c.PointerInc():
+  main's c at 0x58: [ n: 0 ]
+  PointerInc receives: pointer 0x58 (8 bytes)
+  c.n++ → writes at 0x58 → main's c becomes [ n: 1 ]
 ```
 
-Value receiver: you get a photocopy of the form; filling it in doesn’t touch the original. Pointer receiver: you get the actual form the whole app shares.
+> **In plain English:** Value receiver is like sending someone a photocopy of a form — they fill it in, but your original is untouched. Pointer receiver is like handing them the actual form — what they write stays.
 
 ### Rule 2: Method Sets Determine Interface Satisfaction
 
-This is the biggest pointer trap in Go when you wire handlers to interfaces.
+This is the biggest pointer trap in Go when wiring handlers to interfaces.
 
-- Type `T` (value) has methods with **value receivers only**
-- Type `*T` (pointer) has methods with **both** value and pointer receivers
+- Type `T` (value) can only call methods with **value receivers**
+- Type `*T` (pointer) can call methods with **both** value and pointer receivers
+
+**WHY (§4.1, §4.3):** A pointer receiver needs a *stable memory address* to write through. When you store a bare `T` inside an interface, Go might have placed it somewhere that doesn't have a stable address (e.g., a temporary copy). Go refuses to silently take its address because that would hide a heap allocation and create a pointer the caller doesn't know about.
 
 ```go
 type UserStore interface {
-    Save(*User) error
+    Save(name string) error
 }
 
-type PostgresStore struct {
-    // pool, etc.
-}
+type PostgresStore struct{ dsn string }
 
-func (s *PostgresStore) Save(u *User) error {
-    // INSERT ... ON CONFLICT, etc.
+func (s *PostgresStore) Save(name string) error {
+    fmt.Println("saving", name, "to", s.dsn)
     return nil
 }
 
-var _ UserStore = PostgresStore{}   // COMPILE ERROR: PostgresStore does not implement UserStore
-var _ UserStore = &PostgresStore{}  // OK: *PostgresStore has Save()
+func main() {
+    // var _ UserStore = PostgresStore{dsn: "pg://localhost"}   // COMPILE ERROR
+    var _ UserStore = &PostgresStore{dsn: "pg://localhost"}     // OK
+}
 ```
 
 ```
-Method set of PostgresStore:   { }              ← no Save() on the value type
-Method set of *PostgresStore:  { Save() }       ← pointer receiver methods live here
+Method set of PostgresStore (value):
+  { }                    ← Save has a pointer receiver, not included
 
-Interface UserStore requires: { Save(*User) error }
+Method set of *PostgresStore (pointer):
+  { Save(string) error } ← pointer type includes BOTH receiver kinds
 
-PostgresStore{}  → method set {} → missing Save() → COMPILE ERROR
-&PostgresStore{} → method set { Save() } → satisfies UserStore → OK
+WHY the compiler rejects PostgresStore{}:
+
+  Step 1: You write:  var s UserStore = PostgresStore{dsn: "pg://localhost"}
+  Step 2: Go stores the struct inside the interface value (copies it)
+  Step 3: Save needs *PostgresStore — it needs an address to potentially write to
+  Step 4: The copy inside the interface doesn't have a stable, known address
+  Step 5: Go could silently do &copy — but that would:
+          a) Create a heap allocation you didn't ask for
+          b) Give Save a pointer to a COPY, not your original
+          c) Any mutations would be invisible to the caller
+  Step 6: So Go says: COMPILE ERROR — use &PostgresStore{} instead
+
+                   ┌─────────────────────────────┐
+  &PostgresStore{} │ iface: [type: *PostgresStore │ data: → heap obj] │  ← address is stable
+                   └─────────────────────────────┘
+                   ┌─────────────────────────────┐
+  PostgresStore{}  │ iface: [type: PostgresStore  │ data: copy]       │  ← no stable address
+                   └─────────────────────────────┘
+                   Can't call pointer receiver methods on this copy!
 ```
 
-**Why?** Go needs a stable address to call a pointer receiver method. A bare `PostgresStore{}` sitting in an interface might be a transient copy with no stable address. Go refuses to silently take its address because that would hide allocations and confuse everyone.
+> **In plain English:** Think of venue security. `*PostgresStore` is a real ID with your home address — the bouncer lets you in because you can be contacted. `PostgresStore` is a photocopy — the bouncer won't let it in because if someone needs to reach you (write to your address), the photocopy doesn't lead anywhere real.
 
-Think of it like venue security: `*PostgresStore` holds the real ID; `PostgresStore` is a photocopy. The bouncer won’t let the photocopy in even if the picture looks right.
-
-### Rule 3: Don't Return Pointers to Loop Variables
+### Rule 3: Don't Return Pointers to Loop Variables (Pre-Go 1.22)
 
 Before Go 1.22, the loop variable was reused across iterations. Taking its address gave you a pointer to the same slot every time.
 
+**WHY (§4.2):** `&i` gives you the address of `i`. If there's only ONE `i` variable reused across all iterations (pre-1.22 behavior), every `&i` returns the same address. After the loop, that address holds the final value.
+
 ```go
-// Go < 1.22: BUG
+// Go < 1.22: BUG — all pointers alias the same variable
 var ptrs []*int
 for i := 0; i < 3; i++ {
-    ptrs = append(ptrs, &i)  // all point to same i!
+    ptrs = append(ptrs, &i)
 }
-// ptrs[0], ptrs[1], ptrs[2] all point to i = 3
+fmt.Println(*ptrs[0], *ptrs[1], *ptrs[2]) // 3, 3, 3 — all point to same i
 
 // Go >= 1.22: FIXED — each iteration gets its own i
+// Same code prints: 0, 1, 2
 ```
 
 ```
-Go < 1.22:
-  ptrs[0] ──→ [ i ]
-  ptrs[1] ──→ [ i ]   ← all three point to THE SAME slot
-  ptrs[2] ──→ [ i ]
-  After loop: i = 3, so all dereferences give 3
+Go < 1.22 — ONE loop variable reused:
 
-Go >= 1.22:
-  ptrs[0] ──→ [ i₀ = 0 ]
-  ptrs[1] ──→ [ i₁ = 1 ]   ← each iteration has its own variable
-  ptrs[2] ──→ [ i₂ = 2 ]
+  Iteration 0: i = 0 at 0xA0 → ptrs[0] = &i = 0xA0
+  Iteration 1: i = 1 at 0xA0 → ptrs[1] = &i = 0xA0  ← SAME address!
+  Iteration 2: i = 2 at 0xA0 → ptrs[2] = &i = 0xA0  ← SAME address!
+  Loop ends:   i = 3 at 0xA0
+
+  ptrs[0] ──→ 0xA0: [ 3 ]
+  ptrs[1] ──→ 0xA0: [ 3 ]   ← all three read the same slot → all get 3
+  ptrs[2] ──→ 0xA0: [ 3 ]
+
+Go >= 1.22 — FRESH variable per iteration:
+
+  Iteration 0: i₀ = 0 at 0xA0 → ptrs[0] = 0xA0
+  Iteration 1: i₁ = 1 at 0xA8 → ptrs[1] = 0xA8  ← different address!
+  Iteration 2: i₂ = 2 at 0xB0 → ptrs[2] = 0xB0  ← different address!
+
+  ptrs[0] ──→ 0xA0: [ 0 ]
+  ptrs[1] ──→ 0xA8: [ 1 ]   ← each has its own slot
+  ptrs[2] ──→ 0xB0: [ 2 ]
 ```
 
-Before Go 1.22, the `for` loop reused one locker for every iteration — every sticky note pointed at the same locker, so after the loop everyone read whatever was left last (usually the final value). Same bug class shows up when you batch-scan rows and stash `&row` without copying.
+Same bug class showed up when scanning database rows: `for rows.Next() { rows.Scan(&row); results = append(results, &row) }` — every pointer aliases the same `row`.
+
+> **In plain English:** Pre-1.22, the `for` loop had ONE locker and kept putting new items in it each iteration. Every sticky note you wrote said "check locker A" — so after the loop, everyone opens locker A and finds whatever was put in last. Go 1.22 gives each iteration its own locker.
 
 ### Rule 4: Pointer to Interface Is Almost Always Wrong
 
-You almost never need `*UserStore` (pointer to interface). The interface value is already a small two-word container holding a type pointer and a data pointer.
+You almost never need `*UserStore` (pointer to interface). The interface value is already a small two-word container.
+
+**WHY (§4.1):** An interface value is 16 bytes: a type pointer (8B) + a data pointer (8B). It already carries a pointer to your concrete type. Adding `*` wraps a pointer around something that's already pointer-like — useless indirection.
 
 ```go
-type UserStore interface {
-    Save(*User) error
-}
-
 // WRONG — extra indirection, confuses every reader
 func RegisterRoutes(store *UserStore) { ... }
 
-// RIGHT — pass the interface; it already carries a pointer to the concrete store
+// RIGHT — interface already carries a pointer to the concrete store
 func RegisterRoutes(store UserStore) { ... }
 ```
 
 ```
-Interface value (2 words, 16 bytes):
-┌──────────────┬──────────────┐
-│ type pointer  │ data pointer  │  ← already contains a pointer to your PostgresStore
-└──────────────┴──────────────┘
+What an interface value actually looks like in memory (16 bytes):
 
-*UserStore would be a pointer TO this container — useless wrapping.
+  ┌───────────────────┬───────────────────┐
+  │ type ptr (8B)     │ data ptr (8B)     │  ← the interface IS a container with a pointer
+  │ → *PostgresStore  │ → heap: {dsn...}  │
+  └───────────────────┴───────────────────┘
+
+Passing UserStore: copies 16 bytes (the two pointers above). Cheap.
+
+Passing *UserStore: copies 8 bytes (a pointer to the 16-byte container above).
+  ┌──────────┐     ┌──────────────┬──────────────┐
+  │ ptr (8B) │ ──→ │ type ptr     │ data ptr     │ ──→ actual data
+  └──────────┘     └──────────────┴──────────────┘
+  You saved 8 bytes of copying but added an extra dereference at EVERY method call.
+  Net result: slower, harder to read, and breaks nil comparison semantics.
 ```
 
-An interface is already the envelope with the recipient’s address written inside. Putting that envelope inside another envelope doesn’t help.
+> **In plain English:** An interface is already the envelope with the recipient's address written inside. Putting that envelope inside another envelope doesn't help — it just makes the mailman open two envelopes instead of one.
 
 ### Rule 5: sync.Mutex Must Never Be Copied
 
-Types containing `sync.Mutex` must use pointer receivers and never be passed by value. Copying a locked mutex gives you a second mutex with independent state — your HTTP middleware thinks it serialized access; it didn’t.
+Types containing `sync.Mutex` must use pointer receivers and never be passed by value. Copying a locked mutex gives you a second mutex with independent state.
+
+**WHY (§4.1, §4.5):** From §4.1, passing by value copies every byte of the struct. A `sync.Mutex` is a struct with internal state fields (lock state, waiter count). Copying those bytes creates a second, independent mutex. From §4.5, only pointer passing ensures all callers operate on the same lock.
 
 ```go
-type SafeMap struct {
+package main
+
+import (
+    "fmt"
+    "sync"
+)
+
+type SafeCache struct {
     mu sync.Mutex
     m  map[string]int
 }
 
 // WRONG: value receiver copies the mutex
-func (s SafeMap) Get(key string) int {
-    s.mu.Lock()          // locks the COPY's mutex
+func (s SafeCache) GetBroken(key string) int {
+    s.mu.Lock()         // locks the COPY's mutex
     defer s.mu.Unlock()
-    return s.m[key]      // reads the COPY's map — no real protection
+    return s.m[key]     // reads without real protection
 }
 
-// RIGHT: pointer receiver
-func (s *SafeMap) Get(key string) int {
+// RIGHT: pointer receiver — everyone shares one mutex
+func (s *SafeCache) Get(key string) int {
     s.mu.Lock()
     defer s.mu.Unlock()
     return s.m[key]
 }
+
+func main() {
+    cache := &SafeCache{m: map[string]int{"x": 1}}
+    fmt.Println(cache.Get("x")) // 1 — safe
+}
 ```
 
 ```
-Value receiver (WRONG):
-  original:  [ mu: locked   | m: {...} ]
-  copy:      [ mu: locked   | m: {...} ]  ← TWO independent mutexes!
-  Unlocking the copy doesn't unlock the original.
+Value receiver (WRONG) — what happens in memory:
+
+  original at 0xA0: [ mu: {state: locked, waiters: 2} | m: 0xB0 ]
+                                                         │
+  GetBroken() copies ALL bytes:                          │
+  copy at 0xC0:     [ mu: {state: locked, waiters: 2} | m: 0xB0 ]
+                              ↑                          ↑
+                     INDEPENDENT lock state!    Points at same map data
+
+  Result: Two goroutines both call GetBroken():
+    goroutine 1: locks copy₁.mu → reads m
+    goroutine 2: locks copy₂.mu → reads m    ← no contention because DIFFERENT mutexes!
+    RACE CONDITION: both read/write the same map without real synchronization
 
 Pointer receiver (RIGHT):
-  &original: ──→ [ mu: locked | m: {...} ]  ← only ONE mutex, shared
+
+  cache at 0xA0: [ mu: {state: unlocked} | m: 0xB0 ]
+  Get() receives pointer 0xA0 → everyone locks THE SAME mu
 ```
 
-Use `go vet` — it detects copied mutexes.
+`go vet` detects this: `call of GetBroken copies lock value: SafeCache contains sync.Mutex`
 
-Photocopying a padlock doesn’t give you a second key to the same lock — it gives you a different lock entirely, so nothing is actually guarded.
+> **In plain English:** Photocopying a padlock gives you a different lock entirely — it doesn't share a key with the original. Now you have two goroutines each holding their own lock, both thinking they have exclusive access, but neither is actually blocking the other.
 
 ---
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### Example 1: Mutating through a pointer (real service shape)
+### Example 1: Basic Pointer Operations — Traced Through Memory
+
+The foundation for everything else. This example traces `&`, `*`, and passing pointers step by step.
 
 ```go
-func UpdateUserEmail(u *User, newEmail string) {
+package main
+
+import "fmt"
+
+func double(p *int) {
+    *p = *p * 2
+}
+
+func main() {
+    score := 50
+    fmt.Println("before:", score)
+
+    double(&score)
+    fmt.Println("after:", score) // 100
+
+    double(&score)
+    fmt.Println("after 2x:", score) // 200
+}
+```
+
+```
+Step 1: score := 50
+  main's stack:
+    score at 0xA0: [ 50 ]
+
+Step 2: double(&score)
+  Go copies 8 bytes (the address 0xA0) into double's parameter p
+  double's stack:
+    p at 0xB0: [ 0xA0 ]    ← p holds score's address
+
+Step 3: *p = *p * 2
+  Read:  *p → follow 0xA0 → read 50
+  Compute: 50 * 2 = 100
+  Write: *p → follow 0xA0 → write 100
+  main's stack:
+    score at 0xA0: [ 100 ]  ← changed through the pointer!
+
+Step 4: Back in main, score is 100
+
+Step 5: double(&score) again
+  same process → 100 * 2 = 200
+  score at 0xA0: [ 200 ]
+```
+
+### Example 2: Mutating a Struct via Pointer — PATCH /users/:id Shape
+
+What your handler does after binding a JSON request and calling the service layer.
+
+```go
+package main
+
+import "fmt"
+
+type User struct {
+    Name  string
+    Email string
+    Role  string
+}
+
+func promote(u *User) {
+    u.Role = "admin"
+}
+
+func updateEmail(u *User, newEmail string) {
     u.Email = newEmail
 }
 
 func main() {
-    u := &User{Name: "rahul", Email: "old@example.com"}
-    UpdateUserEmail(u, "new@example.com")
-    fmt.Println(u.Email)  // new@example.com
+    u := &User{Name: "rahul", Email: "old@test.com", Role: "viewer"}
+    fmt.Printf("before: %+v\n", *u)
+
+    promote(u)
+    updateEmail(u, "new@test.com")
+    fmt.Printf("after: %+v\n", *u)
+    // after: {Name:rahul Email:new@test.com Role:admin}
 }
 ```
 
 ```
-Step 1: u points at heap or stack User
-Step 2: UpdateUserEmail receives a copy of the pointer (still 8 bytes) → same struct
-Step 3: u.Email = newEmail writes through that address
-Step 4: caller sees updated email — same idea as swapping fields via pointers, but this is what you actually do after a PATCH /users/:id
+Step 1: u := &User{...} — escape analysis moves User to heap (we return/share it)
+  heap 0xC000014040: [ Name:"rahul" | Email:"old@test.com" | Role:"viewer" ]
+  main's stack: u = 0xC000014040
+
+Step 2: promote(u) — copies 8-byte pointer
+  promote's stack: u = 0xC000014040
+  u.Role = "admin" → writes at 0xC000014040 + offset(Role)
+  heap: [ Name:"rahul" | Email:"old@test.com" | Role:"admin" ]
+
+Step 3: updateEmail(u, "new@test.com") — copies pointer + string
+  heap: [ Name:"rahul" | Email:"new@test.com" | Role:"admin" ]
+
+Step 4: main reads *u → sees both changes (same heap address)
 ```
 
-### Example 2: Returning a pointer (escape to heap)
+### Example 3: Returning a Pointer — Constructor Pattern
+
+This is the standard Go constructor: create a struct, configure it, return a pointer.
 
 ```go
-type ListenConfig struct {
-    Addr         string
-    ReadTimeout  time.Duration
+package main
+
+import "fmt"
+
+type DBPool struct {
+    DSN     string
+    MaxConn int
 }
 
-func newListenConfig() *ListenConfig {
-    c := ListenConfig{Addr: ":8080", ReadTimeout: 30 * time.Second}
-    return &c  // c escapes to heap — safe in Go
+func NewDBPool(dsn string, maxConn int) *DBPool {
+    pool := DBPool{DSN: dsn, MaxConn: maxConn}
+    return &pool // pool escapes to heap — safe in Go
 }
 
 func main() {
-    cfg := newListenConfig()
-    fmt.Println(cfg.Addr)  // :8080
+    pool := NewDBPool("postgres://localhost/mydb", 25)
+    fmt.Printf("pool at %p: %+v\n", pool, *pool)
 }
 ```
 
 ```
-Step 1: newListenConfig() creates c on stack
-Step 2: Compiler detects &c is returned → moves c to heap
-Step 3: Returns pointer to heap-allocated ListenConfig
-Step 4: main's cfg points to heap: [ Addr: ":8080", ... ]
-         GC will clean this up when no pointers reference it
+Step 1: NewDBPool called
+  Compiler detects: &pool is returned → pool must escape to heap
+
+Step 2: pool := DBPool{...} — allocated directly on heap (compiler optimization)
+  heap 0xC000010060: [ DSN:"postgres://localhost/mydb" | MaxConn: 25 ]
+
+Step 3: return &pool
+  Returns 0xC000010060 to main
+  NewDBPool's stack frame is destroyed, but the data lives on the heap
+
+Step 4: main's pool = 0xC000010060
+  pool ──→ heap: [ DSN:"postgres://localhost/mydb" | MaxConn: 25 ]
+  GC will free this when no live pointer references it anymore
+
+Verify: go build -gcflags="-m"
+  → "moved to heap: pool"
 ```
 
-This pattern is what you reach for when a constructor hands fully populated server config to `http.ListenAndServe` or your DI container.
+### Example 4: The Nil Interface Trap — Pointer Angle
 
-### Example 3: The nil Interface Trap (Review from T01, Pointer Angle)
+The most subtle pointer-related bug in Go services. Your handler returns a typed nil pointer as `error`, but the nil check fails.
 
 ```go
-type MyError struct{ msg string }
-func (e *MyError) Error() string { return e.msg }
+package main
 
-func mayFail() error {
-    var err *MyError  // nil pointer, but typed
-    return err        // returns non-nil interface!
+import "fmt"
+
+type APIError struct{ Code int; Msg string }
+func (e *APIError) Error() string { return fmt.Sprintf("%d: %s", e.Code, e.Msg) }
+
+func validate(name string) error {
+    var apiErr *APIError // nil pointer, but TYPED
+    if name == "" {
+        apiErr = &APIError{Code: 400, Msg: "name required"}
+    }
+    return apiErr // BUG: returns non-nil interface even when apiErr is nil!
 }
 
 func main() {
-    if err := mayFail(); err != nil {
-        fmt.Println("got error:", err)  // THIS RUNS — even though err is a nil pointer
+    err := validate("rahul") // name is fine, no error created
+    if err != nil {
+        fmt.Println("unexpected error:", err) // THIS RUNS
     }
 }
 ```
 
 ```
-mayFail() returns:
-  interface { type: *MyError | data: nil }  ← type field is NOT nil
+Step 1: validate("rahul")
+  var apiErr *APIError → stack: [ apiErr = nil (0x0) ]
+  name != "" → skip the if block → apiErr stays nil
 
-  err != nil checks the INTERFACE, not the pointer inside.
-  Interface has a type → it's not nil.
+Step 2: return apiErr
+  Go wraps apiErr into an interface{} (error is an interface):
+    interface value: [ type: *APIError | data: nil ]
+                            ↑                ↑
+                      NOT nil!          nil pointer
 
-Fix: return nil explicitly, or use error interface directly:
-  return nil  ← returns interface { type: nil | data: nil }
+Step 3: main checks: err != nil
+  err is: [ type: *APIError | data: nil ]
+  An interface is nil ONLY when BOTH type AND data are nil
+  Here type = *APIError (not nil) → so err != nil is TRUE
+
+  err ──→ [ type: *APIError | data: nil ]   ← non-nil interface!
+  nil ──→ [ type: nil        | data: nil ]   ← this is what nil looks like
+
+FIX: return nil explicitly
+  func validate(name string) error {
+      if name == "" {
+          return &APIError{Code: 400, Msg: "name required"}
+      }
+      return nil  // ← returns [ type: nil | data: nil ] → truly nil
+  }
 ```
-
-Same bug bites you when a JSON handler builds `var apiErr *APIError` and returns it as `error` — tests think failure happened because `err != nil` is true even though the pointer inside is nil.
 
 ---
 
@@ -546,29 +949,95 @@ Implement **`WalkMiddleware`**: a tiny stack of `func(http.Handler) http.Handler
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Fix |
-|--------|-------------|-----|
-| Nil `*User` before `json.NewEncoder(w).Encode` | Panic: invalid memory address | Return `400` early if binding produced nil; guard with `if u == nil` |
-| Value receiver on `SafeMap` or any mutex-backed cache | Two independent locks; race under load | Pointer receivers on methods; never pass the struct by value into goroutines |
-| Comparing `*User` with `==` in a test | You compared addresses, not fields | Compare IDs or use `reflect.DeepEqual` / explicit field checks |
-| Returning typed nil `*APIError` as `error` | `if err != nil` true even though data pointer is nil | `return nil` or var of interface type assigned only on real failure |
-| `&i` inside `for _, row := range rows` (pre-1.22 / shared var bugs) | Every ptr aliases the same loop var | Copy `row := row`, or upgrade Go, or index with `&slice[i]` intentionally |
-| `&m["session"]` on a map value | Compile error: map values aren’t addressable | Copy to local `u := m["session"]`, edit, write `m["session"] = u` |
-| Writing to a nil map in a lazy-loaded cache | `panic: assignment to entry in nil map` | Initialize with `make` before first store |
+| Gotcha | What Happens | Because (§4 link) | Fix |
+|--------|-------------|-------------------|-----|
+| Nil `*User` before `json.Encode` | Panic: nil pointer dereference | §4.4 — dereferencing nil reads address 0x0, which is unmapped memory. CPU triggers SIGSEGV, Go converts to panic | Guard with `if u == nil` before encoding; return 400 early if binding produced nil |
+| Value receiver on mutex-backed cache | Two independent locks; race under load | §4.1 + §4.5 — value receiver copies every byte of the struct, including the mutex's internal state. Two goroutines each lock their own copy — no real synchronization | Pointer receivers on all methods; never pass the struct by value |
+| Comparing `*User` with `==` | Compares addresses, not fields | §4.1 — a pointer IS an address (8 bytes). `==` on two pointers checks if both hold the same address, not whether the structs they point at have equal fields | Compare IDs explicitly, or use `reflect.DeepEqual`, or dereference and compare `*a == *b` (only works if all fields are comparable) |
+| Returning typed nil `*APIError` as `error` | `if err != nil` is true even though data pointer is nil | §4.4 — the interface wraps `[type: *APIError, data: nil]`. The type slot is non-nil, so the interface is non-nil | Always `return nil` for the no-error path; never return a typed nil pointer through an interface |
+| `&i` in `for` loop (pre-Go 1.22) | Every pointer aliases the same loop variable | §4.2 — `&i` gives the address of `i`. Pre-1.22, there's ONE `i` variable reused each iteration, so every `&i` is the same address | Upgrade to Go 1.22+, or copy: `v := i; ptrs = append(ptrs, &v)` |
+| `&m["key"]` on a map value | Compile error: can't take address | Map values don't have stable addresses — the runtime moves values during map growth (evacuation, rehashing). A pointer to a map value would become dangling after growth | Copy to local: `u := m["key"]`; edit; write back `m["key"] = u` |
+| Writing to a nil map | `panic: assignment to entry in nil map` | A nil map pointer has no underlying `hmap` struct allocated — there are no buckets to write to | Initialize with `make(map[K]V)` or a literal `map[K]V{}` before first store |
 
-**The addressability trap:**
+### Gotcha Deep Dive: Map Value Addressability
+
+This one deserves a memory trace because it trips up nearly everyone:
 
 ```go
 m := map[string]User{"a": {Name: "rahul"}}
-m["a"].Name = "admin"  // COMPILE ERROR: cannot take address of map value
+// m["a"].Name = "admin"  // COMPILE ERROR: cannot take address of m["a"]
 
-// Fix: copy, modify, write back
-u := m["a"]
-u.Name = "admin"
-m["a"] = u
+u := m["a"]       // copy the value out
+u.Name = "admin"  // modify the copy
+m["a"] = u        // write it back
+fmt.Println(m["a"].Name) // "admin"
 ```
 
-You can’t edit a document while it’s still clipped inside the filing cabinet drawer — pull it out, change it, slide it back.
+```
+WHY you can't write m["a"].Name directly:
+
+  Step 1: m["a"] returns a COPY of the User stored in the map's bucket
+    m's internal bucket: [ hash | "a" | User{Name:"rahul"} ]
+    m["a"] → Go copies the User out → temp copy on stack
+
+  Step 2: m["a"].Name = "admin" would need to:
+    a) Find the bucket for key "a"
+    b) Get a pointer to the User inside that bucket
+    c) Write to Name through that pointer
+
+  BUT: if another insert triggers map growth between step (b) and (c),
+  the runtime evacuates buckets to a new array. The pointer from step (b)
+  now points at freed/stale memory.
+
+  Go prevents this at compile time by refusing to give you an address
+  into a map's internal storage.
+
+FIX: copy-edit-write pattern
+  u := m["a"]    ← safe copy on stack
+  u.Name = ...   ← modify the copy
+  m["a"] = u     ← runtime handles insertion safely
+```
+
+> **In plain English:** You can't edit a document while it's still clipped inside a filing cabinet drawer — the drawer might get reorganized while you're writing. Pull the document out, make your changes, and slide it back in.
+
+### Gotcha Deep Dive: Nil Pointer in Handler Chain
+
+This is the most common production panic in Go HTTP services:
+
+```go
+func (h *Handler) GetUser(w http.ResponseWriter, r *http.Request) {
+    user, err := h.repo.FindByID(r.Context(), id)
+    if err != nil {
+        http.Error(w, "not found", 404)
+        return // CRITICAL: must return here
+    }
+    // if you forget the return above and user is nil...
+    json.NewEncoder(w).Encode(user) // PANIC if user is nil
+}
+```
+
+```
+What happens when user is nil:
+
+  Step 1: user = nil (FindByID returned nil, *User)
+  Step 2: json.NewEncoder(w).Encode(user)
+    Encode calls user's MarshalJSON or uses reflection
+    Reflection tries to follow the pointer: *user
+    user holds 0x0 (nil)
+    CPU reads address 0x0 → SIGSEGV → panic
+
+  The panic crashes this goroutine.
+  If you have no recover() middleware, the HTTP server
+  catches it and returns 500 — but your logs show a panic stack trace.
+
+SAFE PATTERN:
+  if err != nil {
+      http.Error(w, "not found", 404)
+      return    ← exit the handler entirely
+  }
+  // user is guaranteed non-nil here
+  json.NewEncoder(w).Encode(user)
+```
 
 ---
 
@@ -584,8 +1053,8 @@ Picture a typical HTTP stack: `ListenConfig` + middleware structs + a fat `AppCo
 | Return pointer | 8 bytes to caller | Yes when compiler moves value to heap | Higher | Constructors returning `*Repository`, `*ListenConfig`, anything big or nil-able |
 
 **Concrete sizes (64-bit, rough mental anchors):**
-- `time.Time` is 24 bytes — still fine by value when you’re not mutating it.
-- A minimal `User` with a few strings is already multiple words; by the time you add slices for roles/permissions you’re often past the “tiny value” comfort zone — pointers keep handler signatures stable.
+- `time.Time` is 24 bytes — still fine by value when you're not mutating it.
+- A minimal `User` with a few strings is already multiple words; by the time you add slices for roles/permissions you're often past the "tiny value" comfort zone — pointers keep handler signatures stable.
 - Anything embedding `sync.Mutex` or `sync.RWMutex` — always pointer receivers and pointer fields; copying would duplicate locks.
 
 **Rule of thumb for APIs you actually ship:**
@@ -601,9 +1070,9 @@ Picture a typical HTTP stack: `ListenConfig` + middleware structs + a fat `AppCo
 |--------------|---------|
 | "I passed `*http.Request`, so Go used pass-by-reference" | Still pass-by-value — you copied an 8-byte pointer. Both caller and `ServeHTTP` share the same request struct because the addresses match. |
 | "`new(ListenConfig)` always hits the heap" | `new` is sugar for zero value + pointer; escape analysis decides stack vs heap based on whether the pointer escapes your function. |
-| "`&local` inside a handler always allocates" | If you only pass that pointer to callees that don’t store it past the handler return, it often stays stack-fast. Profile before guessing. |
+| "`&local` inside a handler always allocates" | If you only pass that pointer to callees that don't store it past the handler return, it often stays stack-fast. Profile before guessing. |
 | "Pointers are free performance" | Indirection costs cache misses; heap pointers add GC work. A storm of tiny heap allocations from unnecessary `&T{}` in hot paths hurts more than copying a 24-byte struct. |
-| "Nil pointer means the variable doesn’t exist" | The pointer variable exists on the stack with value `nil`; there’s simply no valid object at address 0. Check before dereferencing. |
+| "Nil pointer means the variable doesn't exist" | The pointer variable exists on the stack with value `nil`; there's simply no valid object at address 0. Check before dereferencing. |
 
 ---
 
@@ -623,31 +1092,31 @@ Picture a typical HTTP stack: `ListenConfig` + middleware structs + a fat `AppCo
 
 ### Q1: "When should you use a pointer receiver vs a value receiver?"
 
-If someone asks that in an interview, I’d start from what we do in real services: pointer receivers when the method mutates state you care about (`Save`, `Increment`, anything touching a mutex), or when the struct is large enough that copying it at every call would be silly. Value receivers are great for small, immutable-ish things — think `time.Time` or a little value object.
+If someone asks that in an interview, I'd start from what we do in real services: pointer receivers when the method mutates state you care about (`Save`, `Increment`, anything touching a mutex), or when the struct is large enough that copying it at every call would be silly. Value receivers are great for small, immutable-ish things — think `time.Time` or a little value object.
 
-Then I’d mention the sharp edge: method sets. If you need `*PostgresStore` to satisfy `UserStore` because `Save` has a pointer receiver, you can’t pretend the plain value type implements the interface — `PostgresStore`’s method set doesn’t include that method. Consistency matters: once a type mixes receivers, reviewers (and the compiler) get cranky.
+Then I'd mention the sharp edge: method sets. If you need `*PostgresStore` to satisfy `UserStore` because `Save` has a pointer receiver, you can't pretend the plain value type implements the interface — `PostgresStore`'s method set doesn't include that method. Consistency matters: once a type mixes receivers, reviewers (and the compiler) get cranky.
 
 ### Q2: "Is Go pass-by-value or pass-by-reference?"
 
-I’d say Go is strictly pass-by-value, full stop — even when the thing being copied is a pointer. You hand the function its own 8-byte sticky note with an address on it; you didn’t teleport the struct. That’s why sharing works: two notes, one apartment.
+I'd say Go is strictly pass-by-value, full stop — even when the thing being copied is a pointer. You hand the function its own 8-byte sticky note with an address on it; you didn't teleport the struct. That's why sharing works: two notes, one apartment.
 
-I’d also nod at slices and maps: the header or map descriptor is copied by value, but the header points at shared backing storage, which is why mutations show up — and why `append` still surprises people until they internalize that the length field lives in the header you might have copied unless you return the new slice or pass `*[]T`.
+I'd also nod at slices and maps: the header or map descriptor is copied by value, but the header points at shared backing storage, which is why mutations show up — and why `append` still surprises people until they internalize that the length field lives in the header you might have copied unless you return the new slice or pass `*[]T`.
 
 ### Q3: "Explain the nil interface trap."
 
-I’d describe the interface as a tiny struct with `{type, data}`. A totally nil `error` has both fields empty. But the moment you write `var e *APIError; return e`, the interface’s type slot says `*APIError` even though the data pointer inside is nil — so `err != nil` is true and your JSON error writer fires even though there’s no actual `APIError` value.
+I'd describe the interface as a tiny struct with `{type, data}`. A totally nil `error` has both fields empty. But the moment you write `var e *APIError; return e`, the interface's type slot says `*APIError` even though the data pointer inside is nil — so `err != nil` is true and your JSON error writer fires even though there's no actual `APIError` value.
 
-Fix is boring but important: `return nil` for the no-error path, or only assign to the `error` variable when you truly constructed a non-nil concrete error. I’ve seen this in handlers that tried to be clever with typed errors.
+Fix is boring but important: `return nil` for the no-error path, or only assign to the `error` variable when you truly constructed a non-nil concrete error. I've seen this in handlers that tried to be clever with typed errors.
 
 ---
 
 ## 12. Final Verbal Answer
 
-If someone asks me about pointers in Go at the end of a long loop, I’d probably say something like:
+If someone asks me about pointers in Go at the end of a long loop, I'd probably say something like:
 
-I treat pointers as shared sticky notes: Go always copies what you pass, but a copied address still lands you in the same struct. That’s how I mutate users, swap in new emails, or update repository state without returning giant structs. Pointer receivers line up with that — they’re how methods get a stable address to write through, and they interact with interfaces in a picky way, which is why `*PostgresStore` implements `UserStore` but the bare struct might not.
+I treat pointers as shared sticky notes: Go always copies what you pass, but a copied address still lands you in the same struct. That's how I mutate users, swap in new emails, or update repository state without returning giant structs. Pointer receivers line up with that — they're how methods get a stable address to write through, and they interact with interfaces in a picky way, which is why `*PostgresStore` implements `UserStore` but the bare struct might not.
 
-I’d mention escape analysis only at a high level: if I return a pointer to something I built locally, the compiler moves the value to the heap so the pointer stays valid — fine for constructors, something to watch in hot paths. Gotchas I actually watch for in production: nil dereferences, typed nil errors tricking `if err != nil`, copying mutexes, and taking addresses of loop variables. Day to day, I reach for pointers when the struct is big, mutable, or owns a lock; I stick to values when the type is small and semantically immutable.
+I'd mention escape analysis only at a high level: if I return a pointer to something I built locally, the compiler moves the value to the heap so the pointer stays valid — fine for constructors, something to watch in hot paths. Gotchas I actually watch for in production: nil dereferences, typed nil errors tricking `if err != nil`, copying mutexes, and taking addresses of loop variables. Day to day, I reach for pointers when the struct is big, mutable, or owns a lock; I stick to values when the type is small and semantically immutable.
 
 ---
 
