@@ -992,28 +992,31 @@ fmt.Println(m["a"].Name) // "admin"
 ```
 
 ```
-WHY you can't write m["a"].Name directly:
+WHY you can't write m["a"].Name directly — traced through memory:
 
-  Step 1: m["a"] returns a COPY of the User stored in the map's bucket
-    m's internal bucket: [ hash | "a" | User{Name:"rahul"} ]
-    m["a"] → Go copies the User out → temp copy on stack
+  Step 1: m on stack → hmap at 0xC000010000 → buckets at 0xC000080000
+    hash("a", hash0) → 0xF3...7B
+    bucket = 0xF3...7B & (2^0 - 1) = 0 → bucket #0
+    tophash 0xF3 found at slot 0 → User{Name:"rahul"} at 0xC000080030
 
   Step 2: m["a"].Name = "admin" would need to:
-    a) Find the bucket for key "a"
-    b) Get a pointer to the User inside that bucket
-    c) Write to Name through that pointer
+    a) Find bucket #0, slot 0 (done above)
+    b) Take pointer: ptr = 0xC000080030 (address of User inside bucket)
+    c) Write "admin" to ptr.Name
 
-  BUT: if another insert triggers map growth between step (b) and (c),
-  the runtime evacuates buckets to a new array. The pointer from step (b)
-  now points at freed/stale memory.
+  BUT: if another insert triggers growth BETWEEN step (b) and (c):
+    New bucket array allocated at 0xC000090000
+    "a" evacuated to new bucket → now at 0xC000090158
+    ptr is still 0xC000080030 → old bucket → DANGLING POINTER
+    Writing to ptr.Name corrupts freed memory
 
   Go prevents this at compile time by refusing to give you an address
   into a map's internal storage.
 
 FIX: copy-edit-write pattern
-  u := m["a"]    ← safe copy on stack
-  u.Name = ...   ← modify the copy
-  m["a"] = u     ← runtime handles insertion safely
+  u := m["a"]    ← runtime copies User from 0xC000080030 onto stack (safe)
+  u.Name = ...   ← modify the stack copy
+  m["a"] = u     ← runtime handles insertion into correct bucket safely
 ```
 
 > **In plain English:** You can't edit a document while it's still clipped inside a filing cabinet drawer — the drawer might get reorganized while you're writing. Pull the document out, make your changes, and slide it back in.
