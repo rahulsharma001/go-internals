@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Study Plan.md",
+                "file": "prerequisites/P06 Function Call Stack.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Study Plan"
+              "title": "P06 Function Call Stack"
             }
           }
         ]
@@ -196,8 +196,8 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
-    "T08 Map Internals.md",
     "Study Plan.md",
+    "T08 Map Internals.md",
     "exercises/T08 Map Internals - Exercises.md",
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
