@@ -193,12 +193,13 @@ d.Speak()   // promoted from Animal
 ```
 What embedding looks like in memory:
 
-Dog struct in memory:
-  [ Animal { Name: "Rex" } | Breed: "Labrador" ]
-    ↑ embedded, not a pointer
+  stack 0xC000060000: d (Dog struct, ~48 bytes)
+    offset 0x00: Animal.Name = string{ ptr=0xC000080000, len=3 }  ← "Rex"
+    offset 0x10: Breed       = string{ ptr=0xC000080010, len=8 }  ← "Labrador"
 
-d.Speak() is syntactic sugar for d.Animal.Speak()
-The receiver of Speak() is ALWAYS Animal, not Dog.
+  d.Name → compiler rewrites to d.Animal.Name → reads at offset 0x00
+  d.Speak() → compiler rewrites to d.Animal.Speak()
+    receiver is ALWAYS Animal (the embedded value at offset 0x00), not Dog
 ```
 
 > **In plain English:** Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. The Hospital gets credit for having the capability, but the Doctor is always the one doing it.
@@ -288,13 +289,19 @@ Step 2: Size() is defined on *File (pointer receiver)
   *File method set: { Size() }   ← has it
   File method set:  { }          ← empty! No value receiver methods.
 
-Step 3: s = &File{...}  → *File satisfies Sizer → ✅
-Step 4: s = File{...}   → File does NOT satisfy Sizer → ❌
-                          <-- this is the #1 type system interview question
+Step 3: s = &File{"test.go"}  → *File satisfies Sizer → ✅
+  What s looks like in memory (interface = 16 bytes):
+    stack 0xC000060000: s = [ tab: *itab{Sizer, *File} | data: 0xC000080000 ]
+                                                                  │
+                                                                  ▼
+    heap 0xC000080000: File{ name: "test.go" }
+  Calling s.Size(): tab → method table → find Size → call with data ptr 0xC000080000
 
-Why? If Go stored a copy of File in the interface and allowed
-pointer-receiver methods, mutations would hit the copy, not your original.
-Go prevents this silent bug at compile time.
+Step 4: s = File{"test.go"}  → File does NOT satisfy Sizer → ❌ COMPILE ERROR
+  Why? The interface would store a COPY of File in data slot.
+  If Go allowed pointer-receiver methods on this copy, mutations would
+  hit the copy (inside the interface), not your original File.
+  Go prevents this silent bug at compile time.
 ```
 
 ### Embedding and method promotion
@@ -520,9 +527,22 @@ m["alice"].Name = "Bob" // ❌ COMPILE ERROR: cannot assign to map value
 ```
 
 ```
-Why? Map entries can MOVE in memory (rehashing, growing).
-If Go gave you a pointer to an entry, it could become invalid after rehash.
-So Go makes map values non-addressable — you can't modify them in place.
+Why? Map entries physically relocate during growth. Traced through memory:
+
+  BEFORE growth (B=0, 1 bucket at 0xC000080000):
+    m on stack → hmap → buckets → 0xC000080000
+    bucket0, slot 0: key="alice", value=User{Name:"Alice"} at 0xC000080030
+
+  Suppose Go let you do: ptr := &m["alice"]
+    ptr = 0xC000080030
+
+  Insert 7 more users → load factor exceeded → growth:
+    New bucket array at 0xC000090000
+    "alice" evacuated to new bucket1, slot 2 → now at 0xC000090158
+
+  ptr is still 0xC000080030 → old bucket → DANGLING POINTER
+  Go prevents this at compile time: map values are not something you can
+  take the address of. You can't modify them in place for the same reason.
 ```
 
 **Fix**: copy out, modify, assign back:
