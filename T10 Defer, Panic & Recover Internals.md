@@ -328,32 +328,34 @@ func main() {
 ```
 
 ```
-Step 1: main starts, registers 3 defers
-  Chain: → [recover-closure] → [Println "B"] → [Println "A"]
+Step 1: main starts, registers 3 defers on goroutine G1's chain
+  G1._defer chain at 0xC000050000:
+    → [_defer at 0x50020: fn=recover-closure, args=none]
+    → [_defer at 0x50010: fn=Println, args=["main: defer B"]]
+    → [_defer at 0x50000: fn=Println, args=["main: defer A"]]
 
-Step 2: riskyWork() runs
+Step 2: riskyWork() called — new stack frame at SP 0xC000070000
   Prints "step 1"
-  panic("something broke") → runtime enters panic mode
+  panic("something broke") → runtime sets G1.panic = {value: "something broke"}
 
-Step 3: Runtime unwinds riskyWork's stack frame
-  riskyWork has no defers → nothing to run
-  Returns to main's frame
+Step 3: Runtime unwinds riskyWork's stack frame (SP 0xC000070000)
+  riskyWork has no defers (no _defer records for this frame)
+  Pop frame → back to main's frame at SP 0xC000060000
 
-Step 4: Runtime walks main's defer chain (LIFO):
-  First: recover-closure runs
-    recover() → returns "something broke" (the panic value)
+Step 4: Runtime walks main's defer chain (LIFO from 0x50020):
+  _defer at 0x50020: recover-closure runs
+    recover() reads G1.panic.value → returns "something broke"
     v != nil → prints "recovered: something broke"
-    recover() stops the panic → normal execution resumes in this defer
+    recover() clears G1.panic → panic stopped
 
-  The remaining defers still run (panic is stopped, but chain continues):
-    Println("main: defer B") → prints
-    Println("main: defer A") → prints
+  _defer at 0x50010: Println("main: defer B") → prints
+  _defer at 0x50000: Println("main: defer A") → prints
 
-Step 5: main returns normally (panic was recovered)
+Step 5: main returns normally (G1.panic was cleared by recover)
 
 WITHOUT the recover:
-  Step 4: Chain runs, no recover() called
-  Step 5: All defers done, still panicking
+  Step 4: Chain runs, no recover() clears G1.panic
+  Step 5: All defers done, G1.panic still set
   Step 6: Runtime prints stack trace + "something broke"
   Step 7: os.Exit(2) — entire program dies
 ```
@@ -390,23 +392,28 @@ func main() {
 ```
 
 ```
-main goroutine (G1):
-  Defer chain: → [recover-closure]
-  
-child goroutine (G2):
-  Defer chain: → (empty — no defers registered)
+Two separate goroutine structs in memory:
+
+  G1 (main) at 0xC000001000:
+    _defer chain: → [_defer at 0xA0: fn=recover-closure]
+    panic: nil
+
+  G2 (child) at 0xC000001080:
+    _defer chain: → nil (empty — no defers registered)
+    panic: nil
 
 Step 1: G2 panics with "child panic"
-  Runtime walks G2's defer chain → empty → nothing to run
-  No recover() was called → panic is unrecovered
-  Runtime kills ENTIRE program (not just G2)
+  G2.panic = {value: "child panic"}
+  Runtime walks G2._defer chain → nil → nothing to run
+  No recover() cleared G2.panic → panic is unrecovered
+  Runtime calls fatalpanic() → kills ENTIRE program (not just G2)
 
-Step 2: G1's recover-closure NEVER runs for G2's panic
-  G1's defer chain belongs to G1 only
-  The two chains are completely separate
+Step 2: G1's recover-closure NEVER executes for G2's panic
+  G1._defer chain at 0xA0 belongs to G1 only
+  The runtime looked at G2._defer (nil), not G1._defer
 
-  G1's defer chain: → [recover-closure]    ← only runs when G1 itself panics or returns
-  G2's defer chain: → (empty)              ← G2's panic walks this, not G1's
+  G1 at 0x1000: _defer → [recover-closure]   ← only runs when G1 panics/returns
+  G2 at 0x1080: _defer → nil                  ← G2's panic walks THIS, not G1's
 
 FIX: child must recover itself:
   go func() {
@@ -430,37 +437,53 @@ The most common production use of defer — guaranteeing a database transaction 
 package main
 
 import (
-	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 )
 
-func TransferFunds(ctx context.Context, db *sql.DB, from, to int64, amount int64) (err error) {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
-	}
+func transferFunds(shouldFail bool) (err error) {
+	fmt.Println("  begin tx")
 	defer func() {
 		if err != nil {
-			tx.Rollback() // error path: undo everything
+			fmt.Println("  defer: err != nil → ROLLBACK")
+		} else {
+			fmt.Println("  defer: err is nil → skip rollback")
 		}
 	}()
 
-	_, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance - $1 WHERE id = $2", amount, from)
-	if err != nil {
-		return fmt.Errorf("debit: %w", err) // defer runs → rollback
+	fmt.Println("  debit account A")
+	if shouldFail {
+		return fmt.Errorf("debit: %w", errors.New("connection reset"))
 	}
 
-	_, err = tx.ExecContext(ctx, "UPDATE accounts SET balance = balance + $1 WHERE id = $2", amount, to)
-	if err != nil {
-		return fmt.Errorf("credit: %w", err) // defer runs → rollback
-	}
-
-	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("commit: %w", err) // defer runs → rollback (commit failed)
-	}
-	return nil // err is nil → defer skips rollback
+	fmt.Println("  credit account B")
+	fmt.Println("  commit")
+	return nil
 }
+
+func main() {
+	fmt.Println("=== SUCCESS path ===")
+	err := transferFunds(false)
+	fmt.Println("result:", err)
+
+	fmt.Println("\n=== ERROR path ===")
+	err = transferFunds(true)
+	fmt.Println("result:", err)
+}
+// Output:
+// === SUCCESS path ===
+//   begin tx
+//   debit account A
+//   credit account B
+//   commit
+//   defer: err is nil → skip rollback
+// result: <nil>
+//
+// === ERROR path ===
+//   begin tx
+//   debit account A
+//   defer: err != nil → ROLLBACK
+// result: debit: connection reset
 ```
 
 ```
@@ -575,13 +598,27 @@ func addErrorContext() (err error) {
 ```
 
 ```
-If doWork() returns an error:
-  Step 1: err = doWork() → err = "connection refused"
-  Step 2: defer closure runs: err != nil → err = "addErrorContext: connection refused"
-  Step 3: return err → caller gets the wrapped error
+Stack frame of addErrorContext():
+  ┌──────────────────────────────────────────┐
+  │  named return:  err  at 0xC000060010     │  ← shared slot
+  │  _defer chain: → [closure capturing &err] │
+  └──────────────────────────────────────────┘
 
-This is the "double return" pattern — the defer adds context to ANY error
-from ANY return path in the function, without repeating the wrapping logic.
+If doWork() returns an error:
+  Step 1: return doWork() → Go assigns: err = "connection refused"
+    stack 0x60010: [ err = "connection refused" ]
+
+  Step 2: walk _defer chain → closure runs
+    closure reads &err → err != nil → wraps:
+    err = fmt.Errorf("addErrorContext: %w", err)
+    stack 0x60010: [ err = "addErrorContext: connection refused" ]
+
+  Step 3: function returns → caller reads 0x60010 → gets wrapped error
+
+If doWork() succeeds:
+  Step 1: return doWork() → err = nil
+  Step 2: closure: err == nil → skip wrapping
+  Step 3: caller gets nil
 ```
 
 > **In plain English:** A named return is a labeled mailbox. The defer can open it and relabel the contents before the mailman picks it up.
@@ -786,6 +823,24 @@ func ListUsers(ctx context.Context, db *sql.DB) ([]User, error) {
 ```
 
 ```
+Step-through (scan error path):
+
+  Step 1: db.QueryContext succeeds
+    rows = *sql.Rows at 0xC000080000 (holds network connection, buffers)
+    stack: [ rows: 0xC000080000 ]
+
+  Step 2: defer rows.Close() registers
+    G._defer chain: → [_defer: fn=(*Rows).Close, receiver=0xC000080000]
+    Argument is evaluated NOW: 0xC000080000 is captured
+
+  Step 3: rows.Scan fails → return nil, err
+    Function is about to return
+    Runtime walks G._defer chain:
+      _defer.fn = Close(0xC000080000)
+      rows.Close() releases the connection back to pool ✓
+
+  Step 4: Caller gets (nil, "scan: ..."), connection safely returned
+
 Without defer:
   You'd need rows.Close() before EVERY return:
     return nil, fmt.Errorf("scan: %w", err)   ← need Close() before this

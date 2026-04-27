@@ -796,6 +796,19 @@ func LoadForAPI(id string) (*User, error) {
 
 **WHY (§4.1, Rule 5):** Same mechanism as Rule 5. The `nil *NotFoundError` fills the type slot when assigned to `error`.
 
+```
+getUser("valid-id") returns: (*User, nil *NotFoundError)
+
+LoadForAPI assigns nf to error return:
+  nf is nil *NotFoundError
+  error interface: [ type: *NotFoundError | data: nil ]   ← type slot filled!
+  
+  caller: err != nil → TRUE → thinks there's an error
+
+FIX: if nf != nil { return u, nf }; return u, nil
+  nil assigned to error: [ type: nil | data: nil ] → truly nil
+```
+
 > **In plain English:** Same trap, different disguise. A nil `*NotFoundError` is still a labeled tray. Guard before promoting: `if nf != nil { return u, nf }; return u, nil`.
 
 ---
