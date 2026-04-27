@@ -456,21 +456,36 @@ for k, v := range endpoints {
 **How the iterator works internally:**
 
 ```
-When you write `for k, v := range m`:
+When you write `for k, v := range endpoints`:
 
-Step 1: Pick a random starting bucket (e.g., bucket #2 out of 4)
-Step 2: Pick a random starting slot offset within that bucket (e.g., slot 5)
-Step 3: Walk forward sequentially:
-        bucket #2 slots 5,6,7 → bucket #3 slots 0-7 →
-        bucket #0 slots 0-7 → bucket #1 slots 0-7 →
-        bucket #2 slots 0,1,2,3,4 → DONE (back to where we started)
+Step 0: Follow the pointer chain to find the buckets
+  endpoints on the stack is a pointer → hmap on the heap
+  Read hmap.B → B=2, so 2^2 = 4 buckets
+  Read hmap.buckets → pointer to bucket array at 0xC000090000
+    0xC000090000: [bucket0][bucket1][bucket2][bucket3]
+  Read hmap.hash0 → 0xAB12 (the per-map random seed)
+
+Step 1: Pick random starting position using hash0
+  Runtime calls fastrand() (seeded from hash0):
+    startBucket = fastrand() & (2^B - 1) = fastrand() & 3 → e.g. 2
+    offset      = fastrand() & 7                           → e.g. 5
+  Now the iterator knows: start at bucket #2, slot 5
+
+Step 2: Walk forward sequentially from that position
+  bucket #2 slots 5,6,7 → bucket #3 slots 0-7 →
+  bucket #0 slots 0-7 → bucket #1 slots 0-7 →
+  bucket #2 slots 0,1,2,3,4 → DONE (wrapped back to start)
+
+  At each slot: check tophash[slot]
+    - 0 (empty) → skip
+    - evacuated marker → skip (growth in progress)
+    - valid → read key from keys[slot], value from values[slot] → yield to loop body
 
 The iterator tracks:
   - startBucket: where we began (so we know when to stop)
   - offset:      starting slot within each bucket
   - currentBucket + currentSlot: where we are right now
 
-It skips empty slots (tophash == 0) and evacuated markers.
 It walks ALL buckets exactly once, wrapping around.
 ```
 
@@ -687,12 +702,19 @@ count, exists := hits["/metrics"]
 
 ```
 Step 1: hits := make(map[string]int)
-  stack: [ hits = ptr → hmap ]
-  heap:  hmap{ count:0, B:0, hash0:0xAB12, buckets→[bucket0 (empty)] }
+  stack: [ hits = ptr → hmap at 0xC000010000 ]
+  heap:  hmap{ count:0, B:0, hash0:0xAB12, buckets→ 0xC000020000 }
+         0xC000020000: [bucket0 — all 8 slots empty]
+
+  B=0 means 2^0 = 1 bucket. Every key lands in bucket #0.
 
 Step 2: hits["/api/users"] = 120
-  hash("/api/users", 0xAB12) → 0xC1..A2
-  bucket #0, slot 0:
+  Follow pointer chain: hits → hmap → read B=0, hash0=0xAB12
+  hash("/api/users", 0xAB12) → 0xC1A2...F7
+  Bucket selection: 0xC1A2...F7 & (2^0 - 1) = 0xC1A2...F7 & 0x0 = 0 → bucket #0
+  Tophash extraction: top byte of 0xC1A2...F7 = 0xC1
+
+  bucket #0 at 0xC000020000: find first empty slot → slot 0
     tophash[0] = 0xC1
     keys[0]    = "/api/users"
     values[0]  = 120
@@ -703,9 +725,10 @@ Step 2: hits["/api/users"] = 120
              [120][-][-][-][-][-][-][-]
 
 Step 3: hits["/api/users"]++
-  hash → same bucket #0 → scan tophash → 0xC1 matches slot 0
-  → compare key → match → read values[0] (120) → write values[0] = 121
-  No new slot used. Just value overwrite in place.
+  hash("/api/users", 0xAB12) → 0xC1A2...F7 (same key, same hash)
+  Bucket: 0xC1A2...F7 & 0x0 = 0 → bucket #0
+  Scan tophash array: tophash[0] = 0xC1 matches top byte → compare full key → match
+  Read values[0] (120) → write values[0] = 121. No new slot used.
 
   bucket #0: [0xC1][0][0][0][0][0][0][0]
              ["/api/users"][-][-][-][-][-][-][-]
@@ -713,8 +736,10 @@ Step 3: hits["/api/users"]++
                 ↑ changed from 120 to 121
 
 Step 4: count, exists := hits["/metrics"]
-  hash("/metrics", 0xAB12) → 0x77..B3
-  bucket #0 → scan tophash for 0x77 → no match → slot 2 is empty (0) → STOP
+  hash("/metrics", 0xAB12) → 0x77B3...4E
+  Bucket: 0x77B3...4E & 0x0 = 0 → bucket #0
+  Tophash to find: 0x77
+  Scan tophash array: [0xC1] ≠ 0x77, [0] = empty → STOP
   Key not found. Return zero value (0) and exists = false.
   count = 0, exists = false
 ```
@@ -737,11 +762,34 @@ cache := map[string]OrderSummary{
 ```
 
 ```
-WHY the compile error (connects to §4.4):
-  Map values live inside bucket slots. When the map grows, entries
-  physically MOVE to new buckets. A pointer into the old slot would
-  become dangling. Go prevents this by making map values non-addressable.
-  You can't take &cache["ord-1001"], so you can't modify it in place.
+WHY the compile error — traced through memory (connects to §4.4):
+
+  BEFORE growth (B=0, 1 bucket at 0xC000080000):
+    hmap.buckets → 0xC000080000
+    bucket0, slot 0:
+      tophash[0] = 0xA3
+      keys[0]    = "ord-1001"
+      values[0]  = {LineItems: 3, TotalCents: 4999}  ← lives at 0xC000080048
+
+  Suppose Go allowed: ptr := &cache["ord-1001"]
+    ptr = 0xC000080048 (address of values[0] inside bucket0)
+
+  Now insert 7 more orders → all 8 slots full → load factor exceeded:
+
+  GROWTH triggers (B=0 → B=1, 1 bucket → 2 buckets):
+    New bucket array allocated at 0xC000090000: [bucket0 | bucket1]
+    Runtime evacuates entries from old bucket to new buckets:
+      hash("ord-1001") & (2^1 - 1) = hash & 1 → e.g. 1 → new bucket1, slot 2
+      "ord-1001" now lives at 0xC000090158 (new address)
+    hmap.buckets → 0xC000090000
+    Old array at 0xC000080000 freed after evacuation completes
+
+  ptr is still 0xC000080048 → old bucket → DANGLING POINTER
+  Reading *ptr gives garbage. Writing *ptr corrupts freed memory.
+
+  Go prevents this at compile time: map values are not something you can
+  take the address of with &. You can't get a pointer into a bucket slot,
+  so you can't end up with a dangling pointer after growth.
 ```
 
 The fix — copy, edit, write back:
@@ -925,20 +973,69 @@ m := make(map[string]*Session)
 for i := 0; i < 1_000_000; i++ {
     m[fmt.Sprintf("sess-%d", i)] = &Session{}
 }
-// hmap: count=1,000,000  B=17  buckets→[131,072 buckets]  ← ~4MB of bucket memory
 
 for i := 0; i < 1_000_000; i++ {
     delete(m, fmt.Sprintf("sess-%d", i))
 }
-// hmap: count=0  B=17  buckets→[131,072 buckets, all slots marked empty]
-//                               ↑ STILL allocated! Same 4MB.
-//
-// WHY: delete() marks tophash as "empty" but doesn't free or shrink the
-// bucket array. The runtime has no "reverse growth" operation.
-//
-// Fix: m = make(map[string]*Session)
-//   → new hmap, new tiny bucket array. Old 4MB array is now unreferenced
-//     and eligible for GC.
+
+// Fix:
+m = make(map[string]*Session)
+```
+
+```
+Step 1: m := make(map[string]*Session)
+  stack: [ m = ptr → hmap at 0xC000010000 ]
+  heap:  hmap{ count:0, B:0, hash0:0x3F91, buckets → 0xC000020000 }
+         0xC000020000: [bucket0 — all 8 slots empty]
+
+Step 2: Insert loop — first 8 keys ("sess-0" through "sess-7")
+  Each insert: hash(key, 0x3F91) → bucket = hash & (2^0 - 1) = 0 → bucket #0
+  After 8 inserts: bucket0 is full (8/8 slots used)
+  hmap{ count:8, B:0 }
+  Load factor = 8 / (2^0 × 8) = 1.0 → exceeds 6.5/8 threshold → GROWTH
+
+Step 3: Growth triggers repeatedly as more keys arrive
+  B=0 → B=1:  1 bucket  → 2 buckets    (new array at 0xC000030000)
+  B=1 → B=2:  2 buckets → 4 buckets    (new array at 0xC000040000)
+  ...
+  B=16 → B=17: 65,536 → 131,072 buckets (new array at 0xC000100000)
+
+  Each growth: allocate new bucket array, evacuate entries, old array freed.
+
+Step 4: After all 1,000,000 inserts
+  hmap{ count:1_000_000, B:17, buckets → 0xC000100000 }
+  2^17 = 131,072 buckets × ~128 bytes each ≈ 4MB of bucket memory
+  Plus 1,000,000 *Session pointers (8 bytes each) stored in value slots
+  Plus 1,000,000 string keys stored in key slots
+
+Step 5: Delete loop — delete(m, "sess-0") through delete(m, "sess-999999")
+  For each delete(m, key):
+    hash(key, 0x3F91) → bucket = hash & (2^17 - 1) → find the bucket
+    Scan tophash → find the slot → mark tophash[slot] = "emptyRest" or "emptyOne"
+    Zero out key slot (string header) and value slot (*Session pointer → nil)
+    hmap.count--
+
+  The *Session pointer in the value slot is set to nil, so the Session
+  on the heap becomes unreferenced → GC can collect it. But the BUCKET
+  SLOT ITSELF stays allocated.
+
+  After all deletes:
+    hmap{ count:0, B:17, buckets → 0xC000100000 }
+                   ↑ B is STILL 17
+                         ↑ STILL pointing to 131,072 buckets ≈ 4MB
+    Every tophash = "empty", every key/value slot zeroed — but the
+    4MB bucket array is not freed and not shrunk.
+
+  WHY no shrink: Growth is one-directional. Reverse evacuation would
+  need to re-hash and relocate all entries into a smaller array — the
+  runtime doesn't implement this. The design trades memory for simplicity.
+
+Step 6: Fix — m = make(map[string]*Session)
+  New hmap at 0xC000200000: { count:0, B:0, buckets → tiny 1-bucket array }
+  m on stack now points to 0xC000200000 (new hmap)
+  Old hmap at 0xC000010000 → no references → GC eligible
+  Old bucket array at 0xC000100000 (4MB) → no references → GC eligible
+  Memory reclaimed on next GC cycle.
 ```
 
 > **In plain English:** When you empty all the drawers in a filing cabinet, the cabinet doesn't magically shrink. You need to buy a smaller cabinet (re-create the map) to free the space.
