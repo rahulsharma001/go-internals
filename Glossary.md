@@ -166,11 +166,12 @@
 
 | Term | Full Form | Plain-English Meaning |
 |------|-----------|------------------------|
-| Call stack | — | LIFO structure of stack frames, one per active function call -- grows on call, shrinks on return |
-| Stack frame | — | Block of memory holding a function's local variables, parameters, and return address |
-| Stack overflow | — | Error when the call stack exceeds its limit -- usually caused by infinite recursion |
+| Call stack | — | The pile of stack frames for a goroutine -- one frame per active function call, grows on call, shrinks on return |
+| Stack frame | — | A function call's workspace: holds its arguments, local variables, and a note saying where to go back |
+| Stack overflow | — | Crash when the call stack runs out of room -- usually caused by infinite recursion (frames keep piling up) |
 | Contiguous stack | — | Go's stack model: when a goroutine's stack needs to grow, it's copied to a larger allocation (not segmented) |
-| Named return value | — | Return variable declared in the function signature -- lives in the caller's frame, modifiable by defer |
+| Named return value | — | Return variable declared in the function signature -- lives in the function's frame, modifiable by defer |
+| defer | — | Go keyword that schedules a function call to run when the current function exits -- runs in reverse registration order (last registered = first to run) |
 
 ## Concurrency Terms
 

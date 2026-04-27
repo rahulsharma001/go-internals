@@ -1,276 +1,288 @@
 # P06 Function Call Stack
 
-> **Prerequisite note** — complete this before starting **T10 Defer, Panic & Recover Internals** or **T13 Goroutine Internals**.
-> Estimated time: ~15 min
+> **Prerequisite note** — complete this before starting [[T10 Defer, Panic & Recover Internals]] or [[T13 Goroutine Internals]].
+> Estimated time: ~25 min
 
 ---
 
 ## 1. Concept
 
-The **call stack** is a last-in, first-out pile of **stack frames**. Every time you call a function, Go puts a new block on the stack for that call. That block holds what this invocation needs: arguments, local variables, where to go back when the call finishes, and room for return values.
+Let's start from the very basics.
 
-Picture a stack of plates at a buffet. You only ever touch the top plate. A new function call adds a plate. A return removes the top plate. The plate on top is always whoever is running *right now*.
+A **function** is a named block of code that does one job. You give it some inputs, it does its work, and it gives you back a result. In Go, your entire backend is built from functions calling other functions.
 
-For you as a backend engineer, this matters because **defers** attach cleanup to *your* frame and run in reverse order when you leave. **Named return values** are real variables in that frame — so a `defer` can still change what the caller gets. **Each goroutine** has its own stack. And if you recurse without stopping, frames keep piling up until the runtime hits **stack overflow**.
+**Arguments** are the inputs you pass to a function. When you write `GetUser(ctx, 42)`, you're calling the function `GetUser` and handing it two arguments: a context and the number 42.
+
+Now here's the key question: **what happens when one function calls another?**
+
+Go needs to remember where it was. If `HandleCheckout` calls `ValidateCart`, Go needs to pause `HandleCheckout`, run `ValidateCart`, and when `ValidateCart` is done, pick up `HandleCheckout` exactly where it left off.
+
+The way Go tracks all of this is called the **call stack**. Think of a stack of trays in a cafeteria. Every time you call a function, Go puts a new tray on top. When that function finishes, Go takes that tray off. The tray on top is always the function that's running right now.
+
+Each tray is called a **stack frame**. It holds everything that function call needs: the arguments you passed in, the local variables it creates, and a note saying "when I'm done, go back to line X in the function that called me."
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**One active call ⇒ one frame.** Nesting depth equals how many frames are stacked. Calling pushes; returning pops. **Defer** is not a queue — it’s a stack of “do this before this function is done,” so the **last** `defer` you registered runs **first** at exit. **Named results** (`(err error)`) live in the outer function’s frame the whole time, so `defer` can wrap or rewrite `err` after the body runs. **Goroutines** don’t share stacks; two concurrent requests each grow their own pile.
+**Every function call gets its own workspace (a frame).** When the function finishes, that workspace goes away.
+
+If function A calls function B, B's frame goes on top of A's. When B returns, B's frame is removed. A picks up where it left off.
+
+That's it. That's the call stack. Everything else in this note builds on top of this one idea.
 
 ---
 
 ## 3. Mental Model (Lock this in)
 
-Think of a request walking through your server.
+### The cafeteria tray analogy
 
-`ServeHTTP` is on the bottom — the entry from `net/http`. It calls `AuthMiddleware`, which calls your handler’s `GetUser`, which calls `db.Query`. While `db.Query` runs, you have **four frames** stacked: query on top, then user lookup, then middleware, then the server glue underneath.
+Imagine you're in a cafeteria. There's a spring-loaded tray dispenser. You can only touch the top tray.
 
-Checkout flows work the same way: `HandleCheckout` → `ValidateCart` → `ChargePayment`. Same idea — each arrow is a call, each call adds a frame.
+- You call a function = you put a new tray on top.
+- That function returns = you take that tray off.
+- The tray on top is always "who's running right now."
 
-When the innermost function returns, its frame vanishes. Locals tied to that call go away with it (unless the compiler moved them to the heap — more on that below).
+If your handler calls a service, which calls a database query, you have three trays stacked up. The database query tray is on top. When the query finishes, its tray comes off, and the service tray is on top again.
 
-**Defer** is “chores pinned to your current plate.” You finish the function body first. Then you run those chores from the **top of the defer list** down. That’s why `defer rows.Close()` and `defer tx.Rollback()` pair naturally with “open, work, return” — order of registration controls cleanup order.
+### The mistake that teaches you
+
+Here's a mistake that shows why this matters:
+
+```go
+func GetUser(ctx context.Context, id int64) User {
+    var u User
+    u.Name = "Sam"
+    u.Email = "sam@co.com"
+    return u
+}
+
+func HandleRequest(w http.ResponseWriter, r *http.Request) {
+    user := GetUser(r.Context(), 42)
+    fmt.Println(user.Name)
+}
+```
+
+When `HandleRequest` calls `GetUser`, Go creates a new tray (frame) for `GetUser`. The variable `u` lives on that tray. When `GetUser` returns, Go copies the result back to `HandleRequest`'s tray, and then throws away `GetUser`'s tray.
+
+After `GetUser` returns, the variable `u` inside it is gone. You can't reach it anymore. It lived on `GetUser`'s tray, and that tray has been removed from the stack.
+
+```
+While GetUser is running:
+
+    ┌──────────────────────────┐  <-- top (running now)
+    │ GetUser's tray           │
+    │   u = {Name:"Sam", ...}  │
+    │   "when done, go back to │
+    │    HandleRequest"        │
+    ├──────────────────────────┤
+    │ HandleRequest's tray     │
+    │   user = (waiting...)    │
+    └──────────────────────────┘
+
+After GetUser returns:
+
+    ┌──────────────────────────┐  <-- top (running now)
+    │ HandleRequest's tray     │
+    │   user = {Name:"Sam"...} │  <-- Got the copy back
+    └──────────────────────────┘
+
+    GetUser's tray is gone. The variable u no longer exists.
+```
 
 ---
 
 ## 4. How It Works
 
-### 4.1 What lives in a frame (the interview-safe version)
+### 4.1 What is a function and what are arguments?
 
-For one invocation, think in terms of:
+You already use functions everywhere. A handler is a function. A database query is a function. Middleware is a function that calls another function.
 
-- **Parameters** you passed in
-- **Locals** declared in that function
-- **Where to resume** in the caller when this call returns
-- **Space for return values** the caller will read
-
-You don’t need register names or exact memory layouts. You need **lifetime**: stuff that belongs to this call disappears when this call’s frame is popped — unless the compiler **escapes** it to the heap (e.g. you return a pointer to a local and that pointer must stay valid).
-
-### 4.2 Push on call, pop on return
-
-You call `ValidateCart` from `HandleCheckout`. `HandleCheckout`’s frame stays. `ValidateCart`’s frame goes on top. If `ValidateCart` calls `ChargePayment`, you get a third frame. Returns unwind in the opposite order: payment finishes, then cart, then checkout.
-
-Same function text can run many times — each call gets a **fresh** frame. Two calls to `GetUser` in one request means two separate workspaces, not one reused block.
-
-### 4.3 Defer runs after the body, still on your frame
-
-When you hit the closing brace (or a `return`), Go runs your deferred calls **before** the function is fully done from the caller’s perspective. They still see your named results and can still call functions — but your body has already finished its normal work.
-
-That’s why this pattern works:
+In Go, a function looks like this:
 
 ```go
-rows, err := db.QueryContext(ctx, `SELECT id FROM orders WHERE user_id = ?`, userID)
-if err != nil {
-    return nil, err
-}
-defer rows.Close()
-// ... scan rows ...
-```
-
-`rows.Close()` runs when **this** function exits, in LIFO order with any other `defer`s you registered in the same function.
-
-### 4.4 Named returns + defer = wrap errors with context
-
-If you write `(cfg Config, err error)`, both `cfg` and `err` are variables in **this** function’s frame for the whole call. A `defer` can read and assign them. That’s how people add context to errors without repeating boilerplate on every `return`:
-
-```go
-func loadConfig(path string) (cfg Config, err error) {
-    defer func() {
-        if err != nil {
-            err = fmt.Errorf("loadConfig %q: %w", path, err)
-        }
-    }()
-    data, err := os.ReadFile(path)
-    if err != nil {
-        return cfg, err
-    }
-    err = json.Unmarshal(data, &cfg)
-    return cfg, err
+func GetUser(ctx context.Context, id int64) (*User, error) {
+    // ... do work ...
+    return &user, nil
 }
 ```
 
-Assume `encoding/json` is imported. Every path that sets `err` is still visible to the `defer`, which runs after those assignments and can wrap `err` before the caller sees the final value.
+The things inside the parentheses after the function name — `ctx` and `id` — are the **parameters**. They're like blank lines on a form. When someone calls `GetUser(reqCtx, 42)`, the values `reqCtx` and `42` are the **arguments** — they fill in those blank lines.
 
-### 4.5 Goroutine stacks
+The things after the closing parenthesis — `(*User, error)` — are the **return values**. That's what the function gives back when it's done.
 
-Each **goroutine** has its own stack. It starts small and **grows** when your call chain gets deep. Two goroutines handling two HTTP requests both run `ServeHTTP` with the same source code — but **different stacks**, different frames, different locals.
-
-### 4.6 Stack overflow
-
-If you never stop calling yourself, frames never pop. Eventually that goroutine’s stack hits its limit and you get a **stack overflow**.
-
-Classic backend footgun: a recursive JSON decoder with no depth cap — nested `{` / `[` forever, one frame per level:
-
-```go
-func decodeValue(d *decoder) error {
-    // missing: max depth check
-    if d.peek() == '{' {
-        return decodeObject(d) // each nested level = another frame
-    }
-    return nil
-}
-```
-
-One hostile payload and you’re miles deep.
+Here's the important part: when you call a function, **Go copies the arguments into the function's workspace**. The function works with its own copies. When it's done, Go copies the return values back to whoever called it.
 
 ---
 
-## 5. Key Rules & Behaviors
+### 4.2 What is a stack frame?
 
-### Every call pushes a frame
+Every time you call a function, Go creates a workspace for that specific call. This workspace is called a **stack frame** (or just "frame").
 
-Even if it’s the same function twice in a row — two calls, two frames.
+Your frame holds four things:
+- **The arguments** that were passed in (your copies)
+- **Local variables** you create inside the function
+- **A return address** — a note saying "when I'm done, go back to this line in the function that called me"
+- **Space for return values** — where Go puts the results before handing them back
 
-### Returning pops the frame; stack locals are gone
+Think of it like a desk in an office. When you start a task (a function call), you get a fresh desk. Your papers (variables) go on that desk. When you finish the task, you hand your results to the person who asked you, and your desk gets cleared.
 
-After `GetUser` returns, its locals aren’t yours anymore. If you need a value to outlive the call, the compiler must place it somewhere that survives the pop (often the heap).
-
-### Defer is LIFO
-
-Last registered runs first at exit. Registration order matters for `Rollback` vs `Close`, or closing inner resources before outer ones.
-
-### `defer f(args)` evaluates `args` when the `defer` line runs
-
-Not when the deferred call runs. Closures `defer func() { ... }()` see variables later — interviewers love the difference.
-
-### Named results are frame-long variables
-
-Defer can change what the caller receives. Mixing bare `return` and `return expr` with defers that touch named results is easy to get wrong — draw one set of slots in your head.
-
----
-
-## 6. Memory traces (three that matter)
-
-These three traces are enough to carry the whole chapter.
-
-### Trace 1 — Request flow: `ServeHTTP` → `AuthMiddleware` → `GetUser` → `db.Query`
-
-Imagine `db.Query` is running (waiting on the driver / network). Your stack looks like:
-
-```
-MEMORY TRACE:
-
-While db.QueryContext(...) is active:
-
-  call stack (top = currently running):
-    ┌─────────────────────────────────┐  ◄── top
-    │ db.QueryContext frame           │  ← driver / DB layer
-    │   "when I return, resume GetUser"
-    ├─────────────────────────────────┤
-    │ GetUser frame                   │  ← repo or service
-    │   "when I return, resume handler"
-    ├─────────────────────────────────┤
-    │ AuthMiddleware frame            │  ← checks JWT / session
-    │   "when I return, resume ServeHTTP"
-    ├─────────────────────────────────┤
-    │ ServeHTTP frame                 │  ← net/http entry
-    │   "when I return, runtime resumes"
-    └─────────────────────────────────┘
-
-  **Aha:** The DB call isn’t lonely — the whole chain of who-called-whom is still underneath. Each layer is paused, waiting for the one above to return.
-```
-
-When `Query` returns, its frame pops. `GetUser` resumes. Then `GetUser` returns, and so on — always **one** pop per return.
-
-### Trace 2 — Defer LIFO: transaction + file in a handler
-
-You open a DB transaction, register `Rollback`, open a file, register `Close`. Happy path commits; defers still run in reverse registration order.
+Here's a simple example — one function calling another:
 
 ```go
-func (h *Handler) ExportReport(w http.ResponseWriter, r *http.Request) error {
-    tx, err := h.db.BeginTx(r.Context(), nil)
-    if err != nil {
-        return err
-    }
-    defer tx.Rollback() // no-op after Commit; safe pattern
+func CalculateTotal(price int, quantity int) int {
+    total := price * quantity
+    return total
+}
 
-    f, err := os.CreateTemp("", "report-*.csv")
-    if err != nil {
-        return err
-    }
-    defer os.Remove(f.Name())
-    defer f.Close()
-
-    if err := h.writeReport(tx, f); err != nil {
-        return err
-    }
-    if err := tx.Commit(); err != nil {
-        return err
-    }
-    return nil
+func HandleOrder(w http.ResponseWriter, r *http.Request) {
+    amount := CalculateTotal(50, 3)
+    fmt.Fprintf(w, "Total: %d", amount)
 }
 ```
 
-At function exit (any path), deferred calls run **last registered first**:
+When `HandleOrder` calls `CalculateTotal(50, 3)`, here's what the stack looks like:
 
 ```
-MEMORY TRACE:
+Step 1: HandleOrder is running, about to call CalculateTotal
 
-Defer stack inside ExportReport (bottom = first registered, top = last registered):
+    ┌───────────────────────────┐  <-- top
+    │ HandleOrder frame         │
+    │   (about to call...)      │
+    └───────────────────────────┘
 
-  Registration order:
-    1. defer tx.Rollback()
-    2. defer os.Remove(f.Name())
-    3. defer f.Close()
+Step 2: CalculateTotal is now running
 
-  Defer stack (conceptual):
-    bottom ──→ [ Rollback ][ Remove ][ Close ] ◄── top
+    ┌───────────────────────────┐  <-- top (running now)
+    │ CalculateTotal frame      │
+    │   price = 50              │
+    │   quantity = 3            │
+    │   total = 150             │
+    │   "go back to HandleOrder"│
+    ├───────────────────────────┤
+    │ HandleOrder frame         │  <-- paused, waiting
+    │   amount = (waiting...)   │
+    └───────────────────────────┘
 
-  On exit, unwind order:
-    1. f.Close()        ← closes the file handle
-    2. os.Remove(...)   ← cleans temp file
-    3. tx.Rollback()    ← rolls back if Commit never happened; no-op after Commit
+Step 3: CalculateTotal returns 150, its frame is removed
 
-  **Aha:** Last registered runs first — here `Close` then `Remove` then `Rollback`. Reorder your `defer` lines when you need a different teardown sequence.
+    ┌───────────────────────────┐  <-- top (running again)
+    │ HandleOrder frame         │
+    │   amount = 150            │  <-- got the result
+    └───────────────────────────┘
 ```
 
-### Trace 3 — Named return + defer wrapping `err`
-
-```go
-func loadConfig(path string) (cfg Config, err error) {
-    defer func() {
-        if err != nil {
-            err = fmt.Errorf("loadConfig %q: %w", path, err)
-        }
-    }()
-
-    data, err := os.ReadFile(path)
-    if err != nil {
-        return cfg, err // err is non-nil; defer will wrap it
-    }
-    err = json.Unmarshal(data, &cfg)
-    return cfg, err
-}
-```
-
-```
-MEMORY TRACE:
-
-Step 1: Enter loadConfig — named cfg and err exist in this frame (err starts as nil)
-
-  call stack:
-    ┌─────────────────────────────────┐  ◄── top
-    │ loadConfig frame                │
-    │   named: cfg (zero), err = nil  │  ◄── caller will read these slots
-    │   defer: [ wrap err closure ]   │
-    └─────────────────────────────────┘
-
-Step 2: os.ReadFile fails — return assigns err; defer runs; defer wraps err
-
-Step 3: Caller sees one error value with path context
-
-  **Aha:** err isn’t invented at the return statement only. It’s a real slot in the frame. The defer runs after your return path sets it but before the caller takes delivery — so you can attach context once, centrally.
-```
+Two calls to the same function get two separate frames. If your handler calls `CalculateTotal` twice, each call gets its own desk with its own copies of `price`, `quantity`, and `total`. They don't share anything.
 
 ---
 
-## 7. Code Examples (Show, Don’t Tell)
+### 4.3 Stack memory vs heap memory
 
-`HandleCheckout` → `ValidateCart` → `ChargePayment`: three frames when the innermost body runs; returns peel from the inside out.
+You've seen that variables live on a frame, and the frame goes away when the function returns. But what if you need a variable to survive after the function returns?
 
-### Rows + defer (the pattern you’ll actually ship)
+Go has two kinds of memory:
+
+**Stack memory** is like scratch paper. Each function call gets a fresh sheet. When the function returns, that sheet gets thrown away. It's fast and automatic — you don't have to clean it up.
+
+**Heap memory** is like a storage locker. Stuff you put there stays until nobody needs it anymore. It's slower, and Go's garbage collector has to come around later to clean it up.
+
+Most of the time, you don't choose. The Go compiler figures it out for you. Here's the rule of thumb:
+
+- If a variable is only used inside the function, it goes on the **stack** (scratch paper — fast, auto-cleanup).
+- If a variable needs to survive after the function returns (like when you return a pointer to it), the compiler moves it to the **heap** (storage locker — survives longer).
+
+```go
+func NewUser(name string) *User {
+    u := User{Name: name}
+    return &u
+}
+```
+
+Here, `u` can't live on the stack because `NewUser` returns a pointer to it. If `u` was on the scratch paper and the scratch paper got thrown away, that pointer would point to garbage. So the compiler puts `u` on the heap instead, where it survives the function return.
+
+You don't need to memorize when this happens. Just know: **you write normal code, the compiler decides where things live.**
+
+---
+
+### 4.4 Push on call, pop on return
+
+Let's build up from two frames to four, step by step.
+
+Imagine a request hitting your API server. The request goes through middleware, then your handler, then a service, then a database call.
+
+**Two frames (handler calls service):**
+
+```
+    ┌─────────────────────────┐  <-- top
+    │ GetUser frame           │  <-- running
+    ├─────────────────────────┤
+    │ HandleRequest frame     │  <-- paused
+    └─────────────────────────┘
+```
+
+**Three frames (service calls database):**
+
+```
+    ┌─────────────────────────┐  <-- top
+    │ db.QueryContext frame   │  <-- running (waiting on DB)
+    ├─────────────────────────┤
+    │ GetUser frame           │  <-- paused
+    ├─────────────────────────┤
+    │ HandleRequest frame     │  <-- paused
+    └─────────────────────────┘
+```
+
+**Four frames (add middleware):**
+
+```
+    ┌─────────────────────────┐  <-- top
+    │ db.QueryContext frame   │  <-- running
+    ├─────────────────────────┤
+    │ GetUser frame           │  <-- paused
+    ├─────────────────────────┤
+    │ AuthMiddleware frame    │  <-- paused
+    ├─────────────────────────┤
+    │ ServeHTTP frame         │  <-- paused
+    └─────────────────────────┘
+```
+
+Now returns happen in reverse. The database query finishes first — its frame is removed. Then `GetUser` finishes — its frame is removed. Then `AuthMiddleware`, then `ServeHTTP`. Always one frame removed per return, always from the top.
+
+The whole chain of "who called whom" is sitting there in the stack. That's why when something crashes, Go can print a **stack trace** — it just reads the stack from top to bottom and shows you every function that was waiting.
+
+---
+
+### 4.5 What is defer?
+
+`defer` is a Go keyword that says: **"run this function call later, right before the current function exits."**
+
+Why does this exist? Because in backend code, you constantly open things that need closing: database connections, file handles, HTTP response bodies, transactions. You want to guarantee the cleanup happens no matter how the function exits — whether it returns normally, returns early because of an error, or even crashes.
+
+Here's the simplest possible example:
+
+```go
+func SayHello() {
+    defer fmt.Println("goodbye")
+    fmt.Println("hello")
+}
+```
+
+When you run `SayHello()`, it prints:
+
+```
+hello
+goodbye
+```
+
+Here's what happened step by step:
+
+1. Go enters `SayHello`.
+2. Go sees `defer fmt.Println("goodbye")`. It doesn't run it yet. It makes a note: "before this function exits, run `fmt.Println("goodbye")`."
+3. Go runs `fmt.Println("hello")`. Prints "hello".
+4. Go reaches the end of `SayHello`. Before actually leaving, it runs the deferred call. Prints "goodbye".
+5. Now `SayHello` is truly done.
+
+The real reason `defer` is powerful: it works no matter HOW the function exits. Here's a real backend example:
 
 ```go
 func (r *UserRepo) GetUser(ctx context.Context, id int64) (*User, error) {
@@ -291,106 +303,380 @@ func (r *UserRepo) GetUser(ctx context.Context, id int64) (*User, error) {
 }
 ```
 
-`rows.Close()` always runs on the way out — success, early return, or error after `Query` succeeded.
+There are three different `return` statements in this function. `rows.Close()` runs on ALL of them. You write `defer rows.Close()` once, right after you know `rows` is valid, and you never worry about forgetting to close it.
+
+Step by step:
+1. Query the database. If that fails, return early (rows don't exist, so no Close needed — the defer wasn't registered yet).
+2. Register `defer rows.Close()`. From this point on, no matter what happens, `rows.Close()` will run when this function exits.
+3. Try to read rows, scan data. If anything fails, return early. The defer still runs `rows.Close()`.
+4. If everything works, return the user. The defer still runs `rows.Close()`.
 
 ---
 
-## 8. Practice Checkpoint
+### 4.6 Defer runs in reverse order (last registered = first to run)
 
-### Tier 1: Predict the outcome (middleware-style)
+What if you register more than one defer? They run in reverse order — the last one you registered runs first.
 
-`handle` registers `defer A` then `defer B`, then `panic("boom")`. Middleware wraps `next` with `recover` in a defer. What prints first, and who catches the panic?
+Think of stacking plates. The last plate you put on top is the first one you pick up.
 
 ```go
-func withRecover(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        defer func() {
-            if rec := recover(); rec != nil {
-                http.Error(w, "internal error", http.StatusInternalServerError)
-            }
-        }()
-        next.ServeHTTP(w, r)
-    })
-}
-
-func handle(w http.ResponseWriter, r *http.Request) {
-    defer fmt.Println("defer A")
-    defer fmt.Println("defer B")
-    panic("boom")
+func ProcessOrder() {
+    defer fmt.Println("step 1: done")
+    defer fmt.Println("step 2: done")
+    defer fmt.Println("step 3: done")
+    fmt.Println("processing...")
 }
 ```
 
-> [!success]- Answer
-> Prints **`defer B`** then **`defer A`** (LIFO in `handle` as the panic unwinds). The middleware’s defer runs `recover` **after** control leaves `handle`; the panic is caught there, not inside `handle`. To recover inside `handle`, you’d defer `recover` in `handle` itself.
+Output:
 
-### Tier 2: Fix the bug (named return + defer)
+```
+processing...
+step 3: done
+step 2: done
+step 1: done
+```
 
-This handler should log `err` **including** context if `decodeJSON` fails, but the log always shows `<nil>`. Why?
+Step by step:
+1. `defer "step 1"` is registered. Defer list: `[step 1]`
+2. `defer "step 2"` is registered. Defer list: `[step 1, step 2]`
+3. `defer "step 3"` is registered. Defer list: `[step 1, step 2, step 3]`
+4. `"processing..."` prints.
+5. Function exits. Defers run from the TOP of the list (last registered first): step 3, then step 2, then step 1.
+
+Why does this matter in real code? Because cleanup order matters. Here's a real example — you open a database transaction, then open a temp file:
 
 ```go
-func (h *Handler) PostWidget(w http.ResponseWriter, r *http.Request) (err error) {
+func (h *Handler) ExportReport(w http.ResponseWriter, r *http.Request) error {
+    tx, err := h.db.BeginTx(r.Context(), nil)
+    if err != nil {
+        return err
+    }
+    defer tx.Rollback()
+
+    f, err := os.CreateTemp("", "report-*.csv")
+    if err != nil {
+        return err
+    }
+    defer f.Close()
+
+    // ... write report using tx and f ...
+
+    return tx.Commit()
+}
+```
+
+Registration order: first `Rollback`, then `Close`.
+Run order at exit: first `Close` (closes the file), then `Rollback` (rolls back the transaction, which is a no-op if `Commit` already succeeded).
+
+```
+Defer list (bottom = first registered):
+
+    bottom --> [ Rollback ] [ Close ] <-- top
+
+On exit, run from top:
+    1. f.Close()       <-- close the file first
+    2. tx.Rollback()   <-- then roll back (no-op if committed)
+```
+
+This is usually what you want: close inner resources before outer ones.
+
+---
+
+### 4.7 Named return values + defer
+
+Before we look at the pattern, let's first understand what **named return values** are.
+
+Normally, you write a function like this:
+
+```go
+func LoadConfig(path string) (Config, error) {
+    // ...
+    return cfg, nil
+}
+```
+
+But Go also lets you **name** the return values:
+
+```go
+func LoadConfig(path string) (cfg Config, err error) {
+    // ...
+    return cfg, err
+}
+```
+
+When you name them, `cfg` and `err` become real variables that exist for the entire function. They start at their zero values (`Config{}` and `nil`). You can use them like any other variable.
+
+Now here's the trick: since named return values are real variables in the function's frame, **a defer can read and change them**.
+
+This is incredibly useful for adding context to errors in one place instead of at every return:
+
+```go
+func LoadConfig(path string) (cfg Config, err error) {
     defer func() {
         if err != nil {
-            h.log.Printf("PostWidget: %v", err)
+            err = fmt.Errorf("LoadConfig %q: %w", path, err)
         }
     }()
 
-    var body widgetRequest
-    if err := decodeJSON(r.Body, &body); err != nil {
-        return err
+    data, err := os.ReadFile(path)
+    if err != nil {
+        return cfg, err
     }
-    return h.saveWidget(r.Context(), body)
+    err = json.Unmarshal(data, &cfg)
+    return cfg, err
+}
+```
+
+Here's the step-by-step:
+
+1. Go enters `LoadConfig`. Two named variables exist in this frame: `cfg` (zero value) and `err` (nil).
+2. The defer is registered. It's a closure that can see `err` because `err` is a named return value in the same frame.
+3. Say `os.ReadFile` fails. `err` gets set to something like "file not found."
+4. `return cfg, err` puts the values into the return slots.
+5. **Before the function actually exits**, the defer runs. It sees `err` is not nil, so it wraps it: `err` becomes `LoadConfig "/etc/app.json": file not found`.
+6. NOW the function exits, and the caller gets the wrapped error.
+
+```
+LoadConfig frame:
+
+    ┌────────────────────────────────────┐
+    │ named: cfg = Config{}, err = nil   │  <-- start
+    │ defer: [ wrap-err closure ]        │
+    └────────────────────────────────────┘
+
+After os.ReadFile fails:
+
+    ┌────────────────────────────────────┐
+    │ named: cfg = Config{}              │
+    │        err = "file not found"      │  <-- set by ReadFile
+    │ defer: [ wrap-err closure ]        │
+    └────────────────────────────────────┘
+
+return cfg, err triggers. BEFORE exiting, defer runs:
+
+    ┌────────────────────────────────────┐
+    │ named: cfg = Config{}              │
+    │        err = "LoadConfig: file..." │  <-- wrapped by defer
+    └────────────────────────────────────┘
+
+Caller receives the wrapped error.
+```
+
+---
+
+### 4.8 Each goroutine gets its own stack
+
+A **goroutine** is Go's version of a lightweight thread. When your server handles multiple requests at the same time, each request runs in its own goroutine.
+
+The key thing: **each goroutine has its own call stack**. Two goroutines handling two requests both run `ServeHTTP` with the same source code, but they have completely separate stacks, separate frames, and separate local variables. They don't interfere with each other.
+
+Go starts each goroutine with a small stack (a few KB) and grows it automatically when the call chain gets deeper. You don't manage this yourself.
+
+---
+
+### 4.9 Stack overflow
+
+If a function keeps calling itself (recursion) and never stops, frames keep piling up on the stack. Eventually the stack runs out of room. That's a **stack overflow**.
+
+A simple example:
+
+```go
+func CountForever(n int) {
+    CountForever(n + 1)
+}
+```
+
+Every call to `CountForever` adds a frame. Nothing ever returns, so nothing ever removes a frame. After enough calls, the goroutine's stack is full and Go crashes with: `runtime: goroutine stack exceeds limit`.
+
+A more realistic backend version: a JSON decoder that handles nested objects by calling itself, with no limit on depth:
+
+```go
+func decodeValue(d *decoder) error {
+    if d.peek() == '{' {
+        return decodeObject(d)
+    }
+    return nil
+}
+```
+
+A malicious API client sends deeply nested JSON — thousands of `{` inside each other. Each level is a new function call, a new frame. The stack fills up and your service crashes.
+
+The fix: add a depth counter and refuse to go deeper than a limit (say 100 levels).
+
+---
+
+## 5. Key Rules & Behaviors
+
+### Every call creates a new frame
+
+Even if you call the same function twice in a row, each call gets its own fresh workspace. Two calls to `GetUser` in the same handler means two separate frames, not one shared one.
+
+### When a function returns, its frame is gone
+
+All the local variables in that frame disappear. If you need something to survive after the function returns, Go's compiler will put it on the heap for you (like when you return a pointer to a local variable).
+
+### Defer runs when the function exits, not when the line runs
+
+`defer` doesn't run the call immediately. It saves it for later. The call runs right before the function returns — no matter which `return` statement you hit.
+
+### Multiple defers run in reverse order
+
+Last registered, first to run. Think of stacking plates — the last plate on top is the first one off.
+
+### Defer evaluates arguments immediately
+
+This is a subtle one. When you write `defer fmt.Println(x)`, Go captures the VALUE of `x` right then and there — not when the defer actually runs later.
+
+```go
+func Example() {
+    x := 1
+    defer fmt.Println(x)
+    x = 2
+    defer fmt.Println(x)
+}
+```
+
+Output: `2` then `1`. The first defer captured `x = 1`. The second defer captured `x = 2`. They run in reverse order (2 then 1), but each uses the value of `x` at the moment they were registered.
+
+If you want the defer to use the value of `x` at the time it RUNS (not when it was registered), use a closure:
+
+```go
+defer func() { fmt.Println(x) }()
+```
+
+The closure doesn't capture the value — it captures the variable itself. So it reads whatever `x` is when the defer finally runs.
+
+---
+
+## 6. Code Examples (Show, Don't Tell)
+
+### The pattern you'll actually ship: rows + defer
+
+```go
+func (r *OrderRepo) GetOrdersByUser(ctx context.Context, userID int64) ([]Order, error) {
+    rows, err := r.db.QueryContext(ctx, `SELECT id, total FROM orders WHERE user_id = ?`, userID)
+    if err != nil {
+        return nil, err
+    }
+    defer rows.Close()
+
+    var orders []Order
+    for rows.Next() {
+        var o Order
+        if err := rows.Scan(&o.ID, &o.Total); err != nil {
+            return nil, err
+        }
+        orders = append(orders, o)
+    }
+    return orders, rows.Err()
+}
+```
+
+Step by step:
+1. Query the database. If it fails, return immediately. `rows` doesn't exist yet, so no Close needed.
+2. `defer rows.Close()` is registered. From now on, `rows.Close()` will run no matter how the function exits.
+3. Loop through rows, scanning each one into an `Order`. If any scan fails, return early — defer still closes rows.
+4. If everything works, return the orders. Defer still closes rows.
+
+You write the cleanup ONCE. It runs on ALL exit paths.
+
+---
+
+## 6.5. Practice Checkpoint
+
+### Tier 1: Predict the Output (2 min)
+
+Before running this code, predict what it prints:
+
+```go
+func main() {
+    fmt.Println("start")
+    defer fmt.Println("first defer")
+    defer fmt.Println("second defer")
+    defer fmt.Println("third defer")
+    fmt.Println("end")
 }
 ```
 
 > [!success]- Answer
-> **Shadowing:** Inside the function, `if err := decodeJSON(...)` declares a **new** `err` scoped to the `if`. The deferred closure closes over the **outer** named return `err`. The inner assignment never updates that outer slot, so when the defer runs, the outer `err` is still `nil`.
+> ```
+> start
+> end
+> third defer
+> second defer
+> first defer
+> ```
+> "start" and "end" print in order. Then defers run in reverse: third, second, first.
+
+### Tier 2: Fix the Bug (5 min)
+
+This function is supposed to log the error with context when it fails, but the log always shows `<nil>`. Can you spot why?
+
+```go
+func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) (err error) {
+    defer func() {
+        if err != nil {
+            h.log.Printf("CreateOrder failed: %v", err)
+        }
+    }()
+
+    var req OrderRequest
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        return err
+    }
+    return h.orderService.Create(r.Context(), req)
+}
+```
+
+> [!success]- Answer
+> The problem is **variable shadowing**. Look at line `if err := json.NewDecoder...`. That `:=` creates a NEW variable called `err` that only exists inside the `if` block. It does NOT update the outer named return `err` that the defer is watching.
 >
-> Fix: use `=` with a predeclared err, or name the inner error something else:
+> The deferred closure reads the outer `err`, which is still `nil` because it was never assigned.
 >
+> Fix: use `=` instead of `:=` to assign to the outer `err`:
 > ```go
-> var body widgetRequest
-> if err = decodeJSON(r.Body, &body); err != nil {
+> var req OrderRequest
+> if err = json.NewDecoder(r.Body).Decode(&req); err != nil {
 >     return err
 > }
 > ```
->
-> or `if decErr := decodeJSON(...); decErr != nil { return decErr }`.
+> Now the outer `err` gets set, and the defer sees it.
 
 ---
 
-## 9. Gotchas & Interview Traps
+## 7. Gotchas & Interview Traps
 
-| Trap | What bites you | What to say |
-|------|----------------|-------------|
-| Defer + loop | `defer` in a `for` registers many cleanups; all run when the **function** returns, not each iteration | “Defer binds to the enclosing function. Use a local closure or inline func per iteration if you need per-iteration cleanup.” |
-| `defer f(i)` vs `defer func() { f(i) }()` | Arguments to `f` are evaluated at registration time | “Captured value vs live variable — know which one you need.” |
-| Infinite recursion | JSON, AST, directory walk without depth cap | “Each call adds a frame; unbounded depth overflows the goroutine stack.” |
-| Assuming stacks are shared | Two requests, one goroutine each | “Each goroutine has its own stack; same code, different frames.” |
+| Trap | What happens | How to explain it |
+|------|-------------|-------------------|
+| Defer in a loop | Every iteration registers a new defer. They ALL run when the **function** exits, not when each iteration ends. If you're opening 1000 files in a loop, you have 1000 pending Close calls. | "Defer is tied to the function, not the loop. If you need per-iteration cleanup, wrap the loop body in a helper function." |
+| `defer f(x)` vs `defer func() { f(x) }()` | `defer f(x)` captures the VALUE of x right now. `defer func() { f(x) }()` reads x when the defer actually runs. | "Direct call = snapshot of the value. Closure = live reference to the variable." |
+| Infinite recursion | Every call adds a frame. No returns means no frames get removed. Stack fills up. | "Each call adds a tray to the stack. No limit on depth = stack overflow." |
+| Assuming goroutines share a stack | Two goroutines running the same function have completely separate stacks and separate variables. | "Same code, different stacks. Each goroutine is its own cafeteria tray stack." |
 
-**Stack vs heap (one sentence for interviews):** The compiler puts locals on the stack when they can die with the frame; if a pointer escapes, the value may live on the heap. You write locals; the compiler decides storage.
+**Stack vs heap in one sentence:** Go puts variables on the stack (fast, auto-cleanup) when they die with the function, and on the heap (slower, garbage-collected) when they need to survive longer. The compiler decides, not you.
 
 ---
 
-## 10. Interview Gold Questions (Top 3)
+## 8. Interview Gold Questions (Top 3)
 
-**Q1: What is a stack frame, and what happens on call vs return?**
+**Q1: What is a stack frame, and what happens when you call a function vs when it returns?**
 
-A frame is this invocation’s workspace: arguments, locals, return path to the caller, and return value slots. Calling pushes a frame; returning pops it. Order is strictly LIFO.
+Every time you call a function, Go creates a workspace called a frame. It holds the arguments, local variables, where to go back when done, and space for return values. Calling a function puts a new frame on top of the stack. Returning removes that frame. The last one added is always the first one removed.
 
-**Q2: Why do defers run in reverse order, and when are deferred arguments evaluated?**
+**Q2: Why do defers run in reverse order, and when are the arguments captured?**
 
-Defers are stacked on the current frame. Last registered runs first at exit. For `defer f(x)`, `x` is evaluated when the `defer` statement runs. A closure `defer func() { ... }()` observes variables at defer **execution** time (unless it copies them itself).
+Defers stack up as you register them. The last one registered runs first when the function exits — like stacking plates. For `defer f(x)`, the value of `x` is captured the moment that line runs. A closure like `defer func() { f(x) }()` reads `x` later, when the defer actually executes — it sees whatever `x` is at that point.
 
 **Q3: How can a defer change what the caller receives?**
 
-With **named return values**, the result slots are variables in the callee’s frame for the whole function. The body and the defer both can assign to them; the caller reads the final values after defers run.
+If your function uses named return values like `(err error)`, then `err` is a real variable in the function's frame for the whole call. A defer can read it and change it. The caller gets whatever value `err` has AFTER the defer runs. That's how people wrap errors with context in one central place instead of at every return statement.
 
 ---
 
-## 11. 30-Second Verbal Answer
+## 9. 30-Second Verbal Answer
 
-Every function call adds a stack frame — arguments, locals, where to resume, and return value space. Return pops the frame. You care because **defer** runs cleanup in reverse registration order as the function exits, still on that frame. **Named returns** are real variables in that frame, so defer can wrap errors or tweak results. Each **goroutine** has its own growing stack. Recursion or insane depth blows that stack — stack overflow.
+"Every function call in Go creates a stack frame — a workspace holding arguments, local variables, and a return address. Calling pushes a frame, returning pops it. Defer lets you register cleanup calls that run automatically when the function exits, in reverse order — last registered, first to run. If you use named return values, a defer can read and change them before the caller gets the result, which is great for wrapping errors with context. Each goroutine has its own stack, and if you recurse without stopping, the stack fills up and you get a stack overflow."
 
 ---
 

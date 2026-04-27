@@ -509,22 +509,22 @@ typed nil:       [ *Err | nil   ] → i == nil is FALSE  ← THE TRAP
 **Blurt check** (try from memory, tap to reveal):
 
 > [!info]- 1. What is the call stack?
-> A LIFO (last-in, first-out) structure of frames. Each active function call has one frame containing local variables, parameters, and a return address. The most recent call is at the top.
+> Every function call gets its own workspace called a frame. The call stack is the pile of these frames. The frame on top is whoever's running right now. Think of cafeteria trays — you only touch the top one.
 
-> [!info]- 2. What happens when a function is called? When it returns?
-> Call: pushes a new frame onto the stack (allocate locals, store return addr). Return: pops the frame (locals gone, control returns to the address stored in the caller's frame).
+> [!info]- 2. What happens when you call a function? When it returns?
+> Calling pushes a new frame on top (with arguments, local variables, and a "go back to" address). Returning pops that frame — its local variables are gone. The caller picks up where it left off.
 
-> [!info]- 3. Why do deferred calls run in LIFO order?
-> Defers accumulate on a stack-like list within the current frame. The last defer pushed is the first to run -- just like a stack of plates. This makes paired operations (open/close, lock/unlock) nest correctly.
+> [!info]- 3. Why do defers run in reverse order?
+> They stack up like plates. The last defer you registered is on top, so it runs first. This makes cleanup nest correctly: if you open a transaction then open a file, the file closes first, then the transaction rolls back.
 
-> [!info]- 4. How can defer modify return values?
-> Only with named return values. Named returns live in the caller's frame, not the current function's local space. When defers run (before the frame is popped), they can read and modify these named returns.
+> [!info]- 4. How can defer modify what the caller receives?
+> Only with named return values. Named returns like `(err error)` are real variables in the function's frame. A defer can read and change them before the function truly exits — so the caller gets the modified value.
 
-> [!info]- 5. What's special about goroutine stacks in Go vs C stacks?
-> Go goroutine stacks start small (~2-8 KB) and grow automatically by copying to a larger contiguous allocation. C stacks are fixed-size (typically ~1-8 MB), set at thread creation. Go's approach enables millions of goroutines.
+> [!info]- 5. What's different about goroutine stacks?
+> Each goroutine has its own stack, starting small (~2-8 KB) and growing automatically. Two goroutines running the same function have completely separate stacks and separate local variables.
 
-> [!info]- 6. When are defer arguments evaluated?
-> At the defer statement, NOT when the deferred function runs. `defer fmt.Println(x)` captures x's value at the defer line. If x changes later, the deferred call still uses the old value.
+> [!info]- 6. When does defer capture argument values?
+> At the `defer` line, NOT when the defer actually runs. `defer fmt.Println(x)` captures x's value right now. If x changes later, the deferred call still uses the old value. Use a closure to read the variable live.
 
 **Key visual:**
 ```
