@@ -62,7 +62,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 **Topics:**
 
 - [x] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
-- [ ] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
+- [x] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
 - [ ] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
 - [ ] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
 - [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05

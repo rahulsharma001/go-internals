@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T08 Map Internals.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T08 Map Internals"
+              "title": "Study Plan"
             }
           }
         ]
@@ -196,10 +196,10 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
-    "exercises/T08 Map Internals - Exercises.md",
     "T08 Map Internals.md",
-    "T07 Pointers & Pointer Semantics.md",
     "Study Plan.md",
+    "exercises/T08 Map Internals - Exercises.md",
+    "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "revision/T01 Go Type System & Value Semantics - Revision.md",
     "Daily Revision.md",
