@@ -59,11 +59,15 @@ func (o *Order) MarkPaid() {
 
 ## 4. How It Works
 
-### Defining methods
+### 4.1 Defining Methods — What the Compiler Actually Does
 
-Any **named type** you define in your package can have methods. Structs are the common case. So are tiny wrapper types.
+Any **named type** you define in your package can have methods. Under the hood, a method is a regular function where the receiver becomes the first parameter.
 
 ```go
+package main
+
+import "fmt"
+
 type Config struct {
 	HTTPPort int
 	DBURL    string
@@ -71,87 +75,176 @@ type Config struct {
 
 func (c Config) Validate() error {
 	if c.HTTPPort <= 0 || c.HTTPPort > 65535 {
-		return errors.New("bad port")
+		return fmt.Errorf("bad port: %d", c.HTTPPort)
 	}
 	if c.DBURL == "" {
-		return errors.New("db url required")
+		return fmt.Errorf("db url required")
 	}
 	return nil
 }
-```
 
-`Validate` does not need to mutate `Config`. It only reads fields. A value receiver is fine: `Config` is small, and you are not trying to "write back" into the caller's struct.
+func main() {
+	cfg := Config{HTTPPort: 8080, DBURL: "postgres://localhost/mydb"}
+	err := cfg.Validate()
+	fmt.Println("error:", err) // error: <nil>
 
-```go
-type UserID string
-
-func (id UserID) IsEmpty() bool {
-	return id == ""
+	bad := Config{HTTPPort: -1}
+	err = bad.Validate()
+	fmt.Println("error:", err) // error: bad port: -1
 }
 ```
 
-Same story. Small, read-only checks. Copying a string header is cheap.
+```
+What the compiler does with cfg.Validate():
 
-### Value receiver vs pointer receiver — the backend default
+  Step 1: cfg := Config{HTTPPort: 8080, DBURL: "postgres://localhost/mydb"}
+    stack 0xA0: [ HTTPPort: 8080 | DBURL: "postgres://localhost/mydb" ]
 
-Most **services** and **repos** you write hold a `*sql.DB`, a logger, an `http.Client`, maybe a `sync.Mutex`. You almost always use a **pointer receiver** for the whole type.
+  Step 2: cfg.Validate() is rewritten by the compiler as:
+    Config.Validate(cfg)    ← regular function, cfg is the first argument
 
-Why?
+  Step 3: Since Validate has a VALUE receiver, Go COPIES cfg:
+    original at 0xA0: [ 8080 | "postgres://..." ]
+    copy at 0xB0:     [ 8080 | "postgres://..." ]   ← Validate works on this copy
+    
+  Step 4: Validate reads c.HTTPPort (from the copy) → 8080 → valid
+    No mutation → no problem using a copy
 
-1. **Mutation** — `MarkPaid`, `UpdateEmail`, `Save` need to change the receiver or something reachable only if you share the real struct.
-2. **Size** — copying a fat struct every call is silly.
-3. **Consistency** — if `Save` is `func (r *PostgresRepo)`, do not make `FindByID` a value receiver. Pick one style per type.
+  KEY: the method call is just syntactic sugar for passing the struct as argument #1
+```
+
+> **In plain English:** When you write `cfg.Validate()`, Go doesn't do anything magical — it just rewrites it as `Validate(cfg)` with the receiver as the first argument. Value receiver means it copies the struct in; pointer receiver means it passes the address.
+
+### 4.2 Value Receiver vs Pointer Receiver — Traced Through Memory
+
+This is the most important distinction in Go methods. Here's what actually happens at the memory level:
 
 ```go
+package main
+
+import "fmt"
+
 type UserService struct {
-	db     *sql.DB
-	logger *slog.Logger
-	// ...
+	db        string // simplified — normally *sql.DB
+	cacheHits int
 }
 
-func (s *UserService) CreateUser(ctx context.Context, email string) (int64, error) {
-	// uses s.db, s.logger — always pointer receiver for this type
-	// ...
-	return 0, nil
+func (s UserService) RecordCacheHitBroken() {
+	s.cacheHits++
+	fmt.Printf("  inside broken: cacheHits=%d (at %p — COPY)\n", s.cacheHits, &s)
 }
 
-func (s *UserService) GetUser(ctx context.Context, id int64) (*User, error) {
-	// ...
-	return nil, nil
+func (s *UserService) RecordCacheHit() {
+	s.cacheHits++
+	fmt.Printf("  inside fixed:  cacheHits=%d (at %p — ORIGINAL)\n", s.cacheHits, s)
 }
 
-func (s *UserService) UpdateEmail(ctx context.Context, id int64, email string) error {
-	// ...
-	return nil
+func main() {
+	svc := UserService{db: "postgres://localhost", cacheHits: 0}
+	fmt.Printf("before: cacheHits=%d (at %p)\n", svc.cacheHits, &svc)
+
+	svc.RecordCacheHitBroken()
+	fmt.Printf("after broken: cacheHits=%d\n", svc.cacheHits) // still 0!
+
+	svc.RecordCacheHit()
+	fmt.Printf("after fixed:  cacheHits=%d\n", svc.cacheHits) // 1
+}
+// Output:
+// before: cacheHits=0 (at 0xC0000A2000)
+// inside broken: cacheHits=1 (at 0xC0000A2030 — COPY)
+// after broken: cacheHits=0
+// inside fixed:  cacheHits=1 (at 0xC0000A2000 — ORIGINAL)
+// after fixed:  cacheHits=1
+```
+
+```
+svc.RecordCacheHitBroken() — VALUE receiver:
+
+  Step 1: Go copies entire UserService into new stack slot
+    original at 0x2000: [ db: "postgres://..." | cacheHits: 0 ]
+    copy at 0x2030:     [ db: "postgres://..." | cacheHits: 0 ]   ← method works here
+                                                 ↑ note: different address!
+  Step 2: s.cacheHits++ → copy at 0x2030 becomes cacheHits: 1
+  Step 3: method returns → copy is discarded
+  Step 4: original at 0x2000 still has cacheHits: 0
+
+svc.RecordCacheHit() — POINTER receiver:
+
+  Step 1: Compiler rewrites as (*UserService).RecordCacheHit(&svc)
+    Go copies 8 bytes (the address 0x2000) into the method's receiver parameter
+    
+  Step 2: s.cacheHits++ → follows pointer to 0x2000 → writes cacheHits: 1
+    original at 0x2000: [ db: "postgres://..." | cacheHits: 1 ]   ← changed!
+    
+  Step 3: caller reads svc.cacheHits → 1 ✓
+```
+
+> **In plain English:** A value receiver hands the method a photocopy of the entire form. They can scribble all over it — your original stays clean. A pointer receiver hands them the actual address of the form — what they write stays permanently.
+
+### 4.3 The Automatic &v Trick — Why Calls Work But Interfaces Don't
+
+If a method is defined on `*User` but you have a `User` variable, Go auto-inserts `&` at the call site. But this trick **does not work** for interface satisfaction.
+
+```go
+package main
+
+import "fmt"
+
+type User struct {
+	Name     string
+	Verified bool
+}
+
+func (u *User) SetVerified() {
+	u.Verified = true
+}
+
+func main() {
+	u := User{Name: "rahul"}
+	u.SetVerified() // works! compiler rewrites as (&u).SetVerified()
+	fmt.Println(u.Verified) // true
 }
 ```
 
-### HTTP server: why your handler uses `func (srv *Server)`
+```
+Step 1: u := User{Name: "rahul", Verified: false}
+  stack 0xA0: [ Name: "rahul" | Verified: false ]
 
-Your `Server` struct usually holds `*sql.DB`, a router, maybe metrics. Handlers are `func (srv *Server) handleUsers(w, r)` so every request hits **the same** `srv`. With a value receiver, each call would get a **copy** of `Server`. The `*sql.DB` inside would still point at the real DB, but anything you store **on** `Server` itself (rate limits, per-server flags) would update only the copy. Pointer receiver keeps one shared server object.
+Step 2: u.SetVerified()
+  Compiler sees: SetVerified is on *User, but u is User (not *User)
+  Auto-rewrite: (&u).SetVerified()
+  Method receives pointer 0xA0
+  u.Verified = true → writes at 0xA0 → Verified becomes true
 
-### When a value receiver is actually nice
+Step 3: fmt.Println(u.Verified) → reads 0xA0 → true ✓
 
-Use a value receiver when:
+WHY this doesn't help with interfaces:
 
-- The type is **small** and **read-only** in practice (`Config.Validate`, `UserID.IsEmpty`).
-- You want each call to work on a **snapshot** and you will not write back.
+  type Verifier interface { SetVerified() }
 
-Slice/map **headers** copy; backing stores are shared. If you `append` into a slice **field** and the caller must see the new length, use a pointer receiver so the header updates in place.
+  var v Verifier = u  // COMPILE ERROR!
+  
+  When Go stores u (a User value) into an interface, it COPIES u.
+  The copy doesn't have a stable address.
+  Go can't auto-insert & on a copy that lives inside the interface box.
+  
+  var v Verifier = &u  // OK! *User satisfies Verifier
+```
 
-### Method sets (plain words)
+> **In plain English:** If your friend asks "where do you live?", you can give them your address (pointer auto-insert works for direct calls). But if you mail your photo (copy into interface), the recipient can't visit you — they only have a picture, not an address.
 
-- `func (u User)` — counts as a method on **`User`**.
-- `func (u *User)` — counts as a method on **`*User` only**, not on plain `User`.
-- **`*User`** picks up **both** kinds: value-style and pointer-style.
+### 4.4 Method Sets — The Rule That Breaks Interface Wiring
 
-So the pointer type has the longer list. The value type might be "missing" methods when an interface asks for them.
-
-### Interfaces: `Repository` and `PostgresRepo`
-
-An interface is a **list of methods**. Your concrete type **implements** the interface if it has those methods with matching signatures.
+This is where receiver choice matters beyond "does mutation stick." It determines which interfaces your type can satisfy.
 
 ```go
+package main
+
+import (
+	"context"
+	"fmt"
+)
+
 type User struct {
 	ID    int64
 	Email string
@@ -163,92 +256,189 @@ type Repository interface {
 }
 
 type PostgresRepo struct {
-	pool *pgxpool.Pool
+	dsn string
 }
 
 func (r *PostgresRepo) Save(ctx context.Context, u *User) error {
-	// INSERT ...
+	fmt.Printf("saving user %d to %s\n", u.ID, r.dsn)
 	return nil
 }
 
 func (r *PostgresRepo) FindByID(ctx context.Context, id int64) (*User, error) {
-	// SELECT ...
-	return nil, nil
+	fmt.Printf("finding user %d in %s\n", id, r.dsn)
+	return &User{ID: id, Email: "found@test.com"}, nil
 }
 
-var _ Repository = (*PostgresRepo)(nil) // compile-time check
+func main() {
+	repo := PostgresRepo{dsn: "postgres://localhost/mydb"}
+
+	// var _ Repository = repo   // COMPILE ERROR: PostgresRepo doesn't implement Repository
+	var _ Repository = &repo     // OK: *PostgresRepo implements Repository
+
+	var r Repository = &repo
+	r.Save(context.Background(), &User{ID: 1, Email: "test@test.com"})
+}
 ```
 
-If every method uses `func (r *PostgresRepo)`, then the **value** `PostgresRepo` does not implement `Repository`. The **pointer** `*PostgresRepo` does. Pass `&repo` (or keep a `*PostgresRepo` field). A compile-time check: `var _ Repository = (*PostgresRepo)(nil)`.
+```
+Method set of PostgresRepo (value):
+  { }   ← EMPTY! Both Save and FindByID are on *PostgresRepo
 
-Example of the gotcha:
+Method set of *PostgresRepo (pointer):
+  { Save(...), FindByID(...) }   ← includes ALL methods (value + pointer receivers)
+
+WHY PostgresRepo{} fails the Repository interface:
+
+  Step 1: var _ Repository = repo
+  Step 2: Go needs to store repo inside the interface → copies it
+  Step 3: Repository requires Save(*User) → Save is on *PostgresRepo
+  Step 4: The copy inside the interface doesn't have a stable address
+  Step 5: Go can't silently take &copy because:
+          a) It would create a hidden heap allocation
+          b) Mutations through Save would modify the copy, not the caller's repo
+  Step 6: COMPILE ERROR
+
+  ┌──────────────────────────────────────┐
+  │  Interface: Repository               │
+  │  Requires: { Save, FindByID }        │
+  ├──────────────────────────────────────┤
+  │  PostgresRepo{}  → method set: {}    │  ← MISSING both! ✗
+  │  &PostgresRepo{} → method set: {S,F} │  ← has both!    ✓
+  └──────────────────────────────────────┘
+
+Compile-time assertion pattern (catches this before runtime):
+  var _ Repository = (*PostgresRepo)(nil)
+```
+
+> **In plain English:** Think of a bouncer checking your ID. `*PostgresRepo` carries a real driver's license — the bouncer (interface) lets it in. `PostgresRepo` carries a photocopy of the license — the bouncer says "this isn't valid" and rejects it. The difference matters even if the picture looks the same.
+
+### 4.5 Real Backend Scenario: Handler → Service → Repository
+
+Here's what method dispatch looks like when your HTTP handler calls a service, which calls a repository — all using pointer receivers:
 
 ```go
-func (u *User) FullEmail() string {
-	if u == nil {
-		return ""
-	}
-	return strings.ToLower(u.Email)
+package main
+
+import "fmt"
+
+type User struct {
+	ID    int64
+	Name  string
+	Email string
 }
 
-type EmailFormatter interface {
-	FullEmail() string
+type UserRepo struct {
+	store map[int64]*User
 }
 
-var _ EmailFormatter = (*User)(nil) // OK
+func (r *UserRepo) Save(u *User) {
+	r.store[u.ID] = u
+	fmt.Printf("  repo.Save: stored user %d at %p\n", u.ID, u)
+}
 
-// var _ EmailFormatter = User{} // compile error: value User has no FullEmail
+type UserService struct {
+	repo *UserRepo
+}
+
+func (s *UserService) CreateUser(name, email string) *User {
+	u := &User{ID: 1, Name: name, Email: email}
+	fmt.Printf("  service.Create: user at %p\n", u)
+	s.repo.Save(u)
+	return u
+}
+
+func main() {
+	repo := &UserRepo{store: make(map[int64]*User)}
+	svc := &UserService{repo: repo}
+
+	fmt.Printf("repo at %p, svc at %p\n", repo, svc)
+	user := svc.CreateUser("rahul", "r@test.com")
+	fmt.Printf("handler got user at %p: %+v\n", user, *user)
+}
+// Output:
+// repo at 0xC000010028, svc at 0xC000010038
+// service.Create: user at 0xC000014040
+// repo.Save: stored user 1 at 0xC000014040
+// handler got user at 0xC000014040: {ID:1 Name:rahul Email:r@test.com}
 ```
 
-The interface only accepts `*User` because `FullEmail` is on `*User`.
+```
+Step 1: repo := &UserRepo{...}
+  heap 0x10028: [ store: map[...] ]
+  main's stack: repo = 0x10028
 
-### What Go does for you at call sites
+Step 2: svc := &UserService{repo: repo}
+  heap 0x10038: [ repo: 0x10028 ]    ← svc.repo points at the same UserRepo
+  main's stack: svc = 0x10038
 
-If the method is on `*User` but you have a `User` **variable**, `u.FullEmail()` becomes `(&u).FullEmail()` automatically. That helps **calls** only — interfaces still see `User` and `*User` as different shapes.
+Step 3: svc.CreateUser("rahul", "r@test.com")
+  Compiler rewrites: (*UserService).CreateUser(svc, "rahul", "r@test.com")
+  CreateUser's receiver s = 0x10038 (pointer to svc)
+  
+  Inside CreateUser:
+    u := &User{...} → heap 0x14040: [ ID:1 | Name:"rahul" | Email:"r@test.com" ]
+    
+  Step 3a: s.repo.Save(u)
+    s.repo → follows 0x10038 → gets repo pointer 0x10028
+    (*UserRepo).Save(0x10028, u)
+    Save's receiver r = 0x10028
+    r.store[u.ID] = u → map now stores pointer 0x14040
+
+Step 4: returns u (0x14040) to main
+  main, svc, repo, and the map entry ALL reference the same User at 0x14040
+
+POINTER CHAIN:
+  main → svc(0x10038) → svc.repo(0x10028) → repo.store[1](0x14040) = User
+  main → user(0x14040) = same User
+  
+  One User struct. Multiple pointers. Every layer mutates through the same address.
+```
+
+> **In plain English:** Think of a hospital patient chart. The front desk creates it, the doctor updates it, the lab reads it. They're all reading and writing the same physical chart — not passing photocopies around. That's pointer receivers in a handler → service → repo chain.
 
 ---
 
 ## 5. Key Rules & Behaviors
 
-### Value receiver: copy in, mutations lost
+### Rule 1: Value Receiver — Copy In, Mutations Lost
+
+The method works on a complete copy of the struct. Any field changes die when the method returns.
+
+**WHY (§4.2):** From §4.2, the compiler passes the struct as the first argument by value — Go copies every byte into a new stack slot. The method increments the copy's field. When the stack frame dies, the copy dies with it.
 
 ```go
-type UserService struct {
-	db         *sql.DB
-	cacheHits  int
+type BatchWriter struct {
+	lines []string
 }
 
-func (s UserService) RecordCacheHit() {
-	s.cacheHits++
-}
-
-func demo(db *sql.DB) {
-	svc := UserService{db: db, cacheHits: 0}
-	svc.RecordCacheHit()
-	// svc.cacheHits still 0 — only the copy inside RecordCacheHit changed
+func (w BatchWriter) AppendBroken(line string) {
+	w.lines = append(w.lines, line) // appends to copy's slice header
 }
 ```
 
 ```
-MEMORY TRACE — value receiver, mutation lost (UserService):
+Step 1: bw := BatchWriter{lines: nil}
+  stack 0xA0: [ lines: {ptr: nil, len: 0, cap: 0} ]
 
-Step 1: svc := UserService{db: db, cacheHits: 0}
-  stack:
-    svc ──→ [ db: ptr to real DB | cacheHits: 0 ]  at addr 0xC000
+Step 2: bw.AppendBroken("hello")
+  Copy at 0xB0: [ lines: {ptr: nil, len: 0, cap: 0} ]   ← copy of the header
+  append creates backing array → copy's header: {ptr: 0xD0, len: 1, cap: 1}
+  Method returns → copy at 0xB0 is gone
 
-Step 2: svc.RecordCacheHit() — Go copies the whole UserService into the receiver
-  stack:
-    caller svc ──→ [ db: same ptr | cacheHits: 0 ]  at addr 0xC000
-    receiver s ──→ [ db: same ptr | cacheHits: 1 ]  at addr 0xC010   ◄── only this copy incremented
+Step 3: bw.lines at 0xA0 still {ptr: nil, len: 0, cap: 0}
+  The new backing array at 0xD0 is now unreachable → GC will free it
 
-Step 3: method returns, receiver discarded
-  stack:
-    svc ──→ [ cacheHits still 0 ]  at addr 0xC000
+FIX: func (w *BatchWriter) Append(line string) { w.lines = append(...) }
+  Now append updates the ORIGINAL header at 0xA0
 ```
 
-Note: `s.db` inside the method is still the real database pointer. You only "lost" updates to **value fields** on `UserService` itself.
+> **In plain English:** You gave the clerk a photocopy of your notebook's table of contents. They added a page to their photocopy. Your notebook still has the old table of contents.
 
-### Pointer receiver: same struct, changes stick
+### Rule 2: Pointer Receiver — Changes Stick Through the Address
+
+The method receives a pointer to the original struct. Field writes go through that address and are visible to the caller.
+
+**WHY (§4.2, §4.5):** From §4.2, pointer receiver passes 8 bytes (the address). The method writes to `s.field` which the compiler turns into `*s + offset(field)` — a write to the same memory the caller holds.
 
 ```go
 func (o *Order) AddItem(item LineItem) {
@@ -259,92 +449,351 @@ func (o *Order) MarkPaid() {
 	o.Paid = true
 }
 ```
-(`Order` and `LineItem` are the same types from the mental model above — `append` here **needs** `*Order` so the caller sees longer `Items`.)
 
 ```
-MEMORY TRACE — pointer receiver (Order.MarkPaid):
+Step 1: ord := Order{ID: "o-1", Paid: false, Items: nil}
+  stack 0xA0: [ ID:"o-1" | Paid:false | Items:{nil,0,0} ]
 
-Step 1: ord := Order{ID: "o-1", Paid: false}
-  stack:
-    ord ──→ [ ID | Paid: false | Items header... ]  at addr 0xC000
+Step 2: ord.MarkPaid() → compiler passes &ord (0xA0)
+  Method writes: *(0xA0 + offset(Paid)) = true
+  stack 0xA0: [ ID:"o-1" | Paid:true | Items:{nil,0,0} ]   ← changed!
 
-Step 2: ord.MarkPaid() — compiler passes &ord; receiver is *Order pointing at 0xC000
-  stack:
-    ord ──→ [ Paid: true ]  at addr 0xC000   ◄── updated in place
-    receiver *Order ──→ 0xC000
-
-Step 3: caller sees Paid == true
+Step 3: ord.AddItem(LineItem{SKU:"X", Qty:2}) → compiler passes &ord (0xA0)
+  append creates backing array, updates Items header at 0xA0
+  stack 0xA0: [ ID:"o-1" | Paid:true | Items:{ptr:0xD0, len:1, cap:1} ]
+  Caller sees both Paid=true and the new item ✓
 ```
 
-### Method set: why `User{}` does not match an interface that needs `*User`
+> **In plain English:** You told the clerk "my desk is room 3A." They walked over and wrote on your actual document. When you go back to your desk, the changes are there.
+
+### Rule 3: Method Sets — The Interface Gate
+
+`T` can only call methods with value receivers. `*T` can call methods with both value and pointer receivers. This determines interface satisfaction.
+
+**WHY (§4.3, §4.4):** From §4.3, Go auto-inserts `&` for direct calls but NOT for interface matching. From §4.4, the interface stores a copy of `T`, which doesn't have a stable address — Go can't safely create a pointer to it.
+
+```go
+type Notifier interface {
+	Notify(msg string)
+}
+
+type EmailNotifier struct { addr string }
+func (n *EmailNotifier) Notify(msg string) { fmt.Println("emailing", n.addr, msg) }
+
+// var _ Notifier = EmailNotifier{}    // COMPILE ERROR
+var _ Notifier = &EmailNotifier{}      // OK
+```
 
 ```
-MEMORY TRACE — method sets (User vs *User):
+Method set lookup:
 
-  func (u User) IsVerified() bool      → belongs to User
-  func (u *User) SetVerified(v bool)  → belongs to *User only
+  EmailNotifier  (value)  → { }                ← Notify is *EmailNotifier only
+  *EmailNotifier (pointer) → { Notify(string) } ← includes pointer receiver methods
 
-Interface needs SetVerified? Plain User does not qualify. *User does.
-(You can still *call* u.SetVerified on a variable — Go turns it into (&u).SetVerified.
-That trick does not help interface matching.)
+  Interface Notifier requires: { Notify(string) }
+  
+  EmailNotifier{}  → {} vs {Notify} → MISSING → compile error
+  &EmailNotifier{} → {Notify} vs {Notify} → MATCH → OK
 ```
 
-### Nil pointer receiver: legal call, dangerous field access
+> **In plain English:** The bouncer checks your method set list. `*EmailNotifier` has all the stamps. `EmailNotifier` is missing the pointer-receiver stamps. No entry.
+
+### Rule 4: Nil Receiver — Legal Call, Dangerous Field Access
+
+You can call a method on a nil pointer. The method runs. But if it tries to read a field without checking nil first, it panics.
+
+**WHY (§4.2, §4.4 from T07):** The method receives `nil` (address 0x0) as its receiver. The call itself is fine — it's just a function call. But reading `c.items` means "read memory at 0x0 + offset" which hits unmapped memory → SIGSEGV → panic.
 
 ```go
 type Cart struct {
-	items []LineItem
+	items []string
 }
 
 func (c *Cart) ItemCount() int {
 	if c == nil {
-		return 0
+		return 0 // safe: checked before field access
 	}
 	return len(c.items)
 }
 
-var cart *Cart
-_ = cart.ItemCount() // OK: ItemCount checks nil before c.items
+func (c *Cart) FirstItemUnsafe() string {
+	return c.items[0] // PANIC if c is nil — reads through nil pointer
+}
+
+func main() {
+	var cart *Cart // nil
+	fmt.Println(cart.ItemCount())      // 0 — safe
+	// fmt.Println(cart.FirstItemUnsafe()) // PANIC
+}
 ```
 
 ```
-MEMORY TRACE — nil receiver:
+cart.ItemCount() with nil receiver:
 
-Step 1: var cart *Cart — nil
-Step 2: cart.ItemCount() — receiver *Cart is still nil; if c == nil { return 0 } — no field read → OK
+  Step 1: cart = nil (0x0)
+  Step 2: Go calls (*Cart).ItemCount(nil)
+    receiver c = 0x0
+  Step 3: if c == nil → true → return 0
+    No field access → no crash ✓
 
-If you started with return len(c.items) with no nil check:
-  reading c.items through nil → panic
+cart.FirstItemUnsafe() with nil receiver:
+
+  Step 1: cart = nil (0x0)
+  Step 2: Go calls (*Cart).FirstItemUnsafe(nil)
+    receiver c = 0x0
+  Step 3: c.items → reads memory at 0x0 + offset(items) → SIGSEGV → panic!
 ```
 
-Calling a method with a nil receiver is allowed. **Using** `c.items` (or any field) before `if c == nil` is what blows up.
+> **In plain English:** Calling a nil-receiver method is like phoning an empty office — the phone rings, someone picks up. But if they try to open a filing cabinet that doesn't exist (field access), they crash.
 
-**Consistency:** if `Save` is `func (r *PostgresRepo)`, make `FindByID` a pointer receiver too. Same for `UserService`, `Server`, any type that holds DB or mutable state.
+### Rule 5: Consistency — One Receiver Style Per Type
 
-**Code review one-liner:** pointer when the struct has a DB connection, mutex, or is big; value when it is tiny and read-only. Unsure? Pointer.
+If `Save` is `func (r *PostgresRepo)`, make `FindByID` a pointer receiver too. Mixing confuses code reviewers and creates subtle bugs where some methods see the real struct and others see a copy.
+
+**WHY (§4.4):** From §4.4, interface satisfaction depends on the method set. If you mix receivers, `PostgresRepo` might implement some interfaces but not others depending on which methods are pointer vs value. Consistency eliminates this entire class of bugs.
+
+```go
+// WRONG: mixed receivers
+type BadRepo struct {
+	pool  string
+	cache map[string]string
+}
+func (r BadRepo) FindByID(id string) string  { return r.cache[id] }  // value
+func (r *BadRepo) Save(id, val string)       { r.cache[id] = val }   // pointer
+
+// PROBLEM: BadRepo{} satisfies an interface needing FindByID
+// but NOT an interface needing Save. Confusing.
+
+// RIGHT: all pointer receivers
+type GoodRepo struct {
+	pool  string
+	cache map[string]string
+}
+func (r *GoodRepo) FindByID(id string) string { return r.cache[id] }
+func (r *GoodRepo) Save(id, val string)       { r.cache[id] = val }
+```
+
+```
+Mixed receivers create confusing method sets:
+
+  BadRepo  → { FindByID }       ← has value receiver method only
+  *BadRepo → { FindByID, Save } ← has both
+
+  Consistent pointer receivers:
+  GoodRepo  → { }                ← no methods on value
+  *GoodRepo → { FindByID, Save } ← everything is here, clean
+
+  Rule of thumb:
+    Struct has *sql.DB, sync.Mutex, or mutable state? → ALL pointer receivers
+    Struct is tiny, immutable, read-only (like UserID)? → ALL value receivers
+    Never mix.
+```
+
+> **In plain English:** If one doctor writes on the real patient chart and another doctor writes on a photocopy, the chart becomes inconsistent. Pick one style — "everyone writes on the real chart" (pointer) or "everyone gets a photocopy" (value) — and stick with it.
 
 ---
 
 ## 6. Code Examples (Show, Don't Tell)
 
-### `HTTPClient` wrapper
+### Example 1: Method Call — What the Compiler Actually Generates
+
+The simplest possible method call, traced through memory to show the compiler rewrite.
 
 ```go
+package main
+
+import "fmt"
+
+type Counter struct {
+	n int
+}
+
+func (c *Counter) Inc() {
+	c.n++
+}
+
+func main() {
+	ctr := Counter{n: 0}
+	fmt.Printf("before: n=%d, ctr at %p\n", ctr.n, &ctr)
+	ctr.Inc()
+	fmt.Printf("after:  n=%d, ctr at %p\n", ctr.n, &ctr)
+}
+// Output:
+// before: n=0, ctr at 0xC0000A6058
+// after:  n=1, ctr at 0xC0000A6058
+```
+
+```
+Step 1: ctr := Counter{n: 0}
+  stack 0x6058: [ n: 0 ]
+
+Step 2: ctr.Inc()
+  Compiler rewrites: (*Counter).Inc(&ctr)
+  Inc receives pointer 0x6058 (8 bytes)
+  c.n++ → writes at 0x6058 → n becomes 1
+
+Step 3: main reads ctr.n → 0x6058 → 1 ✓
+```
+
+### Example 2: HTTPClient Wrapper — Real Service Pattern
+
+A common pattern: wrapping `*http.Client` with a base URL and shared config.
+
+```go
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+)
+
 type HTTPClient struct {
 	client  *http.Client
 	baseURL string
 }
 
+func NewHTTPClient(baseURL string) *HTTPClient {
+	return &HTTPClient{
+		client:  &http.Client{},
+		baseURL: baseURL,
+	}
+}
+
 func (c *HTTPClient) Get(ctx context.Context, path string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	url := c.baseURL + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	return c.client.Do(req)
 }
+
+func main() {
+	client := NewHTTPClient("https://api.example.com")
+	fmt.Printf("client at %p, inner http.Client at %p\n", client, client.client)
+}
 ```
 
-Pointer receiver: one shared `baseURL` and `client`, no struct copy on every outbound call.
+```
+Step 1: NewHTTPClient("https://api.example.com")
+  Compiler detects: return &HTTPClient{...} → escapes to heap
+  heap 0xC000010040: [ client: 0xC000012000 | baseURL: "https://api.example.com" ]
+                        │
+                        └──→ heap: *http.Client at 0xC000012000
+
+Step 2: client.Get(ctx, "/users")
+  Compiler rewrites: (*HTTPClient).Get(client, ctx, "/users")
+  Method receives pointer 0xC000010040
+  Reads c.baseURL and c.client through that pointer
+  
+  WHY pointer receiver: 
+  - HTTPClient is ~32 bytes (pointer + string header) — not huge, but shared
+  - More importantly: every handler shares ONE HTTPClient instance
+  - Value receiver would copy the struct every call — wasteful and wrong if
+    you ever add state (rate limiter, circuit breaker)
+```
+
+### Example 3: Value Receiver for Small Read-Only Types
+
+When the type is small and you never mutate it, value receivers are cleaner.
+
+```go
+package main
+
+import "fmt"
+
+type UserID string
+
+func (id UserID) IsEmpty() bool {
+	return id == ""
+}
+
+func (id UserID) String() string {
+	if id == "" {
+		return "<empty>"
+	}
+	return string(id)
+}
+
+func main() {
+	var empty UserID
+	known := UserID("usr_abc123")
+
+	fmt.Println(empty.IsEmpty())  // true
+	fmt.Println(known.IsEmpty())  // false
+	fmt.Println(known.String())   // usr_abc123
+}
+```
+
+```
+known.IsEmpty():
+
+  Step 1: known = UserID("usr_abc123")
+    stack: [ string header: ptr + len = 16 bytes ]
+
+  Step 2: IsEmpty() copies the 16-byte string header
+    copy: [ same ptr | same len ]
+    Compares copy == "" → false
+
+  Step 3: Original untouched. Copy is tiny (16 bytes). No pointer needed.
+
+  WHY value receiver is fine here:
+  - UserID is 16 bytes (string header) — tiny
+  - Methods are read-only — no mutation
+  - No shared state — each call is independent
+  - Copying 16 bytes is cheaper than pointer indirection + potential GC overhead
+```
+
+### Example 4: The Interface Wiring Bug — Traced End to End
+
+The most common compile error when wiring services together:
+
+```go
+package main
+
+import "fmt"
+
+type Saver interface {
+	Save(data string) error
+}
+
+type FileStore struct {
+	path string
+}
+
+func (f *FileStore) Save(data string) error {
+	fmt.Printf("saving '%s' to %s\n", data, f.path)
+	return nil
+}
+
+func process(s Saver) {
+	s.Save("important data")
+}
+
+func main() {
+	store := FileStore{path: "/tmp/data.txt"}
+
+	// process(store)  // COMPILE ERROR: FileStore does not implement Saver
+	process(&store)    // OK: *FileStore implements Saver
+}
+```
+
+```
+WHY process(store) fails:
+
+  Step 1: store is FileStore (value type)
+  Step 2: process expects Saver interface
+  Step 3: Go checks: does FileStore's method set include Save(string) error?
+    Method set of FileStore: { }   ← Save is on *FileStore only!
+    MISSING → compile error
+
+  Step 4: process(&store) — &store is *FileStore
+    Method set of *FileStore: { Save(string) error }
+    MATCH → OK
+
+  The fix is always the same: pass &store or store the pointer in a field.
+```
 
 ---
 
@@ -386,7 +835,8 @@ func main() {
 > [!success]- Answer
 > `true true`
 >
-> Wrong methods copy the struct; `MarkPaidRight` uses `*Order`. For `a`, the pointer call fixes `a`. For `b`, the value call updates only a temp; the pointer call fixes the real order.
+> For `a`: TryMarkPaidWrong copies a, sets copy's Paid = true, copy dies → a.Paid still false. MarkPaidRight takes &a, sets real a.Paid = true → a.Paid is true.
+> For `b`: TryMarkPaidWrong copies *b into method, sets copy's Paid = true, copy dies → b.Paid still false. MarkPaidRight takes b (already a pointer), sets b.Paid = true → b.Paid is true.
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -412,19 +862,57 @@ func main() {
 ```
 
 > [!success]- Answer
-> Prints `0`. Value receiver → `append` updates only the copy's slice header. Fix: `func (w *BatchWriter) Append(...) { w.lines = append(w.lines, line) }` — same bug pattern as an in-memory repo buffer.
+> Prints `0`. Value receiver → `append` updates only the copy's slice header. The original's header still says len: 0. Fix: `func (w *BatchWriter) Append(...) { w.lines = append(w.lines, line) }` — pointer receiver ensures the original slice header gets the new length and pointer.
 
 ---
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | Why it bites | Fast fix |
-|------|--------------|----------|
-| "I mutated in a method but nothing changed" | Value receiver copied your struct | Use `*Type` when mutating fields |
-| Value does not implement interface | Methods only on `*T` | Pass `*T`, or change receiver to value if tiny and safe |
-| `p.Method()` always copies | Compiler may pass `&p` for `*T` methods | Learn value vs pointer receivers, not just syntax |
-| Nil receiver panic | You read fields before `if v == nil` | Guard first, like `ItemCount` on `*Cart` |
-| Mixed receivers on same type | Confuses everyone in review | One style per type; services → pointers |
+| Trap | What Happens | Because (§4 link) | Fix |
+|------|-------------|-------------------|-----|
+| "I mutated in a method but nothing changed" | Value receiver copied the struct; mutation died with the copy | §4.2 — value receiver copies entire struct into new stack slot. Field writes go to the copy, not the original | Use `*Type` receiver when mutating fields |
+| Value type doesn't implement interface | Compile error: missing method | §4.4 — method set of `T` only includes value receiver methods. Pointer receiver methods are on `*T` only. Interface checks method set, not individual calls | Pass `*T` instead, or change receiver to value if the type is small and safe |
+| `v.Method()` works but `var i Interface = v` doesn't | Auto-insert of `&` only works for direct calls, not interface assignment | §4.3 — compiler rewrites `v.Method()` as `(&v).Method()` for convenience, but can't do the same for interface storage because the copy inside the interface has no stable address | Always pass `&v` into interfaces when methods use pointer receivers |
+| Nil receiver panic | Method called on nil pointer, tried to read a field | §4.5 (Rule 4) — nil pointer is address 0x0. Method call is fine, but field access reads 0x0 + offset → unmapped memory → SIGSEGV | Guard with `if r == nil { return ... }` before any field access |
+| Mixed receivers on same type | Some methods see original, others see copy; interfaces partially satisfied | §4.4 + Rule 5 — method set of `T` includes only value methods, `*T` includes both. Mixed receivers create confusing partial interface matches | One style per type: pointer for service/repo types, value for tiny read-only types |
+
+### Gotcha Deep Dive: Slice Append in Value Receiver
+
+This is the most common beginner trap in Go services — an in-memory buffer that never grows:
+
+```go
+type InMemoryRepo struct {
+	users []User
+}
+
+func (r InMemoryRepo) SaveBroken(u User) {
+	r.users = append(r.users, u)
+}
+```
+
+```
+Step 1: repo := InMemoryRepo{users: nil}
+  stack 0xA0: [ users: {ptr: nil, len: 0, cap: 0} ]   ← 24-byte slice header
+
+Step 2: repo.SaveBroken(User{...})
+  Go copies the 24-byte slice header into the method:
+  original at 0xA0: [ users: {nil, 0, 0} ]
+  copy at 0xB0:     [ users: {nil, 0, 0} ]
+
+Step 3: append(r.users, u) inside the method
+  append sees len=0, cap=0 → allocates new backing array on heap
+  copy's header at 0xB0: [ users: {ptr: 0xD0, len: 1, cap: 1} ]
+  heap 0xD0: [ User{...} ]
+
+Step 4: method returns → copy at 0xB0 is gone
+  original at 0xA0: [ users: {nil, 0, 0} ]   ← STILL EMPTY!
+  heap 0xD0 is now unreachable → will be garbage collected
+
+FIX: func (r *InMemoryRepo) Save(u User)
+  Now append updates the ORIGINAL header at 0xA0
+```
+
+> **In plain English:** You told the clerk "here's a copy of my table of contents." They added a new entry to their copy and put it in the shredder when they left. Your table of contents never changed.
 
 ---
 
