@@ -15,11 +15,9 @@ Why does this matter? Because your HTTP handler can depend on the contract ("som
 
 ## 2. Core Insight (TL;DR)
 
-**Behavior is the passport.** The compiler checks whether your type has the right methods. It does not check the name.
+**If your struct has the right methods, it fits the interface. That's it.** No `implements` keyword. No registration. The compiler checks the methods automatically at the point where you assign the struct to the interface variable.
 
-**An interface value is a pair.** It remembers **which concrete type** is inside, and **a pointer to the actual data**. People call these the **dynamic type** and **dynamic value**.
-
-**Nil is weird.** An interface is nil only when **both** halves are empty. If you stuff a nil pointer of a concrete type into an interface, the "type" half is set — so the interface is **not** nil. This is the single most common interface bug in Go.
+This means your handler can depend on a contract like "something that can find a user by ID" — and production passes Postgres, tests pass a fake. The handler never changes.
 
 ---
 
@@ -43,7 +41,43 @@ Think **USB-C**. The interface is the **port shape**. Your concrete type is the 
 
 Your handler plugs into the port. It doesn't know which cable is on the other end.
 
-**The mistake that teaches you:** what if you return a nil pointer through an interface? You'd expect `err == nil` to be true. It's not — the interface remembers the *type* of the pointer, so it's non-nil. You'll see this fully in §4.5.
+### The mistake that teaches you
+
+Here's a bug that trips up nearly every Go developer at least once:
+
+```go
+func Validate(email string) error {
+    var err *ValidationError
+    if email == "" {
+        err = &ValidationError{Field: "email", Reason: "required"}
+    }
+    return err
+}
+
+func main() {
+    err := Validate("sam@co.com")
+    fmt.Println(err == nil) // You'd expect: true
+}
+```
+
+**What you'd expect:** `email` is valid, so `err` stays nil, so `err == nil` should be `true`.
+
+**What actually happens:** It prints `false`. The caller thinks validation failed even though nothing went wrong.
+
+**Why?** When you write `return err`, Go wraps the `*ValidationError` into the `error` interface. Even though the pointer is nil, Go remembers the *type* of the pointer. An interface with a type stamped on it is not nil — even if the actual data is empty. Think of a labeled envelope that happens to be empty. You'd still say "there's an envelope here" because the label is on it.
+
+**The fix:** Return `nil` directly on the success path, never a typed nil variable:
+
+```go
+func Validate(email string) error {
+    if email == "" {
+        return &ValidationError{Field: "email", Reason: "required"}
+    }
+    return nil
+}
+```
+
+You'll learn exactly *why* this happens (the two-word structure of an interface value) in §4.5 below.
 
 ---
 
@@ -137,7 +171,19 @@ Step 2: Alert calls n.Notify(ctx, "server down").
 Step 3: (*EmailNotifier).Notify runs → prints "sending email from ops@acme.co: server down"
 ```
 
-If you pass a `*SlackNotifier` instead, same flow, different method gets called. The `Alert` function doesn't change at all. That's the whole point.
+```
+What Alert sees (the interface envelope):
+
+  n (Notifier interface):
+  ┌────────────────────────────────────────────────┐
+  │ label:    *EmailNotifier                       │
+  │ contents: → EmailNotifier{From:"ops@acme.co"}  │
+  └────────────────────────────────────────────────┘
+
+  Alert calls n.Notify() → Go reads the label → finds *EmailNotifier's Notify → runs it
+```
+
+If you pass a `*SlackNotifier` instead, the envelope has a different label and different contents, but `Alert` doesn't care. It just calls `n.Notify()` and Go dispatches to the right method. That's the whole point.
 
 ---
 
@@ -227,46 +273,52 @@ This is the core value of interfaces in Go: **your business logic never imports 
 
 ---
 
-### 4.5 What an interface value looks like in memory
+### 4.5 What an interface value actually holds (and why nil is tricky)
 
-This is important because it explains the nil trap.
+When you store a concrete value in an interface variable, Go keeps track of **two things**:
 
-When you assign a concrete value to an interface variable, Go stores **two things** on the stack: a **type descriptor** (which concrete type is inside) and a **data pointer** (where the actual struct lives on the heap).
+1. **A label** — which concrete type is inside (e.g., "this is a `*EmailNotifier`")
+2. **The contents** — a pointer to the actual data
+
+Think of it like a **labeled envelope**. The label on the outside tells you what kind of thing is inside. The contents are the actual thing.
 
 ```go
 var n Notifier = &EmailNotifier{From: "ops@acme.co"}
 ```
 
 ```
-stack 0xC000060000: n (Notifier interface — 16 bytes, two words)
-  [0x00] tab  → type descriptor: "this is a *EmailNotifier"
-  [0x08] data → 0xC000080000
-
-heap  0xC000080000: EmailNotifier{ From: "ops@acme.co" }
+n (interface value — an envelope):
+  ┌───────────────────────────────────────────┐
+  │ label:    *EmailNotifier                  │
+  │ contents: ──> EmailNotifier{From:"ops@.."}│
+  └───────────────────────────────────────────┘
 ```
 
-When you call `n.Notify(ctx, msg)`, Go reads the tab to find out the concrete type, looks up the `Notify` method for that type, and calls it with the data pointer as the receiver.
+When you call `n.Notify(ctx, msg)`, Go reads the label to find out it's a `*EmailNotifier`, looks up its `Notify` method, and calls it.
 
-**Why this matters for nil:** an interface is nil only when **both** words are zero.
+**Now here's the tricky part: when is an interface nil?** Before reading on, think about this: if you have a nil pointer of type `*EmailNotifier` and assign it to a `Notifier` variable, is the interface nil or not?
+
+An interface is nil **only when both the label and contents are empty** — a blank envelope with nothing written on it and nothing inside.
 
 ```go
-var n Notifier                          // tab=0, data=0 → nil
-var n2 Notifier = (*EmailNotifier)(nil) // tab=*EmailNotifier, data=0 → NOT nil!
+var n Notifier                          // no label, no contents → nil
+var n2 Notifier = (*EmailNotifier)(nil) // label says *EmailNotifier, contents empty → NOT nil!
 ```
 
 ```
-n:  [tab = 0x0              | data = 0x0]  → n == nil is TRUE
-n2: [tab = *EmailNotifier   | data = 0x0]  → n2 == nil is FALSE
-                               ↑ tab is set, so Go says "this interface holds something"
+n:  envelope with no label, nothing inside       → n == nil is TRUE
+
+n2: envelope labeled "*EmailNotifier", but empty  → n2 == nil is FALSE
+         ↑ the label is there, so Go says "this envelope has something"
 ```
 
-`n2` has a type stamped on it — Go considers it non-nil even though the data pointer is zero. This is the typed-nil trap, and it bites you most often with the `error` interface (§4.7).
+`n2` has a label stamped on it. Go considers it non-nil even though there's nothing inside. This is the **typed-nil trap**. It bites you most often when returning errors (see §4.7 below).
 
 ---
 
 ### 4.6 The `error` interface and custom error types
 
-The standard library defines `error` as an interface with one method:
+Go's standard library defines `error` as an interface with just one method:
 
 ```go
 type error interface {
@@ -274,7 +326,9 @@ type error interface {
 }
 ```
 
-Any struct with an `Error() string` method is automatically a valid `error`. You use this to create custom error types that carry structured information:
+That's it. Any struct that has an `Error() string` method is automatically a valid `error`. This is the same implicit satisfaction you learned in 4.2 — no `implements` keyword.
+
+You use this to create custom error types that carry structured information beyond just a message string:
 
 ```go
 type NotFoundError struct {
@@ -296,7 +350,21 @@ func (e *ValidationError) Error() string {
 }
 ```
 
-Both `*NotFoundError` and `*ValidationError` have `Error() string`, so both are valid `error` values. Your handler can return them, and your middleware can inspect them:
+Both `*NotFoundError` and `*ValidationError` have `Error() string`, so both are valid `error` values.
+
+```
+Compiler's checklist for the error interface:
+  ✓ Does *NotFoundError have Error() string?    → YES → it's a valid error
+  ✓ Does *ValidationError have Error() string?  → YES → it's a valid error
+```
+
+Why does this matter? Because your handler can return these as `error`, and your middleware can figure out the right HTTP status code by checking which concrete type is inside.
+
+---
+
+### 4.6b Type switches — checking which concrete type is inside an interface
+
+Now that you have custom error types, you need a way to ask: "what concrete type is actually inside this `error` interface?" That's what a **type switch** does.
 
 ```go
 func WriteError(w http.ResponseWriter, err error) {
@@ -311,18 +379,20 @@ func WriteError(w http.ResponseWriter, err error) {
 }
 ```
 
-The `switch e := err.(type)` is a **type switch**. It asks: "what concrete type is inside this `error` interface?" Each `case` branch matches a specific type, and inside that branch, `e` has the concrete type — so you can read `e.Field`, `e.Resource`, etc.
+`switch e := err.(type)` asks Go: "look at the label on this interface envelope — what type is inside?" Each `case` branch matches a specific type. Inside that branch, `e` has the concrete type, so you can read fields like `e.Field` or `e.Resource`.
+
+Here's what happens step by step when `err` holds a `*ValidationError{Field: "email", Reason: "required"}`:
 
 ```
-When err holds a *ValidationError{Field: "email", Reason: "required"}:
+Step 1: err is an interface envelope
+  label:    *ValidationError
+  contents: → ValidationError{Field:"email", Reason:"required"}
 
-  err interface value:
-    [tab]  → *ValidationError
-    [data] → pointer to the struct
+Step 2: type switch reads the label
+  case *ValidationError → label matches! → e is now *ValidationError
 
-  type switch checks tab:
-    case *ValidationError → MATCH → e is now *ValidationError
-    → calls http.Error(w, "invalid email: required", 400)
+Step 3: e.Error() returns "invalid email: required"
+  → http.Error(w, "invalid email: required", 400)
 ```
 
 ---
@@ -341,25 +411,25 @@ func LoadConfig(strict bool) error {
 }
 ```
 
-When `strict` is false, `err` is a nil `*ValidationError`. You'd expect `return err` to return nil. But it doesn't — here's why:
+When `strict` is false, `err` is a nil `*ValidationError`. Before reading the trace below, predict: what will the caller see when it checks `if err != nil`?
 
 ```
 Step 1: strict == false → err is a nil *ValidationError
-  stack: err = nil (a nil pointer of type *ValidationError)
 
-Step 2: return err — Go converts *ValidationError to the error interface
-  Go builds the interface value:
-    [0x00] tab  → *ValidationError   ← this is NOT zero!
-    [0x08] data → 0x0 (nil pointer)
+Step 2: return err — Go wraps *ValidationError into the error interface envelope
+  Go builds the envelope:
+    label:    *ValidationError   ← this is NOT empty!
+    contents: (nil pointer)
 
 Step 3: Caller does `if err != nil`
-  Go checks: is tab zero? No. → interface is non-nil → condition is TRUE.
+  Go checks: is the envelope completely blank? No — the label says *ValidationError.
+  → interface is non-nil → condition is TRUE
   The caller thinks LoadConfig failed, even though nothing went wrong.
 
 The fix — return nil directly:
-  Go builds the interface value:
-    [0x00] tab  → 0x0
-    [0x08] data → 0x0
+  Go builds the envelope:
+    label:    (none)
+    contents: (none)
   Now `if err != nil` is false. Correct.
 ```
 
@@ -396,16 +466,16 @@ func GetUserFromCache(cache map[string]any, key string) (*User, bool) {
 ```
 Step 1: cache["user:1"] returns v = &User{ID: "u1"} stored as `any`
 
-  v (any interface — two words):
-    [tab]  → *User
-    [data] → 0xC000080000 (pointer to User struct on heap)
+  v (any interface — an envelope):
+    label:    *User
+    contents: → User{ID:"u1"}
 
 Step 2: u, ok := v.(*User)
-  Go checks: does v's tab match *User? → YES
-  u = 0xC000080000 (the same pointer), ok = true
+  Go checks: does v's label say *User? → YES
+  u = the *User pointer, ok = true
 
 Step 3 (wrong type): cache["session:abc"] returns v = &Session{...}
-  Go checks: does v's tab match *User? → NO
+  Go checks: does v's label say *User? → NO (it says *Session)
   u = nil, ok = false
 ```
 
@@ -432,16 +502,22 @@ func (b *BatchJob) Run(ctx context.Context) error { return nil }
 var r JobRunner = &BatchJob{}     // OK — *BatchJob has Run
 ```
 
-Why? Because `Run` is defined on `*BatchJob`, not `BatchJob`. Go doesn't automatically take the address of a value to make an interface assignment work.
+Why? Because `Run` is defined on `*BatchJob`, not `BatchJob`. When you write `var r JobRunner = BatchJob{}`, here's what the compiler does:
 
 ```
-Method list for BatchJob:   (empty — no methods defined on the value)
-Method list for *BatchJob:  Run(ctx, error)
+Step 1: Go checks — does BatchJob have all the methods JobRunner needs?
+  JobRunner needs: Run(ctx context.Context) error
+  BatchJob's method list: (empty — Run is defined on *BatchJob, not BatchJob)
 
-JobRunner needs: Run(ctx, error)
-  BatchJob  → no Run method → FAIL
-  *BatchJob → has Run       → OK
+Step 2: Run is missing from BatchJob → COMPILE ERROR
+  "BatchJob does not implement JobRunner (Run method has pointer receiver)"
+
+Step 3 (the fix): var r JobRunner = &BatchJob{}
+  Go checks — does *BatchJob have Run(ctx context.Context) error? → YES
+  Assignment allowed.
 ```
+
+The rule is simple: if you define a method on `*T`, only `*T` gets that method. `T` by itself doesn't.
 
 In practice, you almost always use pointer receivers for types that hold state (`*sql.DB`, loggers, caches), so you almost always assign `&MyStruct{}` to interfaces.
 
@@ -501,20 +577,20 @@ If you rename a method in the interface and forget to update the struct, you get
 
 ---
 
-### 5.2 Interface value is two words — both must be zero for nil
+### 5.2 An interface is nil only when both the label and contents are empty
 
-An interface variable holds **tab** (type descriptor) and **data** (pointer to the value). Only when both are zero is the interface nil.
+An interface variable holds two things: a label (which concrete type is inside) and a pointer to the contents. Only when both are empty — a blank envelope — is the interface nil.
 
 ```go
-var e error               // tab=0, data=0 → nil
+var e error               // no label, no contents → nil
 var p *ValidationError    // nil *ValidationError
-var e2 error = p          // tab=*ValidationError, data=0 → NOT nil
+var e2 error = p          // label = *ValidationError, contents = empty → NOT nil
 ```
 
 ```
-  e:  [tab=0x0 | data=0x0]               → e == nil is true
-  e2: [tab=*ValidationError | data=0x0]   → e2 == nil is FALSE
-                              ↑ tab is set, so the interface is non-nil
+  e:  [ label: (none) | contents: (none) ]             → e == nil is true
+  e2: [ label: *ValidationError | contents: (none) ]   → e2 == nil is FALSE
+                                   ↑ label is set, so the interface is non-nil
 ```
 
 This is why you always `return nil` on the success path — never a typed nil through an interface.
@@ -607,14 +683,14 @@ func TestGetUser(t *testing.T) {
 ```
 
 ```
-Step 1: NewGetUserHandler(store) — store is a UserStore interface value
-  stack 0xC000060000: store
-    [0x00] tab  → *MockUserStore (the concrete type)
-    [0x08] data → 0xC000080000 (pointer to the MockUserStore on heap)
+Step 1: NewGetUserHandler(store) — store is a UserStore interface envelope
+  store:
+    label:    *MockUserStore
+    contents: → the MockUserStore with its Users map
 
 Step 2: store.FindByID(ctx, "1")
-  Go reads store's tab → finds FindByID for *MockUserStore → calls it
-  MockUserStore looks up "1" in its Users map → returns &User at 0xC000090000
+  Go reads store's label → finds FindByID for *MockUserStore → calls it
+  MockUserStore looks up "1" in its Users map → returns the User
 
 Step 3: json.NewEncoder(w).Encode(u)
   Writes {"ID":"1","Email":"a@b.co"} to the ResponseWriter
@@ -626,27 +702,36 @@ Step 3: json.NewEncoder(w).Encode(u)
 
 ### Tier 1: Predict the behavior (2 min)
 
+Does this code compile? If not, which line fails and why?
+
 ```go
-func pickNotifier(useEmail bool) Notifier {
-	var n *EmailNotifier
-	if useEmail {
-		n = &EmailNotifier{}
-	}
-	return n
+type Logger interface {
+	Log(msg string)
+}
+
+type FileLogger struct {
+	Path string
+}
+
+func (f *FileLogger) Log(msg string) {
+	fmt.Println(msg)
 }
 
 func main() {
-	x := pickNotifier(false)
-	fmt.Println(x == nil)
+	var a Logger = &FileLogger{Path: "/var/log/app.log"} // line A
+	var b Logger = FileLogger{Path: "/var/log/app.log"}   // line B
+	a.Log("hello")
+	b.Log("hello")
 }
 ```
 
-(`Notifier` / `EmailNotifier` / `Notify` as in §4.2.)
-
 > [!success]- Answer
-> Prints **`false`**.
+> **Line B fails to compile.** The `Log` method is defined on `*FileLogger` (pointer receiver), not on `FileLogger` (the value). So `*FileLogger` has the method `Logger` needs, but `FileLogger` by itself doesn't.
 >
-> `pickNotifier` returns a `Notifier` interface. When `useEmail` is false, `n` is a nil `*EmailNotifier`, but `return n` wraps it into the interface: **tab = `*EmailNotifier`, data = nil**. The tab is set, so the interface is non-nil. Use **`return nil`** when there's no notifier to return.
+> Line A works because `&FileLogger{}` is a `*FileLogger`.
+> Line B fails because `FileLogger{}` is a `FileLogger` — no pointer, no `Log` method.
+>
+> Fix: either use `&FileLogger{}` on line B, or define `Log` with a value receiver `func (f FileLogger) Log(msg string)`.
 
 ### Tier 2: Fix the bug (5 min)
 
@@ -682,11 +767,11 @@ func SaveDraft(ctx context.Context, email string) error {
 
 | # | Trap | What happens | Why (§4 link) |
 |---|------|-------------|---------------|
-| 1 | Return nil `*ValidationError` through `error` | Caller sees `err != nil` even on success | §4.7 — the interface tab word is set, so the interface is non-nil even though the data pointer is zero |
-| 2 | `v.(*User)` without comma-ok on cache `any` | Panics at runtime if wrong type | §4.8 — assertion checks the tab against `*User`; mismatch with no `ok` triggers panic |
+| 1 | Return nil `*ValidationError` through `error` | Caller sees `err != nil` even on success | §4.7 — the interface label is set (it says `*ValidationError`), so the envelope is non-nil even though the contents are empty |
+| 2 | `v.(*User)` without comma-ok on cache `any` | Panics at runtime if wrong type | §4.8 — assertion checks the label against `*User`; mismatch with no `ok` triggers panic |
 | 3 | `BatchJob{}` assigned to `JobRunner` | Compile error | §4.9 — `Run` is defined on `*BatchJob`, not `BatchJob`; pointer receiver methods don't exist on the value type |
 | 4 | Fat interface with 8+ methods | Every test needs an 8-method mock | §4.10 — keep interfaces to 1-3 methods; define in the consumer package |
-| 5 | Comparing two interfaces holding different concrete types | `==` returns false even if the values "look the same" | §4.5 — comparison checks both tab and data; different concrete types mean different tabs |
+| 5 | Comparing two interfaces holding different concrete types | `==` returns false even if the values "look the same" | §4.5 — comparison checks both label and contents; different concrete types mean different labels |
 
 ---
 
