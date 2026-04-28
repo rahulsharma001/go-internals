@@ -40,6 +40,22 @@ You do not hope someone notices a flashing light. You pass a labeled note: what 
 
 Imagine a real letter. Each function that fails puts that letter into a new envelope. On the front of the envelope, someone writes what step failed: "read file", "parse JSON", and so on. The original letter is still inside.
 
+```
+  ┌─────────────────────────────────────────────┐
+  │  handler envelope: "get user: ..."          │
+  │  ┌─────────────────────────────────────┐    │
+  │  │  service envelope: "lookup: ..."    │    │
+  │  │  ┌─────────────────────────────┐    │    │
+  │  │  │  original letter:           │    │    │
+  │  │  │  ErrNotFound (sentinel)     │    │    │
+  │  │  └─────────────────────────────┘    │    │
+  │  └─────────────────────────────────────┘    │
+  └─────────────────────────────────────────────┘
+       ↑                        ↑
+   == sees ONLY this       errors.Is opens
+   outer envelope          every layer inside
+```
+
 - **`errors.Is`** keeps opening envelopes until it finds a letter that matches a specific stamp you care about, like `os.ErrNotExist`.
 - **`errors.As`** keeps opening until it finds an envelope of a **specific shape** — for example, a red envelope with a form inside your custom type, so you can read extra fields.
 
@@ -75,7 +91,9 @@ func main() {
 
 ### 4.1 The `error` Interface — What Lives in Memory
 
-`error` is an interface. Every interface value in Go is a **16-byte container** with two slots: a **type pointer** (what concrete type is inside?) and a **data pointer** (where does the actual value live?). Understanding this two-slot layout explains every error behavior.
+Every Go error — sentinel, custom struct, wrapped chain — ends up stored in the same kind of container. Before looking at any specific pattern, you need to understand what that container looks like in memory. Once you see the two-slot layout, everything else in this topic (sentinel identity, wrapping chains, the typed nil trap) clicks into place.
+
+`error` is an interface. Every interface value in Go is a **16-byte container** with two slots: a **type pointer** (what concrete type is inside?) and a **data pointer** (where does the actual value live?).
 
 ```go
 package main
@@ -574,7 +592,7 @@ Error flow through layers:
   errors.Is / errors.As cross the boundary through the chain.
 ```
 
-> **In plain English:** The repo writes a medical report. The receptionist (handler) translates it into patient-friendly language. The repo never decides how to talk to the patient.
+Same idea as a hospital: inside, doctors use medical terminology on the chart. At the reception desk, you translate that into "your test results are ready" — not "serum creatinine elevated 2.3 mg/dL." The repo never decides how to talk to the API consumer.
 
 ### Rule 2c: Middleware — Log Once, Attach Request Context, Then Wrap
 
@@ -603,7 +621,7 @@ Chain after wrapReq:
                     ↑ req_id is in the MESSAGE for logs, not blocking the chain
 ```
 
-> **In plain English:** You stamp every envelope with a tracking number. Anyone who opens the envelope can still read the original letter — the stamp doesn't cover anything up.
+It's like stamping a tracking number on every envelope — anyone who opens it can still read the original letter. The stamp doesn't cover anything up.
 
 ### Rule 2d: Retryable vs Non-Retryable
 
@@ -639,7 +657,7 @@ Retry decision via chain walk:
     walks entire chain → no ValidationError found → don't retry
 ```
 
-> **In plain English:** A "temporary" sticker on an envelope means "try sending this again." A "validation failed" sticker means "fix the contents first — resending won't help."
+A "temporary" sticker on an envelope means "try sending this again." A "validation failed" sticker means "fix the contents first — resending won't help."
 
 ### Rule 2e: Error Boundary — `*RepoError` Inside, `*APIError` at the Edge
 
@@ -676,7 +694,7 @@ Error boundary translation:
               ↑ Cause: full chain preserved for structured logs
 ```
 
-> **In plain English:** Inside the hospital, doctors use medical terminology on the chart. At the reception desk, you translate that into "your test results are ready" — not "serum creatinine elevated 2.3 mg/dL."
+Inside the hospital, doctors use medical terminology. At the reception desk, you translate that into "your test results are ready." Same principle: internal errors stay internal, the API boundary translates.
 
 ### Rule 3: Use `errors.Is` for Sentinels, `errors.As` for Type Extraction
 
@@ -710,7 +728,7 @@ errors.Is vs errors.As — what each does at each chain level:
     level 3: *ValidationError assignable? YES → set v, return true
 ```
 
-> **In plain English:** `Is` checks if the same serial-numbered form is inside. `As` checks if any layer uses a specific form template, and hands you the form so you can read the fields.
+`Is` checks if the same serial-numbered form is inside any envelope. `As` checks if any layer uses a specific form template, and hands you the form so you can read its fields.
 
 ### Rule 4: Do Not Wrap Twice with the Same Context
 
@@ -735,7 +753,7 @@ GOOD chain:
     err: → errorString{"db error"} }         ← one wrap, one new label
 ```
 
-> **In plain English:** You do not put two identical address labels on the same box. One clear label is enough.
+You don't put two identical address labels on the same box. One clear label is enough.
 
 ### Rule 5: Return `nil` for Success — Avoid the Typed Nil Interface Trap
 
@@ -809,7 +827,7 @@ FIX: if nf != nil { return u, nf }; return u, nil
   nil assigned to error: [ type: nil | data: nil ] → truly nil
 ```
 
-> **In plain English:** Same trap, different disguise. A nil `*NotFoundError` is still a labeled tray. Guard before promoting: `if nf != nil { return u, nf }; return u, nil`.
+Same trap, different disguise. A nil `*NotFoundError` is still a labeled tray. Guard before promoting: `if nf != nil { return u, nf }; return u, nil`.
 
 ---
 
@@ -1152,7 +1170,7 @@ func main() {
   But the internal structure is completely different.
 ```
 
-> **In plain English:** `%w` is a window in the envelope — you can reach through it. `%v` is a photocopy printed on a new envelope — looks the same from outside, but there's nothing inside to reach.
+Remember: `%w` is the window in the envelope — you can reach through it. `%v` is a photocopy on a new envelope — looks the same from outside, but there's nothing inside to reach.
 
 ### Gotcha Deep Dive: Two Sentinels With Same Text
 
@@ -1260,7 +1278,11 @@ If they ask the **typed nil** question, draw the **(type, data)** pair in the ai
 
 ## 12. Final Verbal Answer
 
-Go's **`error`** is just **`Error() string`**. You **`return`** failures; you **`if err != nil`**; you do not route normal cases through **`panic`**. In real services you **wrap** with **`%w`**, map to **HTTP** at the edge, **log once** with a **request ID**, and use **`Is`/`As`** so **404 / 400 / 500** stay honest. Avoid **`==`** after wraps, avoid **typed nil** surprises when you promote pointers to **`error`**, and treat **retries** as policy — not every error deserves another POST.
+Go errors are just values — any type that has an `Error() string` method counts as an `error`. You return errors explicitly and check them with `if err != nil`; you don't use `panic` for normal failure paths.
+
+In a real backend service, you wrap errors with `%w` as they move up the call stack so each layer adds context — repo says what query failed, service says which user, handler adds a request ID. At the API boundary you map internal errors to HTTP status codes using `errors.Is` and `errors.As`, and you log the full chain once with the request ID so you can trace it in Datadog.
+
+Two traps to watch for: first, never use `==` to compare errors after wrapping — the wrapper is a new value, so `==` fails. Use `errors.Is` instead. Second, the typed nil trap — if a function returns a concrete pointer type like `*AppError` with value `nil`, assigning it to an `error` return gives you a non-nil interface (the type slot is set). Always return bare `nil` for the success case.
 
 ---
 

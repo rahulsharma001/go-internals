@@ -326,7 +326,7 @@ type error interface {
 }
 ```
 
-That's it. Any struct that has an `Error() string` method is automatically a valid `error`. This is the same implicit satisfaction you learned in 4.2 — no `implements` keyword.
+That's it. Any struct that has an `Error() string` method is automatically a valid `error`. Same rule you learned in §4.2 — if you have the right methods, you're in. No `implements` keyword.
 
 You use this to create custom error types that carry structured information beyond just a message string:
 
@@ -558,7 +558,7 @@ This function works with an HTTP request body, a file, or a `bytes.Buffer` in te
 
 ## 5. Key Rules & Behaviors
 
-### 5.1 Implicit satisfaction — no `implements`
+### 5.1 If you have the methods, you're in — no `implements`
 
 If your struct has every method the interface lists, it fulfills the interface. The compiler checks this at the point where you assign the struct to the interface variable, not at the struct definition.
 
