@@ -783,7 +783,7 @@ An interface value is two words: a type descriptor and a data pointer. When you 
 
 **Q2: How does Go know a struct fulfills an interface without `implements`?**
 
-The compiler checks at the assignment site. When you write `var store UserStore = &PostgresUserStore{}`, it verifies that `*PostgresUserStore` has every method `UserStore` declares — matching names, parameter types, and return types. If anything is missing, you get a compile error right there. This is **structural typing**. The advantage: your Postgres package never imports the interface — the handler package owns it. That keeps dependencies pointing inward.
+The compiler checks at the assignment site. When you write `var store UserStore = &PostgresUserStore{}`, it verifies that `*PostgresUserStore` has every method `UserStore` declares — matching names, parameter types, and return types. If anything is missing, you get a compile error right there. No registration, no keyword — just "do you have the methods or not?" The advantage: your Postgres package never imports the interface — the handler package owns it. That keeps dependencies pointing inward.
 
 **Q3: When should you use a type assertion vs a type switch vs `errors.As`?**
 
@@ -793,7 +793,7 @@ Use `v.(*User), ok` when you expect one specific concrete type — like pulling 
 
 ## 9. 30-Second Verbal Answer
 
-"Interfaces in Go are method contracts — if your struct has the right methods, it fulfills the interface automatically. There's no `implements` keyword. Under the hood, an interface value is two words: a type descriptor and a data pointer. That's why a nil pointer inside an interface is not a nil interface — the type word is still set. In practice, you use interfaces to decouple handlers from implementations. Your handler takes `UserStore`, prod passes Postgres, tests pass a mock. Keep them small — one to three methods — and define them in the consumer package, not next to the implementation."
+"Interfaces in Go are method contracts — if your struct has the right methods, it fits the interface automatically. There's no `implements` keyword. Under the hood, an interface value is like a labeled envelope: it stores which concrete type is inside and a pointer to the actual data. That's why a nil pointer inside an interface is not a nil interface — the label is still there. In practice, you use interfaces to decouple handlers from implementations. Your handler takes `UserStore`, prod passes Postgres, tests pass a mock. Keep them small — one to three methods — and define them in the consumer package, not next to the implementation."
 
 ---
 
