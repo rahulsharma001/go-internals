@@ -18,15 +18,21 @@ This is a foundational topic. No prerequisites are required — T01 is designed 
 
 ## 1. Concept
 
-Go's type system — how types are defined, how they relate to each other, and the rules governing identity, assignability, method sets, and composition. The foundation every other Go concept builds on.
+When we talk about **the type system**, we mean how you name types, how they connect, and the rules for identity, assignability, method sets, and composition. Every other idea in this language stacks on that.
 
-> **Scope note**: This covers the type system itself (defined types, aliases, underlying types, zero values, method sets, embedding). For stack/heap allocation and pass-by-value mechanics, see [[T02 Go Memory Allocation & Value Semantics]].
+> **Scope note**: We stick to the type system here — defined types, aliases, underlying types, zero values, method sets, embedding. Stack vs heap and pass-by-value live in [[T02 Go Memory Allocation & Value Semantics]].
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-Go is **statically typed** with **structural typing for interfaces** (satisfied implicitly, not declared). Every type has an **underlying type**, a **zero value**, and a **method set** that determines what interfaces it satisfies. Understanding the rules of **type identity vs assignability** and **value vs pointer receiver method sets** is what separates senior Go engineers from mid-level ones.
+**Go decides all types at compile time.** There are no runtime type surprises.
+
+Every type has three properties: an **underlying type** (what it's made of), a **zero value** (its safe default), and a **method set** (what it can do).
+
+Interfaces are satisfied **implicitly** — if your type has the right methods, it fits the interface. No signup form, no `implements` keyword.
+
+If you prep for interviews, double down on **type identity vs assignability** and **value vs pointer receiver method sets**. Section 4 takes you through each, one step at a time.
 
 ---
 
@@ -44,7 +50,7 @@ Go is **statically typed** with **structural typing for interfaces** (satisfied 
 2. **What is its zero value?** (determines safety)
 3. **What is its method set?** (determines interface satisfaction)
 
-> **In plain English:** Go doesn't care what you call your type — it only cares what methods it has. If it walks like a duck and quacks like a duck, it satisfies the "Duck" interface. No signup form needed.
+> **In plain English:** Go doesn't care what you call your type — it only cares what methods it has. If a device can charge via USB-C, it fits the USB-C charger — it doesn't matter if it's a phone, tablet, or laptop. No signup form needed.
 
 ### The mistake that teaches you
 
@@ -122,7 +128,12 @@ Type alias:  type Temperature = float64
 | Own methods? | ✅ Can attach methods | ❌ Cannot add methods |
 | Assignable to T? | ❌ Requires explicit conversion | ✅ Directly assignable |
 | Underlying type | T | T |
-| Use case | Domain modeling, type safety | Gradual refactoring, cross-package access |
+| Use case | Domain modeling (`UserID`, `Currency`) | Gradual refactoring, cross-package access |
+
+```
+Defined type:    Celsius ──builds on──→ float64   (separate type, own methods)
+Type alias:      Temperature ══is══→ float64     (same type, no own methods)
+```
 
 ### Underlying Types
 
@@ -136,7 +147,15 @@ type Point struct{X, Y int}  // underlying: struct{X, Y int}
 type Weights []float64       // underlying: []float64
 ```
 
-**Why this matters:** Two types are **identical** only if they have the same name in the same package, or if they're both unnamed with identical structure. The underlying type determines what **conversions** are legal.
+**What Go sees for each line:**
+
+```
+Step 1: `type Celsius float64` — a new defined type `Celsius` whose underlying type is `float64`.
+Step 2: `type Point struct{...}` — a new defined type `Point` whose underlying type is the struct `struct{X, Y int}`.
+Step 3: `type Weights []float64` — a new defined type `Weights` whose underlying type is `[]float64`.
+```
+
+**Why this matters:** Go only calls two types **identical** in those narrow cases: same name in the same package, or both unnamed with the same shape. From there, you read off which **conversions** the compiler will allow.
 
 ### Type Identity vs Assignability
 
@@ -158,12 +177,33 @@ Step 3: MyInt(a) — explicit conversion works because they share
         the same underlying type (int).
 ```
 
+```
+int ─────── MyInt
+  │  same underlying type (int)  │
+  │  but DIFFERENT named types   │
+  ╰──── explicit conversion ─────╯
+```
+
 **Assignability rules** (when `x` can be assigned to type `T`):
 1. `x`'s type is identical to `T`
 2. `x`'s type and `T` have identical underlying types, and at least one is unnamed
 3. `T` is an interface and `x` implements `T`
 4. `x` is the untyped nil and `T` is a pointer, function, slice, map, channel, or interface
 5. `x` is an untyped constant representable by type `T`
+
+```go
+var a [3]int
+var b [4]int
+a = b // COMPILE ERROR: [3]int and [4]int are different types
+```
+
+**What Go does:**
+
+```
+Step 1: `a` has type [3]int and `b` has type [4]int — the length is part of the type, so these are not the same type.
+Step 2: For assignment, rule 1 requires `x`'s type to be identical to `T`; [3]int and [4]int are not identical.
+Step 3: The compiler rejects `a = b` because there is no built-in conversion between different array types.
+```
 
 ### Zero Values
 
@@ -248,12 +288,12 @@ What embedding looks like in memory:
 ## 5. Key Rules & Behaviors
 
 1. **Defined types create new types** — `type X int` makes `X` and `int` distinct; explicit conversion required.
-2. **Type aliases are the same type** — `type X = int` is just another name for `int`.
+2. **Type aliases are the same type** — `type X = int` is another name for `int`.
 3. **Underlying type determines convertibility** — types with the same underlying type can be explicitly converted.
 4. **Zero values are guaranteed** — every variable is initialized; no garbage memory.
 5. **Design for useful zero values** — `sync.Mutex{}`, `bytes.Buffer{}`, `http.Client{}` all work at zero.
 6. **Method sets are asymmetric** — `*T` has all methods; `T` only has value receiver methods.
-7. **Interface satisfaction is implicit** — no `implements` keyword; just match the method set.
+7. **Interface satisfaction is implicit** — no `implements` keyword; match the method set.
 8. **Embedding promotes, doesn't inherit** — the embedded type is the receiver, not the outer type.
 9. **Embedding multiple types** that share a method name → ambiguity compile error (must disambiguate).
 10. **Untyped constants** are assignable to any compatible type without explicit conversion.
@@ -294,11 +334,7 @@ buf.WriteString("hello")
 ```
 
 ```
-In many languages, you'd need:
-  mu = new Mutex()
-  buf = new Buffer()
-
-In Go, the zero value IS the initialized state:
+In Go, the zero value IS the ready-to-use state — no extra setup step:
   sync.Mutex{}  → locked: false, ready to Lock()
   bytes.Buffer{} → empty buffer, ready to Write()
   
@@ -359,7 +395,7 @@ s.Log("started") // promoted from Logger
 ```
 
 ```
-Step 1: Server embeds Logger (not a field name, just the type)
+Step 1: Server embeds Logger (not a field name, only the type)
 Step 2: Logger has method Log()
 Step 3: Go promotes Log() to Server — s.Log() works
 Step 4: Under the hood: s.Log("started") → s.Logger.Log("started")
@@ -392,9 +428,8 @@ Step 2: Inside Base.Greet(): "Hello, " + b.Name()
 Step 3: Result: "Hello, Base"
                  <-- NOT "Hello, Derived"!
 
-In most OOP languages, this would call Derived's Name(). Not in Go.
-In Go: b.Name() calls Base.Name() because b IS Base. No virtual dispatch.
-This is delegation, not polymorphism.
+Inside `Base.Greet`, the receiver `b` is a `Base`, not a `Derived`, so `b.Name()` always calls `Base.Name()`. The outer type's `Name()` is never in play for that call. There is no dynamic dispatch to the outer struct.
+This is delegation, not the outer struct replacing the embedded type's behavior mid-call.
 ```
 
 ---
@@ -425,12 +460,9 @@ func main() {
 }
 ```
 
-<details>
-<summary>Answer</summary>
-
-`bark` then `woof`. `d.Sound` accesses Dog's own `Sound` field (shadows Animal's). But `d.Speak()` calls `Animal.Speak()` which uses `a.Sound` — Animal's Sound, which is "woof".
-
-</details>
+> [!success]- Answer
+> 
+> `bark` then `woof`. `d.Sound` accesses Dog's own `Sound` field (shadows Animal's). But `d.Speak()` calls `Animal.Speak()` which uses `a.Sound` — Animal's Sound, which is "woof".
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -456,19 +488,13 @@ func main() {
 }
 ```
 
-<details>
-<summary>Hint</summary>
+> [!success]- Hint
+> 
+> `String()` is defined on `*User` (pointer receiver), but `u` is a value. Value types don't have pointer-receiver methods in their method set.
 
-`String()` is defined on `*User` (pointer receiver), but `u` is a value. Value types don't have pointer-receiver methods in their method set.
-
-</details>
-
-<details>
-<summary>Fix</summary>
-
-Either change to value receiver: `func (u User) String()` or pass a pointer: `printUser(&u)`.
-
-</details>
+> [!success]- Fix
+> 
+> Either change to value receiver: `func (u User) String()` or pass a pointer: `printUser(&u)`.
 
 ### Tier 3: Build It (15 min)
 
@@ -687,6 +713,8 @@ go vet ./...                    # catches interface satisfaction issues
 go build -gcflags="-m"          # shows escape analysis (type-related escapes)
 ```
 
+**What each command does:** `go vet ./...` runs the static analyzer on all packages in the tree (suspicious code, some API misuse, and related issues; use it to catch problems before they ship). `go build` compiles; `-gcflags` forwards flags to the compiler, and `"-m"` means print **escape analysis and optimization decisions** (which values escape to the heap, inlining, etc.).
+
 ### Compile-time interface checks
 
 ```go
@@ -719,15 +747,15 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 
 **Answer**: `type X int` creates a **new defined type** with `int` as its underlying type. `X` and `int` are distinct — you can't assign between them without explicit conversion, and you can attach methods to `X`. `type X = int` creates a **type alias** — `X` IS `int`, no conversion needed, but you can't add methods to `X`. Use defined types for domain modeling and type safety (`UserID`, `Currency`). Use aliases for gradual refactoring and cross-package migration.
 
-### Q3: How does struct embedding differ from inheritance in OOP languages?
+### Q3: How does struct embedding work? Why isn't it inheritance?
 
-**Answer**: Embedding promotes the embedded type's fields and methods to the outer type for convenience, but it's composition, not inheritance. The critical difference: when a promoted method runs, its receiver is always the **embedded type**, not the outer type. So if `Base.Greet()` calls `b.Name()`, it calls `Base.Name()` even if the outer `Derived` type overrides `Name()`. There's no virtual dispatch. This means embedding can't be used for the Template Method pattern or polymorphism — it's pure delegation.
+**Answer**: Embedding promotes the embedded type's fields and methods to the outer type for convenience, but it's composition, not inheritance. The critical difference: when a promoted method runs, its receiver is always the **embedded type**, not the outer type. So if `Base.Greet()` calls `b.Name()`, it calls `Base.Name()` even if the outer `Derived` type defines its own `Name()`. There's no virtual dispatch. This means embedding can't be used for the Template Method pattern or polymorphism — it's pure delegation.
 
 ---
 
 ## 12. Final Verbal Answer
 
-> "Go has a statically typed system with structural interface satisfaction — types implement interfaces implicitly by having the right method set, no `implements` keyword needed. Every type has an underlying type, a guaranteed zero value, and a method set. The critical rule: a value of type `T` only has value-receiver methods in its method set, while `*T` has both value and pointer receiver methods. This matters for interface satisfaction — a value can't satisfy an interface requiring pointer-receiver methods, because the interface stores a copy and mutations would be lost. Go uses composition over inheritance through struct embedding, which promotes fields and methods but is delegation, not polymorphism — the embedded type is always the receiver. Defined types create new distinct types for type safety, while type aliases are just alternate names. Designing for useful zero values is idiomatic — `sync.Mutex{}`, `bytes.Buffer{}`, and `http.Client{}` all work without initialization."
+> "Go has a statically typed system with structural interface satisfaction — types implement interfaces implicitly by having the right method set, no `implements` keyword needed. Every type has an underlying type, a guaranteed zero value, and a method set. The critical rule: a value of type `T` only has value-receiver methods in its method set, while `*T` has both value and pointer receiver methods. This matters for interface satisfaction — a value can't satisfy an interface requiring pointer-receiver methods, because the interface stores a copy and mutations would be lost. Go uses composition over inheritance through struct embedding, which promotes fields and methods but is delegation, not polymorphism — the embedded type is always the receiver. Defined types create new distinct types for type safety, while type aliases are alternate names for the same underlying type. Designing for useful zero values is idiomatic — `sync.Mutex{}`, `bytes.Buffer{}`, and `http.Client{}` all work without initialization."
 
 ---
 
@@ -738,8 +766,21 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 Preview of most frequently asked:
 
 1. **Why can't a value type satisfy an interface with pointer receiver methods?** `[COMMON]`
-2. **How does struct embedding differ from inheritance? Show a case where it surprises you.** `[COMMON]`
+2. **How does struct embedding work? Why isn't it inheritance? Show a case where it surprises you.** `[COMMON]`
 3. **What's the nil interface trap and how do you avoid it in production?** `[TRICKY]`
+
+---
+
+## Quick Recall (test yourself)
+
+> [!info]- 1. What are the three properties of every Go type?
+> Every type has an **underlying type**, a well-defined **zero value**, and a **method set** (value `T` gets only value receivers; `*T` gets both value and pointer receivers).
+
+> [!info]- 2. Can a value type satisfy an interface with pointer receiver methods?
+> **Not as `T` alone** — a value's method set excludes pointer-receiver methods, so it cannot implement an interface that requires `*T` methods; you need a `*T` (or addressable `T` that promotes to `*T` in some call contexts).
+
+> [!info]- 3. What does struct embedding promote?
+> It **promotes** the embedded type's **field names and methods** onto the outer type for direct access, but the receiver of promoted methods remains the **embedded value**, not a subclass (delegation, not OO inheritance).
 
 ---
 

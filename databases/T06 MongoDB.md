@@ -8,21 +8,31 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]] (struct tags for BSON mapping)
+
+Also assumed: basic Go syntax, `context.Context` usage, and comfort with HTTP handlers.
+
+---
+
 ## 1. Concept
 
-MongoDB is a document-oriented NoSQL database that stores data as flexible, JSON-like BSON documents instead of rows and columns. In Go, you interact with it via the official `mongo-go-driver` (`go.mongodb.org/mongo/v2`).
+**MongoDB** stores **BSON** — flexible, JSON-like documents — instead of one identical column layout for every row. In Go, use the official driver: `go.mongodb.org/mongo/v2`.
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**MongoDB trades rigid schema for flexible documents**, meaning your application code owns the schema. The single most important thing: **design your schema around your query patterns, not your data relationships**. Embedding vs referencing is the fundamental decision that determines performance.
+**You** stop worrying about a single locked table shape. The app layer decides what a valid document looks like. The habit that will save you: **shape the schema for how you read the data**, not for how the ER diagram looks. **Nest related fields (embed) vs point to another collection (reference)** — that choice does more for speed than any clever index trick.
 
 ---
 
 ## 3. Mental Model (Lock this in)
 
-Think of MongoDB as a **filing cabinet** where each drawer is a **collection** and each folder inside is a **document**. Unlike SQL tables where every row has identical columns, each folder can contain different papers -- but smart filing means similar folders are grouped together.
+Picture a **filing cabinet**. A **drawer** is a **collection**. A **folder** is a **document**. A rigid SQL row grid makes every cell line up. Here, two folders in the same drawer can look different. You still file related stuff together.
 
 ```mermaid
 graph LR
@@ -32,7 +42,7 @@ graph LR
     C1 --> D2["Doc {name, email, phone}"]
 ```
 
-> **In plain English:** Instead of designing rigid forms (tables) and making everyone fill them out the same way, MongoDB lets each document be its own folder with whatever papers make sense. The key design question isn't "what does my data look like?" — it's "how will I look up and read this data?"
+> **In plain English:** Instead of designing one rigid form that everyone must fill out the same way, MongoDB lets each document be its own folder with whatever papers make sense. The key design question isn't "what does my data look like?" — it's "how will I look up and read this data?"
 
 ### The mistake that teaches you
 
@@ -75,10 +85,10 @@ One client, one pool, thousands of requests sharing the pooled connections.
 
 ### Storage Engine: WiredTiger
 
-MongoDB uses WiredTiger as its default storage engine since v3.2.
+Since v3.2, **WiredTiger** has been the default engine under the hood.
 
 **Key internals:**
-- **B-tree indexes** for efficient lookups (similar to MySQL InnoDB)
+- **B-tree indexes** for efficient range queries and point lookups
 - **Document-level locking** (not collection-level) -- allows high concurrent write throughput
 - **Write-Ahead Log (WAL)** called the **journal** for crash recovery
 - **Snappy compression** by default for data and indexes
@@ -164,6 +174,25 @@ func main() {
 }
 ```
 
+> [!question]- Before reading on, predict: what happens here?
+> Try to answer from memory before expanding the walkthrough below.
+
+**What this code does step by step:**
+
+- `options.Client().ApplyURI(...)` — builds a connection config pointing at your MongoDB instance
+- `mongo.Connect(ctx, ...)` — creates a single `Client` with an internal connection pool (default 100 connections)
+- `client.Ping(ctx, nil)` — sends an actual ping to verify the server is reachable
+- `client.Database("myapp").Collection("users")` — navigates to a specific database and collection (like opening a specific drawer in the filing cabinet)
+
+```
+Your App
+  └── mongo.Client (shared, one per process)
+       └── Connection Pool (default 100)
+            ├── conn 1 ──→ MongoDB
+            ├── conn 2 ──→ MongoDB
+            └── conn N ──→ MongoDB
+```
+
 ### CRUD Operations
 
 ```go
@@ -214,6 +243,16 @@ if err := cursor.All(ctx, &users); err != nil {
 }
 ```
 
+> [!question]- Before reading on, predict: what happens here?
+> Try to answer from memory before expanding the walkthrough below.
+
+**What this code does:**
+
+- `bson.D{{"age", bson.D{{"$gte", 25}}}}` — builds a BSON filter document: "find users where age >= 25"
+- `options.Find().SetProjection(...)` — tells MongoDB to only return these fields, not the whole document
+- `cursor, err := collection.Find(ctx, filter, opts)` — sends the query to MongoDB and returns a cursor (a pointer into the result set)
+- `cursor.All(ctx, &users)` — reads all documents from the cursor into the Go slice
+
 ### Aggregation Pipeline
 
 ```go
@@ -230,6 +269,12 @@ pipeline := mongo.Pipeline{
 
 cursor, err := collection.Aggregate(ctx, pipeline)
 ```
+
+**What this code does:**
+
+- `$match` — keeps only documents with `age >= 18` (early filtering reduces work for later stages)
+- `$group` — groups by a computed bucket id (`floor(age/10)`), counts documents per bucket (`count`), and computes average age per bucket (`avgAge`)
+- `$sort` — orders the grouped results by bucket id (`_id`) ascending
 
 > **In plain English:** An aggregation pipeline is like an assembly line — each station transforms the data flowing through. First filter ($match), then group ($group), then sort ($sort). Each stage receives the output of the previous one.
 
@@ -294,6 +339,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
+**Why this fails / what the fix does:** The BAD version creates and tears down a `Client` on every request, so you never get pooling and you burn connections and CPU on handshakes. The GOOD version uses one process-wide client so the driver reuses its pool for every handler call.
+
 > **In plain English:** Creating a new database connection for every request is like calling a taxi every time you need to cross the room. Create one connection pool at startup and let everyone share it.
 
 ### Gotcha 2: Using `bson.M` where order matters
@@ -305,6 +352,8 @@ sort := bson.M{"createdAt": -1, "name": 1}
 // GOOD - bson.D preserves insertion order
 sort := bson.D{{"createdAt", -1}, {"name", 1}}
 ```
+
+**Why this fails / what the fix does:** The BAD `bson.M` has random key iteration order in Go, so MongoDB can receive a different sort field order on each run and you get unstable results. The GOOD `bson.D` keeps the key order you wrote, which `$sort` relies on.
 
 ### Gotcha 3: Forgetting context timeouts
 
@@ -318,6 +367,8 @@ defer cancel()
 cursor, err := coll.Find(ctx, filter)
 ```
 
+**Why this fails / what the fix does:** The BAD code uses a never-cancelled `context.Background()` for the find, so if MongoDB is stuck or the network hangs, the call can block without bound. The GOOD pattern attaches a timeout so the operation fails fast and releases resources when the deadline hits.
+
 ### Gotcha 4: Not closing cursors
 
 ```go
@@ -327,6 +378,8 @@ cursor, _ := coll.Find(ctx, filter)
 cursor, _ := coll.Find(ctx, filter)
 defer cursor.Close(ctx) // GOOD - always close
 ```
+
+**Why this fails / what the fix does:** The BAD path never closes the cursor, so the server can keep a cursor and buffers allocated until they time out, and you risk leaking client-side state under load. `defer cursor.Close(ctx)` ends the batch on the server and frees the cursor promptly.
 
 ### Gotcha 5: Nil BSON values
 
@@ -339,6 +392,8 @@ cursor, _ := coll.Find(ctx, filter)
 filter := bson.D{} // empty, not nil
 cursor, _ := coll.Find(ctx, filter)
 ```
+
+**Why this fails / what the fix does:** A nil `bson.D` is not a valid "empty document" in the driver — it can trip BSON encoder rules ("WriteXXX can only write while positioned on Element"). An empty but non-nil `bson.D{}` encodes as `{}` and means "no filter" (match all documents) as intended.
 
 ---
 
@@ -368,8 +423,8 @@ cursor, _ := coll.Find(ctx, filter)
 | Misconception | Reality |
 |---------------|---------|
 | MongoDB is schemaless | Documents still have implicit schema; use JSON Schema validation for enforcement |
-| MongoDB can't do JOINs | `$lookup` in aggregation is a LEFT JOIN; but design to avoid needing it |
-| MongoDB is always faster than SQL | Depends on query patterns; poorly indexed MongoDB is slower than well-tuned MySQL |
+| MongoDB can't combine collections | `$lookup` in aggregation can merge from another collection; but design to avoid needing it |
+| MongoDB is always the fastest way to store data | Depends on query patterns; poorly indexed MongoDB can be slower than a well-tuned relational database |
 | Transactions aren't supported | Multi-document ACID transactions exist since v4.0, but are expensive |
 | ObjectId is a UUID | ObjectId is 12 bytes with embedded timestamp; UUID is 16 bytes, fully random |
 | MongoDB is not suitable for FinTech | Major FinTech companies use it; with proper write concern and transactions it provides strong durability |
@@ -379,7 +434,7 @@ cursor, _ := coll.Find(ctx, filter)
 ## 10. Related Tooling & Debugging
 
 - **`mongosh`**: Interactive MongoDB shell for ad-hoc queries
-- **`explain()`**: Analyze query execution plan (equivalent to MySQL `EXPLAIN`)
+- **`explain()`**: Analyze query execution plan; inspect stages, indexes used, and cost
   ```js
   db.users.find({age: {$gt: 25}}).explain("executionStats")
   ```
@@ -397,7 +452,7 @@ cursor, _ := coll.Find(ctx, filter)
 
 **Answer:** Embed when the related data is always accessed together, the relationship is 1:few (not unbounded), and you need atomic writes. Reference when the related data grows unboundedly (e.g., user's order history), is accessed independently, or is shared across multiple documents. The key insight: MongoDB optimizes for read patterns, so schema design follows access patterns, not entity relationships.
 
-**Interview tip:** Interviewers want to hear that you think about access patterns first, not just "normalize vs denormalize."
+**Interview tip:** Interviewers want to hear that you think about access patterns first, not only "normalize vs denormalize."
 
 ### Q2: "How do you handle the 16MB document limit?"
 
@@ -405,13 +460,13 @@ cursor, _ := coll.Find(ctx, filter)
 
 ### Q3: "How does indexing work in MongoDB, and what's a compound index's leftmost prefix rule?"
 
-**Answer:** MongoDB uses B-tree indexes similar to MySQL. A compound index on `{a, b, c}` can serve queries on `{a}`, `{a, b}`, or `{a, b, c}`, but NOT `{b}` or `{c}` alone. This is the leftmost prefix rule. Index selection: use `explain()` to verify `IXSCAN` vs `COLLSCAN`, and check the `rejectedPlans` to see what MongoDB considered.
+**Answer (interview context):** MongoDB uses B-tree indexes for range and equality lookups. A compound index on `{a, b, c}` can serve queries on `{a}`, `{a, b}`, or `{a, b, c}`, but NOT `{b}` or `{c}` alone. This is the leftmost prefix rule. Index selection: use `explain()` to verify `IXSCAN` vs `COLLSCAN`, and check the `rejectedPlans` to see what MongoDB considered.
 
 ---
 
 ## 12. Final Verbal Answer
 
-"MongoDB is a document-oriented database that stores BSON documents instead of rows. In Go, we use the official mongo-go-driver with a single, reused client instance managing connection pooling. The key design principle is modeling documents around query patterns -- embed for 1:few relationships accessed together, reference for unbounded or independently accessed data. For performance, proper indexing is essential -- compound indexes follow the leftmost prefix rule, and explain() is your primary diagnostic tool. In production, always use context timeouts, write concern majority for durability, and be mindful of the 16MB document limit. For complex analytics, the aggregation pipeline provides SQL-equivalent GROUP BY and JOIN capabilities through stages like $match, $group, and $lookup."
+"MongoDB is a document-oriented database that stores BSON documents instead of rows. In Go, we use the official mongo-go-driver with a single, reused client instance managing connection pooling. The key design principle is modeling documents around query patterns -- embed for 1:few relationships accessed together, reference for unbounded or independently accessed data. For performance, proper indexing is essential -- compound indexes follow the leftmost prefix rule, and explain() is your primary diagnostic tool. In production, always use context timeouts, write concern majority for durability, and be mindful of the 16MB document limit. For complex analytics, the aggregation pipeline provides grouping, aggregation, and cross-collection steps through stages like $match, $group, and $lookup."
 
 ---
 
@@ -423,6 +478,19 @@ Preview:
 1. "Explain the difference between embedding and referencing in MongoDB schema design" [COMMON]
 2. "How does the mongo-go-driver handle connection pooling?" [COMMON]
 3. "Walk me through designing a schema for an e-commerce platform in MongoDB" [ADVANCED]
+
+---
+
+## Quick Recall (test yourself)
+
+> [!info]- 1. Why should you create only one `mongo.Client` per process?
+> The client owns a **connection pool**; multiple clients **duplicate pools**, waste file descriptors, and work against **efficient** reuse and tuning.
+
+> [!info]- 2. What is BSON?
+> **Binary JSON** — MongoDB's **wire** and on-disk **document encoding**; typed, **ordered** in some contexts, and not identical to text JSON.
+
+> [!info]- 3. What happens if you use `bson.M` instead of `bson.D` for a sort?
+> `bson.M` is a **map**, so key **order is undefined**; a sort/ordered document can be **wrong** — use ordered **`bson.D`** when order matters (e.g. `sort`).
 
 ---
 

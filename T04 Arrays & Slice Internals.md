@@ -18,7 +18,7 @@ Complete these before starting this topic:
 
 An **array** in Go is a fixed-size list. The size is part of the type — `[3]int` and `[5]int` are completely different types that cannot be swapped.
 
-A **slice** is a lightweight "window" into an array. It doesn't own the data — it just describes where to look: a pointer to the start, how many elements are visible (length), and how much room exists (capacity).
+A **slice** is a lightweight "window" into an array. It doesn't own the data — it describes where to look: a pointer to the start, how many elements are visible (length), and how much room exists (capacity).
 
 Most Go code uses slices, not arrays.
 
@@ -127,6 +127,14 @@ func main() {
 }
 ```
 
+**What you'd expect:** `tryToModify` sets `arr[0] = 999`, so printing `a` should show `[999 20 30]`.
+
+**What actually happens:** `a` is still `[10 20 30]`. The 999 is gone.
+
+**Why:** Arrays are values. When you pass `a` to `tryToModify`, Go copies all 3 elements onto the function's own stack. The function modifies its copy. When it returns, the copy disappears. The original `a` was never touched.
+
+**The fix:** If you need the function to modify the original, pass a pointer (`*[3]int`) or use a slice instead.
+
 ```
 MEMORY TRACE:
 
@@ -203,7 +211,9 @@ Back in main: a[0] is now 999.
 
 ### 4.1 The slice struct in the runtime
 
-Under the hood, a slice is this struct (from `src/runtime/slice.go`):
+A slice header is like a library card that says "Shelf B, books 3 through 7, shelf holds 20 books total." The card itself is tiny — three numbers. Photocopying the card gives someone else access to the same shelf, but doesn't duplicate the books.
+
+That's exactly how Go represents a slice internally — three fields, 24 bytes total:
 
 ```go
 type slice struct {
@@ -213,19 +223,19 @@ type slice struct {
 }
 ```
 
-On a 64-bit machine: 8 + 8 + 8 = **24 bytes**. That's all that gets copied when you pass a slice to a function.
+> [!question]- Before reading on, predict: what happens here?
+> Try to answer from memory before expanding the walkthrough below.
 
-- **`array`** (pointer): points at element index 0 of the backing array for this slice's view. After re-slicing, this may not be the original allocation's start.
+**What each field means:**
+- **`array`** (pointer): points at element 0 of the backing array. After re-slicing, this may not be the original allocation's start.
 - **`len`**: count of elements you can index — valid indices are `0` to `len-1`. Accessing `s[len]` panics.
 - **`cap`**: total elements available from the pointer onward. This is the room for `append` before reallocation kicks in.
 
 When you pass a slice to a function, Go copies these 24 bytes. The copy still points to the same backing array — that's why element modifications are visible across function boundaries, but `append` that reallocates creates a new array that only the callee sees.
 
-> **In plain English:** The slice header is like a library card that says "Shelf B, books 3 through 7, shelf holds 20 books total." Photocopying the card doesn't duplicate the books.
-
 ### 4.2 Array internals
 
-An array `[N]T` is literally `N * sizeof(T)` bytes. There's no header, no pointer — the variable IS the data.
+An array is the simplest data structure in Go — it's a fixed row of boxes bolted together. There's no header, no pointer, no bookkeeping. The variable IS the data. A `[3]int` is three ints sitting side by side in memory, and the size is part of the type's name tag.
 
 ```
 [3]int on a 64-bit machine:
@@ -247,6 +257,8 @@ var a [3]int
 var b [4]int
 a = b // COMPILE ERROR: cannot use b (type [4]int) as type [3]int
 ```
+
+**What Go does:** The compiler types `a` as `[3]int` and `b` as `[4]int` — the length in brackets is not a value you can “cast away”; it is part of the type name, like two different struct types. An assignment only succeeds when the left and right types are identical, and `[3]int` and `[4]int` are not. You would need a loop or a conversion through a slice, not a direct assignment, to move data between different array sizes.
 
 > **In plain English:** An array's size is literally part of its name tag. A box-of-3 and a box-of-4 are different products — you can't swap them any more than you can return a 6-pack when you bought an 8-pack.
 
@@ -292,6 +304,8 @@ s := []int{10, 20, 30}  // equivalent to: make + fill
 // len=3, cap=3, backing array holds [10, 20, 30]
 ```
 
+**What Go does:** A slice literal creates a new backing array with exactly the elements you list, then builds a slice header pointing at the first element with `len` and `cap` both equal to that count (here 3). The header lives on the stack or in a register slot for `s`, while the array is typically on the heap (unless the compiler can prove a stack allocation is safe). The result is the same “shape” as `make([]int, 3, 3)` followed by writing each index.
+
 If you omit capacity from `make`, it defaults to length: `make([]int, 5)` gives `len=5, cap=5`.
 
 ### 4.4 Growth algorithm — what happens when `append` runs out of room (Go 1.18+)
@@ -316,6 +330,9 @@ for i := 0; i < 10; i++ {
     fmt.Printf("len=%-2d  cap=%d\n", len(s), cap(s))
 }
 ```
+
+> [!question]- Before reading on, predict: what happens here?
+> Try to answer from memory before expanding the walkthrough below.
 
 ```
 Output (approximate, 64-bit):
@@ -399,7 +416,7 @@ s[3] = 5  // PANIC — even though cap is 10, len is 3
 
 The slots from `len` to `cap-1` exist in memory but you cannot touch them until `len` grows via `append`.
 
-> **In plain English:** A hotel booked 10 rooms on a floor, but only handed out keys to 3 guests. Guest #4 can't walk in just because the room exists — they need to be checked in first (via `append`).
+> **In plain English:** A hotel booked 10 rooms on a floor, but only handed out keys to 3 guests. Guest #4 can't walk in merely because the room exists — they need to be checked in first (via `append`).
 
 ### Rule 3: `append` might stay in place, or might move everything
 
@@ -530,6 +547,8 @@ n := copy(dst, src) // copies min(len(dst), len(src)) = 3 elements
 // dst = [1, 2, 3], n = 3
 // elements 4 and 5 from src are NOT copied — dst is too short
 ```
+
+**What Go does:** `copy` does not look at the slice headers as “move the whole list”; it only copies element values from `src`’s backing array into `dst`’s, starting at index 0 in both, for at most `min(len(src), len(dst))` elements. It does not reallocate, extend `len(dst)`, or clear extra slots in `dst` past what it writes. The returned `n` is the number of elements actually copied, so you can tell when a short destination or source stopped the copy early.
 
 `copy` never grows `dst`. It copies the minimum of both lengths and returns how many it copied.
 
@@ -725,6 +744,8 @@ b := Response{Items: []int{}} // Items is empty, non-nil
 // This matters when your API consumer expects [] vs missing field
 ```
 
+**What Go does:** The `encoding/json` package walks the struct, reads the `json` tag for the key name (`items`) and the `,omitempty` rule. For a nil `[]int` field, the encoder either outputs `"items": null` or skips the key entirely, depending on how `omitempty` applies to that nil slice. For a non-nil but empty slice, the key is always emitted with `"items":[]`. Consumers see a real JSON array in the second case and `null` or a missing key in the first—so the wire format differs even though both in-memory values have `len` 0.
+
 ### 6.5 `make([]T, len)` vs `make([]T, 0, cap)`
 
 ```go
@@ -838,6 +859,8 @@ func reverse(s []int) {
     }
 }
 ```
+
+**What Go does:** The loop pairs the leftmost and rightmost indices, swaps the two elements through the single backing array that `s`’s header points to, then moves `i` forward and `j` backward until they meet or cross. Only the element values in that existing slice change — no new slice and no reallocation. An empty or one-element slice never enters the loop body, so it is a no-op, which is correct for reverse.
 
 **Rotate left in-place (3-reverse trick — classic interview pattern):**
 
@@ -1027,6 +1050,19 @@ The append split — visualized:
 1. You append inside a helper but the caller's slice never grows — what happened, and what's the idiom to fix it?
 2. A micro-service caches a 2 GB read buffer; you store `line := bigBuf[0:lineEnd]`; memory never drops after requests — why, and what two fixes are idiomatic?
 3. After deleting `*Node` from a `[]*Node` using slice tricks, `runtime.MemStats` still shows high heap in-use — what class of bug is this and the concrete mitigation?
+
+---
+
+## Quick Recall (test yourself)
+
+> [!info]- 1. What are the three fields of a slice header?
+> **`Data`** (pointer to the first element in the backing array), **`Len`** (count of elements), and **`Cap`** (length from `Data` through allocated slots).
+
+> [!info]- 2. When does `append` allocate a new backing array?
+> When there is **not enough capacity** to hold the appended elements, or in edge cases with growth policy — **capacity exhausted** is the key trigger for a new allocation and copy.
+
+> [!info]- 3. What happens when you pass an array to a function?
+> The **whole array is copied** (pass-by-value) — a `[N]T` parameter receives an independent full copy, unlike a slice (header copy, shared array).
 
 ---
 

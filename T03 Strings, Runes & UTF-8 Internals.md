@@ -18,13 +18,17 @@ Complete these before starting this topic:
 
 ## 1. Concept
 
-A Go **string** is an immutable, read-only sequence of bytes — not characters, not runes, not Unicode code points — just raw bytes. The runtime represents it as a two-word **StringHeader** (pointer to byte data + length). Runes (`int32`) decode those bytes into Unicode code points. **UTF-8** is the variable-width encoding that bridges the two: it tells you how many bytes each rune consumes (1-4).
+In Go, a **string** is a small read-only view of bytes. You do not get an abstract "character" type here. You get storage. The runtime names that pair **StringHeader** — pointer to the bytes plus a length. A **rune** is an `int32` that stands for one Unicode code point after you decode. **UTF-8** is how you map bytes to runes. Each rune can take one to four bytes.
 
 ---
 
 ## 2. Core Insight (TL;DR)
 
-**Go strings are byte arrays with a UTF-8 interpretation, not character arrays.** `len(s)` returns bytes, `s[i]` returns a byte, and only `for range` over a string decodes runes. Every "string is characters" assumption from other languages will bite you. The StringHeader is just **16 bytes** (pointer + length) on 64-bit systems, making string passing essentially free — you're always copying the header, never the data.
+**Treat a Go string as bytes first. Characters come later, when you decode.**
+
+`len(s)` counts bytes. `s[i]` is one byte. A `for range` over a string is what steps rune by rune (what you and I would call a character).
+
+On 64-bit hardware the header is 16 bytes: pointer and length. When you call a function with a string, Go copies that header. It does not copy the full byte slice behind it. So passing strings stays light.
 
 ---
 
@@ -111,9 +115,9 @@ This is the core lesson: **`len()` counts bytes, not characters. Slicing by byte
 
 ### 4.1 The StringHeader Runtime Struct
 
-When you hold a string in Go, you're holding something like a bookmark in a library book. The bookmark has two pieces of information: where the text starts (a pointer) and how many bytes long it is. That's the entire string — two numbers, 16 bytes on a 64-bit machine.
+Picture a string as a bookmark in a book. The bookmark says where the bytes start. It says how long the slice is. That is the whole value — two numbers, 16 bytes on 64-bit.
 
-When you pass a string to a function, Go copies this tiny bookmark — never the actual text. That's why string passing is cheap and why there's no need for `*string` parameters.
+You pass a string by copying that bookmark. The bytes behind it stay put. You rarely need a `*string` to dodge a copy. The header is already tiny.
 
 Here's the actual runtime struct (historically exposed via `reflect.StringHeader`, now accessed through `unsafe.StringData` since Go 1.20):
 
@@ -155,7 +159,10 @@ s[0] = 'H' // COMPILE ERROR: cannot assign to s[0] (strings are immutable)
 
 ### 4.4 UTF-8 Encoding Internals
 
-UTF-8 uses a prefix-code scheme that's self-synchronizing:
+UTF-8 marks the start of each rune with bit patterns. If you land in the middle, you can still find the next boundary:
+
+> [!question]- Before reading on, predict: what will this print / what does memory look like here?
+> Try to answer from memory before expanding the walkthrough below.
 
 ```
 1-byte:  0xxxxxxx                            (ASCII, 0x00-0x7F)
@@ -466,17 +473,14 @@ for i, r := range s {
 }
 ```
 
-<details>
-<summary>Answer</summary>
-
-```
-9
-0:日 3:本 6:語
-```
-
-Each CJK character is 3 bytes in UTF-8. `len(s)` = 9 bytes. The range indices are byte offsets: 0, 3, 6.
-
-</details>
+> [!success]- Answer
+> 
+> ```
+> 9
+> 0:日 3:本 6:語
+> ```
+> 
+> Each CJK character is 3 bytes in UTF-8. `len(s)` = 9 bytes. The range indices are byte offsets: 0, 3, 6.
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -494,12 +498,9 @@ func reverseString(s string) string {
 
 What's wrong and how do you fix it?
 
-<details>
-<summary>Hint</summary>
-
-It reverses bytes, not runes. A 3-byte CJK character gets its bytes scrambled.
-
-</details>
+> [!success]- Hint
+> 
+> It reverses bytes, not runes. A 3-byte CJK character gets its bytes scrambled.
 
 ### Tier 3: Build It (15 min)
 
@@ -544,7 +545,7 @@ Fix: return string([]byte(huge[:i]))   <-- forces a copy, releases huge
   Or: return strings.Clone(huge[:i])   <-- Go 1.20+ idiomatic
 ```
 
-> **In plain English:** Taking a substring in Go is like drawing a smaller frame on a large photograph — the entire photo stays in memory because the frame just points at it. If you only need the small piece, make an actual print (copy) so the big photo can be thrown away.
+> **In plain English:** Taking a substring in Go is like drawing a smaller frame on a large photograph — the entire photo stays in memory because the frame only points at it. If you only need the small piece, make an actual print (copy) so the big photo can be thrown away.
 
 ### Gotcha 2: `string(intValue)` creates a character, not digit string
 
@@ -552,6 +553,8 @@ Fix: return string([]byte(huge[:i]))   <-- forces a copy, releases huge
 fmt.Println(string(48))   // "0" (rune U+0030)
 fmt.Println(string(9731)) // "☃" (snowman!)
 ```
+
+**Walkthrough:** (1) `string(48)` does **not** turn the integer 48 into the two characters `'4'` and `'8'`. (2) The `string(int)` form treats the int as a **Unicode code point (rune)**: 48 = U+0030, which is the *digit* `"0"`. (3) So you see the character "0", not the decimal string `"48"` — for digits as text, use `strconv.Itoa(48)` or `fmt.Sprint(48)`.
 
 Fix: Use `strconv.Itoa()` or `fmt.Sprintf("%d", n)`.
 
@@ -607,6 +610,8 @@ _ = m[string(key)]  // compiler optimizes: NO allocation (temporary string)
 s := string(key)    // this DOES allocate
 _ = m[s]            // and this uses the allocated string
 ```
+
+**Walkthrough:** (1) The map is keyed by `string`, but you hold a `[]byte` — lookup requires a `string` form of the bytes. (2) In `m[string(key)]` the `string` exists only for the lookup; the compiler can **elide the allocation** as a "temporary string" in that pattern. (3) Assigning `s := string(key)` **materializes** a string on the heap (in general), so a later `m[s]` pays that cost; the first line shows the idiom to avoid the extra alloc when you only need the lookup.
 
 The compiler has a special optimization: `m[string(b)]` does not allocate if the result is used directly in a map lookup. But assigning to a variable first defeats this optimization.
 
@@ -678,6 +683,8 @@ go build -gcflags="-m" ./...
 go build -gcflags="-m -m" ./... 2>&1 | grep string
 ```
 
+**Walkthrough:** (1) `-m` makes the compiler print *escape analysis*: which local values can stay on the stack vs must be allocated on the heap. (2) A single `-m` is the normal summary; `-m -m` is more detailed (per-expression reasons). (3) The `grep string` line filters the noisy output so you see lines that mention `string` — e.g. whether a `string` conversion or temporary *escapes* and forces a heap allocation.
+
 ### Benchmark string operations
 
 ```go
@@ -700,6 +707,8 @@ func BenchmarkBuilder(b *testing.B) {
     }
 }
 ```
+
+**Walkthrough:** (1) `BenchmarkConcat` runs the inner loop with `s += "x"`: each `+=` allocates a new string, so this measures **O(n²) work and many allocs** for repeated concatenation — expect high `ns/op` and high `allocs/op`. (2) `BenchmarkBuilder` appends the same 100 runes with `strings.Builder`, which reuses a buffer — it measures the **amortized fast path** for building text in a loop. (3) Compare the two: Builder should show much lower time and far fewer (often one) allocations per op; the gap illustrates why `+=` in a loop is avoided.
 
 ### Useful packages
 
@@ -750,6 +759,19 @@ Preview:
 - What is the internal representation of a Go string, and what does passing a string to a function actually copy?
 - Explain the difference between `len()`, `utf8.RuneCountInString()`, and the number of grapheme clusters in a string.
 - How does `strings.Builder` work internally, and why is it faster than `+=` concatenation?
+
+---
+
+## Quick Recall (test yourself)
+
+> [!info]- 1. What does `len("café")` return and why?
+> It returns **5** because `len` counts **UTF-8 bytes**; the `é` rune is **two** bytes, so 1+1+1+2 = 5, not 4 "characters."
+
+> [!info]- 2. What is a `StringHeader`?
+> The classic internal layout of a `string` as a **data pointer** plus **byte length** (see `reflect.StringHeader` in older docs); a string is that header, not a separate mutable buffer.
+
+> [!info]- 3. How does `for-range` differ from a numeric `for i` on strings?
+> **`for range` over a string** decodes **UTF-8 into runes** (variable byte steps); a **`for` with a byte index** visits **raw bytes** and can split a multi-byte character.
 
 ---
 

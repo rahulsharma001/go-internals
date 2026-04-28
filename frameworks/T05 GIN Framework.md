@@ -8,9 +8,21 @@
 
 ---
 
+## 0. Prerequisites
+
+Complete these before starting this topic:
+
+- [[prerequisites/P01 Structs & Struct Memory Layout]] (struct tags, JSON binding)
+- [[prerequisites/P05 Interfaces Basics]] (http.Handler, HandlerFunc)
+- [[prerequisites/P07 Functions, Closures & Variable Capture]] (middleware factories)
+
+Also assumed: basic familiarity with HTTP (methods, paths, status codes, JSON bodies).
+
+---
+
 ## 1. Concept
 
-Gin is a high-performance HTTP web framework for Go, built on top of `httprouter`. It provides a martini-like API with up to 40x faster performance thanks to its radix tree router and zero-allocation path parsing.
+Gin is a high-performance HTTP web framework for Go, built on top of `httprouter`. It provides a clean, expressive API. Radix-tree routing and zero-allocation path parsing keep handler dispatch fast even as you register many routes.
 
 ---
 
@@ -57,7 +69,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 **What actually happens:** The 401 response is written, but execution continues. `c.Next()` still runs, the handler runs, and it may write a second response or access data the unauthenticated request shouldn't see.
 
-**Why:** `c.JSON()` writes the response but does **not** stop the middleware chain. Without `c.Abort()` or a `return` statement, the next middleware/handler still runs. Gin's middleware chain is just a slice of functions — it doesn't know you "meant" to reject the request.
+**Why:** `c.JSON()` writes the response but does **not** stop the middleware chain. Without `c.Abort()` or a `return` statement, the next middleware/handler still runs. Gin's middleware chain is a slice of functions — it doesn't know you "meant" to reject the request.
 
 **The fix:**
 
@@ -93,10 +105,27 @@ Radix tree:
   └── products
 ```
 
-- **O(log n) lookup** regardless of route count (vs linear scan in standard mux)
+- **O(log n) lookup** regardless of route count (a long flat list of patterns would scan linearly)
 - **Zero memory allocation** during path matching -- pre-compiled tree
 - **Parametric routes** via `:param` and wildcard via `*path`
 - Routes are **method-specific** -- `GET /users` and `POST /users` are separate tree entries
+
+```go
+func main() {
+    r := gin.New()
+    r.GET("/users", listUsers)              // registers in radix tree at /users
+    r.GET("/users/:id", getUser)         // :id = wildcard parameter node
+    r.GET("/users/:id/orders", listOrders) // extends the :id branch
+}
+func listUsers(c *gin.Context)   {}
+func getUser(c *gin.Context)     {}
+func listOrders(c *gin.Context)  {}
+```
+
+> [!question]- Before reading on, predict: what happens here?
+> Try to answer from memory before expanding the walkthrough below.
+
+**What Gin does when you call `r.GET()`:** It inserts the path into its radix tree as a new branch, wiring each segment to the `HandlerFunc` you passed. The `:id` token becomes a parametric child node, so a single `GET` can match any single path segment. Longer paths like `/users/:id/orders` share the same prefix; lookup walks the tree once per request with no per-route list scan, which is why large route sets stay fast.
 
 ### Middleware Chain Execution
 
@@ -127,6 +156,19 @@ Response sent
 
 The `gin.Context.index` field tracks the current position in the handler chain. `c.Next()` increments the index and calls the next handler. `c.Abort()` sets index to `math.MaxInt8 / 2`, stopping further execution.
 
+```go
+func main() {
+    r := gin.New()
+    r.Use(gin.Logger())   // index 0
+    r.Use(gin.Recovery()) // index 1
+    r.GET("/ping", func(c *gin.Context) { // index 2 (the handler)
+        c.JSON(200, gin.H{"message": "pong"})
+    })
+}
+```
+
+**What happens on a request to `/ping`:** Step 1: Logger runs (index 0) until it calls `c.Next()`. Step 2: Recovery runs (index 1) until it calls `c.Next()`. Step 3: The `/ping` handler runs (index 2) and writes the JSON. Step 4: Recovery resumes after `c.Next()`. Step 5: Logger resumes after `c.Next()`. The chain order is the order of `r.Use` calls, with the route handler last; that is the slice `Engine` uses when `ServeHTTP` runs the matched `HandlersChain`.
+
 ### gin.Context Internals
 
 `gin.Context` is the most important type. It wraps:
@@ -139,6 +181,17 @@ The `gin.Context.index` field tracks the current position in the handler chain. 
 
 **Critical:** `gin.Context` is **not goroutine-safe**. If you need to use it in a goroutine, copy it first: `cCopy := c.Copy()`.
 
+```go
+func GetUser(c *gin.Context) {
+    id := c.Param("id")                 // reads from Params slice
+    page := c.DefaultQuery("page", "1") // reads from request URL
+    c.Set("userID", id)                 // writes to Keys map (K/V store)
+    c.JSON(200, gin.H{"id": id, "page": page})
+}
+```
+
+**What each `c` call does under the hood:** `Param` returns the named segment the radix matcher filled into `c.Params` for this request. `DefaultQuery` reads `c.Request.URL.Query()` and supplies the default when the key is missing. `Set` stores a value in the per-request `Keys` map for middleware and handlers. `JSON` encodes the map, sets `Content-Type: application/json`, and writes the body through the wrapped `ResponseWriter`.
+
 ---
 
 ## 5. Key Rules & Behaviors
@@ -146,7 +199,7 @@ The `gin.Context.index` field tracks the current position in the handler chain. 
 1. **One `gin.Engine` per application** -- create with `gin.New()` (bare) or `gin.Default()` (with Logger + Recovery)
 2. **Use `gin.ReleaseMode`** in production: `gin.SetMode(gin.ReleaseMode)` -- disables debug logging
 3. **Middleware order matters** -- Recovery first, then Logger, then Auth, then business logic
-4. **`c.Next()` is optional** -- without it, remaining handlers still execute; `c.Next()` just lets you run code AFTER downstream handlers
+4. **`c.Next()` is optional** -- without it, remaining handlers still execute; `c.Next()` lets you run code AFTER downstream handlers
 5. **`c.Abort()` stops the chain** but does NOT return from the current handler -- you must `return` explicitly after `c.Abort()`
 6. **`c.JSON()` writes response AND sets Content-Type** -- calling it twice causes double-write
 7. **`gin.Context` is NOT goroutine-safe** -- use `c.Copy()` before spawning goroutines
@@ -181,6 +234,19 @@ func main() {
 
     r.Run(":8080") // defaults to 0.0.0.0:8080
 }
+```
+
+```
+HTTP :8080
+  │
+  ▼
+gin.Engine ── find route (radix) ──→ handler chain
+  │
+  ▼
+Recovery → Logger → GET /ping handler → c.JSON(200, …)
+  │
+  ▼
+Response
 ```
 
 ### Route Groups + Middleware
@@ -287,6 +353,16 @@ func createUserHandler(c *gin.Context) {
 ```
 
 > **In plain English:** Instead of manually opening a package, checking the contents, and validating each item yourself, Gin's `ShouldBindJSON` does it all in one step — opens the JSON, fills your struct, and checks all the validation rules from your struct tags.
+
+```
+Request JSON body
+  │
+  ▼
+ShouldBindJSON(&req) ──→ decode (tags) + validate (go-playground/validator)
+  │
+  ├── OK  → struct filled, handler continues
+  └── err → 400 (your c.JSON) + return
+```
 
 ---
 
@@ -424,6 +500,8 @@ if err := c.ShouldBindJSON(&req); err != nil {
 
 ## 8. Performance & Tradeoffs
 
+> **Note (interview context, not a teaching analogy):** The table below is a compact comparison for interview prep. Elsewhere, this guide uses only physical-world models and direct descriptions of how Gin works.
+
 | Feature | Gin | net/http (stdlib) | Echo | Chi |
 |---------|-----|-------------------|------|-----|
 | Router | Radix tree | ServeMux (linear) | Radix tree | Radix tree |
@@ -467,9 +545,9 @@ if err := c.ShouldBindJSON(&req); err != nil {
 
 ### Q1: "How does Gin's routing differ from Go's default HTTP mux?"
 
-**Answer:** Go's `DefaultServeMux` uses a map for exact path matching and falls back to longest-prefix matching -- it's O(n) in worst case and doesn't support path parameters natively. Gin uses httprouter's radix tree (compressed trie) which provides O(log n) lookups, built-in path parameters (`:id`), wildcards (`*path`), and method-specific trees. The key difference: Gin resolves routes at near-zero allocation cost because the tree is pre-compiled at startup.
+**Answer (interview context):** Facts about the default `http.ServeMux` (and `DefaultServeMux`): it uses a map for exact path matching and falls back to longest-prefix matching — O(n) in the worst case and no native path parameters. Gin uses httprouter's radix tree (compressed trie) for O(log n) lookups, path parameters (`:id`), wildcards (`*path`), and method-specific trees, with routes resolved at near-zero allocation cost because the tree is pre-compiled at startup.
 
-**Interview tip:** Mention that Go 1.22+ improved ServeMux with pattern matching, but Gin's radix tree is still faster for large route sets.
+**Interview tip:** Go 1.22+ added pattern matching to `ServeMux`, but a large radix tree still tends to win on route lookup for very large route sets.
 
 ### Q2: "Explain the middleware execution lifecycle in Gin"
 
@@ -491,6 +569,19 @@ Preview:
 1. "How does Gin's router differ from Go's default ServeMux?" [COMMON]
 2. "Explain the middleware chain execution model" [COMMON]
 3. "When would you NOT use Gin?" [TRICKY]
+
+---
+
+## Quick Recall (test yourself)
+
+> [!info]- 1. What data structure does Gin use for routing?
+> **httprouter**'s **radix tree** (compressed trie) for **method-aware** path matching, not a flat `map` of routes.
+
+> [!info]- 2. What happens if you call `c.JSON()` without `c.Abort()` in middleware?
+> The **handler chain can keep running** — other handlers/middleware may still execute and the response can be **further written** or **double-sent**; use **`c.Abort()`** (or similar) to stop the chain when you're done.
+
+> [!info]- 3. Why must you `c.Copy()` before using `gin.Context` in a goroutine?
+> **`gin.Context` is not goroutine-safe** and is **reused** (pooled) after the request; **`Copy()`** returns a **snapshot** you can use safely in background work.
 
 ---
 
