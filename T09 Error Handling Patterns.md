@@ -157,7 +157,7 @@ WHY this design:
   Pointer identity means only YOUR specific sentinel matches.
 ```
 
-> **In plain English:** A sentinel error is like a serial-numbered form. Two forms can say the same thing, but they have different serial numbers (memory addresses). When you check `errors.Is`, you're checking the serial number — not reading the text.
+Think of it like serial-numbered forms. Two forms can say the same thing, but they have different serial numbers (memory addresses). `errors.Is` checks the serial number — not the text.
 
 ### 4.3 Error Wrapping — `%w` Builds a Linked List
 
@@ -370,7 +370,7 @@ WHY this matters for HTTP handlers:
   The wrapping from service/repo layers is transparent.
 ```
 
-> **In plain English:** `errors.As` is like searching through a stack of folders. You're looking for a specific form (e.g., a validation report). You flip through each folder until you find one that matches the shape you need, then you pull out the form and read its fields.
+Think of it like searching through a stack of folders for a specific form — say, a validation report. You flip through each folder until you find one that matches the shape you need, then pull out the form and read its fields.
 
 ### 4.6 Backend Scenario: Repo → Service → Handler Error Flow
 
@@ -492,7 +492,7 @@ Step 1: os.Open("cfg.json") returns (f, err)
   The check ensures you only use f when it's actually valid.
 ```
 
-> **In plain English:** You don't start reading a book before checking someone actually handed you a book. The handle might be empty.
+You don't start reading a book before checking someone actually handed you a book. The handle might be empty.
 
 ### Rule 2: Wrap Errors at Abstraction Boundaries with `%w`
 
@@ -533,7 +533,7 @@ WHY translate sql.ErrNoRows → ErrUserNotFound:
     Handler checks: errors.Is(err, ErrUserNotFound) → true → 404
 ```
 
-> **In plain English:** The moving truck writes your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
+Picture a moving truck: you write your name on a new label, but the old sticker from the furniture shop is still visible through a plastic window. Delivery staff can read both.
 
 ### Rule 2b: Map Errors to HTTP at the Edge (Handler), Not in the Repo
 
