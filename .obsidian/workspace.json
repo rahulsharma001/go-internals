@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Study Plan.md",
+                "file": "T10 Defer, Panic & Recover Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Study Plan"
+              "title": "T10 Defer, Panic & Recover Internals"
             }
           }
         ]
@@ -196,6 +196,7 @@
   },
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
+    "Study Plan.md",
     "Roadmap.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
     "T01 Go Type System & Value Semantics.md",
@@ -210,7 +211,6 @@
     "visuals/T09 Error Handling Patterns - Visual Map.md",
     "visuals/T08 Map Internals - Visual Map.md",
     "prerequisites/P06 Function Call Stack.md",
-    "Study Plan.md",
     "exercises/T08 Map Internals - Exercises.md",
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
