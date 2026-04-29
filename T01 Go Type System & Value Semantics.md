@@ -18,9 +18,9 @@ This is a foundational topic. No prerequisites are required — T01 is designed 
 
 ## 1. Concept
 
-When we talk about **the type system**, we mean how you name types, how they connect, and the rules for identity, assignability, method sets, and composition. Every other idea in this language stacks on that.
+When we talk about **the type system**, we mean how you name types, how they connect, and the rules for identity, assignability, what methods a type has, and composition. Every other idea in this language stacks on that.
 
-> **Scope note**: We stick to the type system here — defined types, aliases, underlying types, zero values, method sets, embedding. Stack vs heap and pass-by-value live in [[T02 Go Memory Allocation & Value Semantics]].
+> **Scope note**: We stick to the type system here — defined types, aliases, underlying types, zero values, methods, embedding. Stack vs heap and pass-by-value live in [[T02 Go Memory Allocation & Value Semantics]].
 
 ---
 
@@ -28,11 +28,11 @@ When we talk about **the type system**, we mean how you name types, how they con
 
 **Go decides all types at compile time.** There are no runtime type surprises.
 
-Every type has three properties: an **underlying type** (what it's made of), a **zero value** (its safe default), and a **method set** (what it can do).
+Every type has three properties: an **underlying type** (what it's made of), a **zero value** (its safe default), and a **list of methods** (what it can do).
 
-Interfaces are satisfied **implicitly** — if your type has the right methods, it fits the interface. No signup form, no `implements` keyword.
+Interfaces work **implicitly** — if your type has the right methods, it fits the interface. No signup form, no `implements` keyword.
 
-If you prep for interviews, double down on **type identity vs assignability** and **value vs pointer receiver method sets**. Section 4 takes you through each, one step at a time.
+If you prep for interviews, double down on **type identity vs assignability** and **value vs pointer receiver rules**. Section 4 takes you through each, one step at a time.
 
 ---
 
@@ -48,9 +48,9 @@ If you prep for interviews, double down on **type identity vs assignability** an
 
 1. **What is its underlying type?** (determines behavior)
 2. **What is its zero value?** (determines safety)
-3. **What is its method set?** (determines interface satisfaction)
+3. **What methods does it have?** (determines which interfaces it fits)
 
-> **In plain English:** Go doesn't care what you call your type — it only cares what methods it has. If a device can charge via USB-C, it fits the USB-C charger — it doesn't matter if it's a phone, tablet, or laptop. No signup form needed.
+> **In plain English:** Every type in Go comes with three things baked in: what raw material it's made from, what its default empty state is, and what methods are attached to it. That's all the compiler needs to know about any type.
 
 ### The mistake that teaches you
 
@@ -74,20 +74,13 @@ func main() {
 
 **The fix:** If you genuinely need to convert, you must be explicit: `LookupOrder(OrderID(uid))`. The type system forces you to think about whether that conversion makes sense.
 
-```mermaid
-graph TD
-    T["Your Type"] --> UT["Underlying Type"]
-    T --> ZV["Zero Value"]
-    T --> MS["Method Set"]
-
-    style T fill:#e8f5e9,stroke:#4caf50
-    style UT fill:#e3f2fd,stroke:#1976d2
-    style ZV fill:#e3f2fd,stroke:#1976d2
-    style MS fill:#e3f2fd,stroke:#1976d2
 ```
+Your Type
+  ├── Underlying type  (what it's made of — int, struct, slice, etc.)
+  ├── Zero value       (its safe default — 0, "", nil, false, etc.)
+  └── Methods          (what you can call on it)
 
-```
-Method set rules:
+Method rules:
   Value T    → only value receiver methods
   Pointer *T → value receiver methods + pointer receiver methods
 
@@ -100,26 +93,26 @@ Method set rules:
 
 ### Defined Types vs Type Aliases
 
-Go gives you two ways to name a type, and they work very differently. A **defined type** is like creating a new brand of coffee — it's still coffee inside, but you can't accidentally mix it with tea. You get your own label, your own method set, and the compiler treats it as a separate thing. A **type alias** is a nickname — same coffee, different label on the bag.
+Go gives you two ways to name a type, and they work very differently. A **defined type** is like creating a new brand of coffee — it's still coffee inside, but you can't accidentally mix it with tea. You get your own label, your own methods, and the compiler treats it as a separate thing. A **type alias** is a nickname — same coffee, different label on the bag.
 
 ```go
-type Celsius float64       // DEFINED TYPE — new type, own method set
-type Temperature = float64 // TYPE ALIAS — same type, no own methods
+type UserID int64       // DEFINED TYPE — new type, can attach methods
+type LegacyID = int64   // TYPE ALIAS — same type, no own methods
 ```
 
 **What Go does with each line:**
 
 ```
-Defined type:  type Celsius float64
-  Creates a BRAND NEW type called Celsius
-  Celsius and float64 are DIFFERENT types — can't assign between them
-  BUT you can convert: Celsius(3.14) or float64(c)
-  You CAN attach methods to Celsius
+Defined type:  type UserID int64
+  Creates a BRAND NEW type called UserID
+  UserID and int64 are DIFFERENT types — can't assign between them
+  BUT you can convert: UserID(42) or int64(uid)
+  You CAN attach methods to UserID
 
-Type alias:  type Temperature = float64
-  Temperature IS float64 — another name for the same type
-  No conversion needed: var t Temperature = 3.14
-  You CANNOT attach methods to Temperature (they'd go on float64)
+Type alias:  type LegacyID = int64
+  LegacyID IS int64 — another name for the same type
+  No conversion needed: var id LegacyID = 42
+  You CANNOT attach methods to LegacyID (they'd go on int64)
 ```
 
 | Feature | Defined Type (`type X T`) | Type Alias (`type X = T`) |
@@ -131,28 +124,28 @@ Type alias:  type Temperature = float64
 | Use case | Domain modeling (`UserID`, `Currency`) | Gradual refactoring, cross-package access |
 
 ```
-Defined type:    Celsius ──builds on──→ float64   (separate type, own methods)
-Type alias:      Temperature ══is══→ float64     (same type, no own methods)
+Defined type:    UserID ──builds on──→ int64     (separate type, own methods)
+Type alias:      LegacyID ══is══→ int64          (same type, no own methods)
 ```
 
 ### Underlying Types
 
-Think of the underlying type as the raw material a type is made from. A `Celsius` is made from `float64` the way a wooden chair is made from wood — the chair has its own identity, but you can always ask "what is it made of?"
+Think of the underlying type as the raw material a type is made from. A `UserID` is made from `int64` the way a wooden chair is made from wood — the chair has its own identity, but you can always ask "what is it made of?"
 
 For built-in types (`int`, `string`, `bool`), the underlying type is itself. For defined types, it's the type on the right side of the definition:
 
 ```go
-type Celsius float64         // underlying: float64
-type Point struct{X, Y int}  // underlying: struct{X, Y int}
-type Weights []float64       // underlying: []float64
+type UserID int64                    // underlying: int64
+type Config struct{ Port int }       // underlying: struct{ Port int }
+type Permissions []string            // underlying: []string
 ```
 
 **What Go sees for each line:**
 
 ```
-Step 1: `type Celsius float64` — a new defined type `Celsius` whose underlying type is `float64`.
-Step 2: `type Point struct{...}` — a new defined type `Point` whose underlying type is the struct `struct{X, Y int}`.
-Step 3: `type Weights []float64` — a new defined type `Weights` whose underlying type is `[]float64`.
+Step 1: `type UserID int64` — a new defined type `UserID` whose underlying type is `int64`.
+Step 2: `type Config struct{...}` — a new defined type `Config` whose underlying type is the struct `struct{ Port int }`.
+Step 3: `type Permissions []string` — a new defined type `Permissions` whose underlying type is `[]string`.
 ```
 
 **Why this matters:** Go only calls two types **identical** in those narrow cases: same name in the same package, or both unnamed with the same shape. From there, you read off which **conversions** the compiler will allow.
@@ -220,11 +213,11 @@ Go guarantees every variable is initialized to its **zero value** — there is n
 
 > Design types so their zero value is **useful**. `sync.Mutex{}` is ready to use. `bytes.Buffer{}` is an empty buffer. This is idiomatic Go.
 
-> **In plain English:** In Go, there's no such thing as "uninitialized." Every variable starts with a sensible default — numbers start at 0, strings start empty, booleans start false. It's like every seat in a theater having a default "empty" card on it before anyone sits down.
+> **In plain English:** In Go, there's no such thing as "uninitialized." Every variable starts with a sensible default — numbers start at 0, strings start empty, booleans start false. You never get garbage memory.
 
-### Method Sets: The Interface Gateway
+### Which Methods Does a Type Have?
 
-The method set determines which interfaces a type satisfies:
+The list of methods on a type determines which interfaces it fits:
 
 | Receiver | Methods available on `T` | Methods available on `*T` |
 |---|---|---|
@@ -251,52 +244,223 @@ Pointer receiver: func (t *T) M()
 
 ### Struct Embedding (Composition, NOT Inheritance)
 
-Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. The Hospital gets credit for having the capability, but the Doctor is always the one doing it. In Go, when you embed a type inside a struct, its fields and methods get "promoted" — you can call them directly on the outer struct.
+Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. In Go, when you embed a type inside a struct, its fields and methods get "promoted" — you can call them directly on the outer struct.
 
 ```go
-type Animal struct {
-    Name string
+type AuditLog struct {
+    Message string
 }
-func (a Animal) Speak() string { return a.Name + " speaks" }
+func (a AuditLog) Summary() string { return "audit: " + a.Message }
 
-type Dog struct {
-    Animal       // embedded — promotes fields + methods
-    Breed string
+type OrderService struct {
+    AuditLog         // embedded — promotes fields + methods
+    ServiceName string
 }
 
-d := Dog{Animal{"Rex"}, "Labrador"}
-d.Name      // promoted from Animal
-d.Speak()   // promoted from Animal
+svc := OrderService{AuditLog{"order created"}, "orders"}
+svc.Message    // promoted from AuditLog
+svc.Summary()  // promoted from AuditLog
 ```
 
 ```
 What embedding looks like in memory:
 
-  stack 0xC000060000: d (Dog struct, ~48 bytes)
-    offset 0x00: Animal.Name = string{ ptr=0xC000080000, len=3 }  ← "Rex"
-    offset 0x10: Breed       = string{ ptr=0xC000080010, len=8 }  ← "Labrador"
+  stack 0xC000060000: svc (OrderService struct, ~48 bytes)
+    offset 0x00: AuditLog.Message = string{ ptr=0xC000080000, len=13 }  ← "order created"
+    offset 0x10: ServiceName      = string{ ptr=0xC000080020, len=6 }   ← "orders"
 
-  d.Name → compiler rewrites to d.Animal.Name → reads at offset 0x00
-  d.Speak() → compiler rewrites to d.Animal.Speak()
-    receiver is ALWAYS Animal (the embedded value at offset 0x00), not Dog
+  svc.Message → compiler rewrites to svc.AuditLog.Message → reads at offset 0x00
+  svc.Summary() → compiler rewrites to svc.AuditLog.Summary()
+    receiver is ALWAYS AuditLog (the embedded value at offset 0x00), not OrderService
 ```
 
-> **In plain English:** Embedding is like hiring a specialist. A Hospital doesn't become a Doctor — it has a Doctor on staff. When someone asks the Hospital to diagnose, the Doctor does the work. The Hospital gets credit for having the capability, but the Doctor is always the one doing it.
+> **In plain English:** Embedding promotes the embedded type's fields and methods so you can call them directly on the outer struct. But the embedded type is always the one doing the work — the outer struct just gets credit for having the capability.
 
 ---
 
 ## 5. Key Rules & Behaviors
 
-1. **Defined types create new types** — `type X int` makes `X` and `int` distinct; explicit conversion required.
-2. **Type aliases are the same type** — `type X = int` is another name for `int`.
-3. **Underlying type determines convertibility** — types with the same underlying type can be explicitly converted.
-4. **Zero values are guaranteed** — every variable is initialized; no garbage memory.
-5. **Design for useful zero values** — `sync.Mutex{}`, `bytes.Buffer{}`, `http.Client{}` all work at zero.
-6. **Method sets are asymmetric** — `*T` has all methods; `T` only has value receiver methods.
-7. **Interface satisfaction is implicit** — no `implements` keyword; match the method set.
-8. **Embedding promotes, doesn't inherit** — the embedded type is the receiver, not the outer type.
-9. **Embedding multiple types** that share a method name → ambiguity compile error (must disambiguate).
-10. **Untyped constants** are assignable to any compatible type without explicit conversion.
+### Rule 1: Defined types create new types
+
+`type X int` makes `X` and `int` distinct types. You need an explicit conversion to go between them.
+
+```go
+type OrderID int64
+var raw int64 = 42
+var oid OrderID = raw           // COMPILE ERROR
+var oid OrderID = OrderID(raw)  // OK — explicit conversion
+```
+
+```
+int64 ─────── OrderID
+  │  same underlying type (int64) │
+  │  but DIFFERENT defined types   │
+  ╰──── explicit conversion ───────╯
+```
+
+**Why (Section 4.1):** Defined types exist so the compiler can catch domain bugs. You don't want to pass a `UserID` where an `OrderID` is expected, even if both are `int64` underneath.
+
+### Rule 2: Type aliases are the same type
+
+`type X = int` is just another name for `int`. No conversion needed.
+
+```go
+type LegacyID = int64
+var id LegacyID = 42  // fine — LegacyID IS int64
+```
+
+```
+LegacyID ══is══→ int64   (same type, just a different name)
+```
+
+**Why (Section 4.1):** Aliases exist for gradual refactoring — when you're migrating a type from one package to another and don't want to break callers all at once.
+
+### Rule 3: Underlying type determines convertibility
+
+Two defined types can be explicitly converted if they share the same underlying type.
+
+```go
+type UserID int64
+type OrderID int64
+uid := UserID(1)
+oid := OrderID(uid)  // OK — both have underlying type int64
+```
+
+```
+UserID ──underlying──→ int64 ←──underlying── OrderID
+                 ↑ same raw material → conversion allowed
+```
+
+**Why (Section 4.2):** The compiler checks that the raw material (underlying type) matches before allowing a conversion. Same raw material = safe to reinterpret the bits.
+
+### Rule 4: Zero values are guaranteed
+
+Every variable in Go is initialized to its zero value. You never read garbage memory.
+
+```go
+var s Session  // Session{UserID: 0, Token: "", Active: false}
+```
+
+```
+var s Session declared:
+  s.UserID = 0       ← numeric zero
+  s.Token  = ""      ← empty string
+  s.Active = false   ← boolean zero
+  Every field is safe to read immediately.
+```
+
+**Why (Section 4.4):** Go allocates memory zeroed. This eliminates an entire class of bugs that languages like C have with uninitialized memory.
+
+### Rule 5: *T has all methods, T only has value receiver methods
+
+This is the most frequently tested Go rule in interviews. A pointer `*T` can call both value and pointer receiver methods. A value `T` can only call value receiver methods.
+
+```go
+type UserService struct{ db *sql.DB }
+func (s UserService) Name() string     { return "users" }  // value receiver
+func (s *UserService) Reload()         { /* ... */ }        // pointer receiver
+
+// UserService  methods: { Name() }
+// *UserService methods: { Name(), Reload() }
+```
+
+```
+Value (UserService):
+  ┌──────────────┐
+  │  Name() ✅   │  ← only value receiver methods
+  │  Reload() ❌  │
+  └──────────────┘
+
+Pointer (*UserService):
+  ┌──────────────┐
+  │  Name() ✅   │  ← both value and pointer receiver methods
+  │  Reload() ✅  │
+  └──────────────┘
+```
+
+**Why (Section 4.5):** When a value is stored in an interface, the interface holds a *copy*. If Go allowed pointer-receiver methods on that copy, mutations would silently hit the copy instead of your original. Go blocks this at compile time.
+
+### Rule 6: Interface matching is implicit
+
+If your type has all the methods an interface asks for, it fits. No `implements` keyword.
+
+```go
+type Handler interface { ServeHTTP(http.ResponseWriter, *http.Request) }
+type UserHandler struct{}
+func (h *UserHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) { /* ... */ }
+// *UserHandler has ServeHTTP → it fits Handler. No registration needed.
+```
+
+```
+Handler interface needs: ServeHTTP(ResponseWriter, *Request)
+*UserHandler has:        ServeHTTP(ResponseWriter, *Request)  ✅ match
+  → *UserHandler fits Handler automatically
+```
+
+**Why:** Go's design avoids the coupling that `implements` creates. You can write an interface in one package and have types in a completely different package match it without importing the interface package.
+
+### Rule 7: Embedding promotes, doesn't inherit
+
+The embedded type's methods are promoted to the outer struct. But the receiver is always the embedded type, not the outer struct.
+
+```go
+type AuditLog struct{ Message string }
+func (a AuditLog) Print() { fmt.Println(a.Message) }
+
+type OrderService struct{ AuditLog }
+svc := OrderService{AuditLog{"order created"}}
+svc.Print()  // calls AuditLog.Print() — receiver is AuditLog, not OrderService
+```
+
+```
+svc.Print() → compiler rewrites → svc.AuditLog.Print()
+  receiver = AuditLog (the embedded value), NOT OrderService
+  This is delegation, not inheritance.
+```
+
+**Why (Section 4.6):** There's no virtual dispatch in Go. The embedded type doesn't know it's embedded. It always sees itself as the receiver.
+
+### Rule 8: Ambiguous embedding is a compile error
+
+If you embed two types that both have a method with the same name, Go won't guess which one you mean.
+
+```go
+type Logger struct{}
+func (Logger) Start() { fmt.Println("log start") }
+
+type Metrics struct{}
+func (Metrics) Start() { fmt.Println("metric start") }
+
+type Server struct{ Logger; Metrics }
+s := Server{}
+s.Start()          // COMPILE ERROR: ambiguous selector
+s.Logger.Start()   // OK — disambiguate explicitly
+```
+
+```
+Server embeds Logger AND Metrics → both have Start()
+Go promotes BOTH → conflict at same depth → compile error
+Fix: call s.Logger.Start() or s.Metrics.Start() explicitly
+```
+
+**Why:** Go won't make assumptions about which promoted method you want. Explicit is better than implicit when there's ambiguity.
+
+### Rule 9: Untyped constants fit any compatible type
+
+An untyped constant like `42` or `"hello"` can be assigned to any type with a compatible underlying type, without explicit conversion.
+
+```go
+type UserID int64
+const defaultID = 0      // untyped constant
+var uid UserID = defaultID  // OK — no conversion needed
+```
+
+```
+defaultID is untyped → Go sees it can represent 0 as int64 → fits UserID
+No explicit conversion required for untyped constants.
+```
+
+**Why:** Untyped constants are a convenience — they make the type system less painful for literal values while still being type-safe at runtime.
 
 ---
 
@@ -306,19 +470,19 @@ What embedding looks like in memory:
 
 ```go
 type UserID int64
-type OrderID int64
+type SessionID int64
 
 var uid UserID = 42
-var oid OrderID = uid          // COMPILE ERROR: different types!
-var oid2 OrderID = OrderID(uid) // OK: same underlying type
+var sid SessionID = uid           // COMPILE ERROR: different types!
+var sid2 SessionID = SessionID(uid) // OK: same underlying type
 ```
 
 ```
 Step 1: uid is type UserID, value 42
-Step 2: oid = uid → FAILS because UserID and OrderID are different types
+Step 2: sid = uid → FAILS because UserID and SessionID are different types
         Even though both have underlying type int64!
         This is the POINT of defined types — type safety.
-Step 3: OrderID(uid) → explicit conversion works
+Step 3: SessionID(uid) → explicit conversion works
         Compiler knows both underlying types are int64 → safe to convert
 ```
 
@@ -341,94 +505,96 @@ In Go, the zero value IS the ready-to-use state — no extra setup step:
 This is a design principle, not an accident.
 ```
 
-### Method set and interface satisfaction
+### Value vs pointer and interface matching
 
 ```go
-type Sizer interface {
-    Size() int
+type Repository interface {
+    FindByID(id int64) error
 }
 
-type File struct{ name string }
+type UserRepo struct{ connStr string }
 
-func (f *File) Size() int { return len(f.name) }
+func (r *UserRepo) FindByID(id int64) error { return nil }
 
-var s Sizer
-s = &File{"test.go"} // ✅ *File has Size()
-s = File{"test.go"}  // ❌ COMPILE ERROR: File (value) lacks Size()
+var repo Repository
+repo = &UserRepo{"postgres://..."}  // ✅ *UserRepo has FindByID()
+repo = UserRepo{"postgres://..."}   // ❌ COMPILE ERROR: UserRepo (value) lacks FindByID()
 ```
 
 ```
-Step 1: Sizer interface requires: Size() int
+Step 1: Repository interface requires: FindByID(int64) error
 
-Step 2: Size() is defined on *File (pointer receiver)
-  *File method set: { Size() }   ← has it
-  File method set:  { }          ← empty! No value receiver methods.
+Step 2: FindByID() is defined on *UserRepo (pointer receiver)
+  *UserRepo methods: { FindByID() }   ← has it
+  UserRepo methods:  { }              ← empty! No value receiver methods.
 
-Step 3: s = &File{"test.go"}  → *File satisfies Sizer → ✅
-  What s looks like in memory (interface = 16 bytes):
-    stack 0xC000060000: s = [ tab: *itab{Sizer, *File} | data: 0xC000080000 ]
-                                                                  │
-                                                                  ▼
-    heap 0xC000080000: File{ name: "test.go" }
-  Calling s.Size(): tab → method table → find Size → call with data ptr 0xC000080000
+Step 3: repo = &UserRepo{"postgres://..."}  → *UserRepo has all methods Repository asks for → ✅
+  What repo looks like in memory (interface = 16 bytes):
+    stack 0xC000060000: repo = [ tab: *itab{Repository, *UserRepo} | data: 0xC000080000 ]
+                                                                            │
+                                                                            ▼
+    heap 0xC000080000: UserRepo{ connStr: "postgres://..." }
+  Calling repo.FindByID(1): tab → method table → find FindByID → call with data ptr 0xC000080000
 
-Step 4: s = File{"test.go"}  → File does NOT satisfy Sizer → ❌ COMPILE ERROR
-  Why? The interface would store a COPY of File in data slot.
+Step 4: repo = UserRepo{"postgres://..."}  → UserRepo does NOT have FindByID() → ❌ COMPILE ERROR
+  Why? The interface would store a COPY of UserRepo in the data slot.
   If Go allowed pointer-receiver methods on this copy, mutations would
-  hit the copy (inside the interface), not your original File.
+  hit the copy (inside the interface), not your original UserRepo.
   Go prevents this silent bug at compile time.
 ```
 
 ### Embedding and method promotion
 
 ```go
-type Logger struct{}
-func (l Logger) Log(msg string) { fmt.Println(msg) }
+type AuditLog struct{}
+func (a AuditLog) Record(msg string) { fmt.Println(msg) }
 
-type Server struct {
-    Logger  // embedding
-    Addr string
+type OrderService struct {
+    AuditLog  // embedding
+    Name string
 }
 
-s := Server{Addr: ":8080"}
-s.Log("started") // promoted from Logger
+svc := OrderService{Name: "orders"}
+svc.Record("order placed") // promoted from AuditLog
 ```
 
 ```
-Step 1: Server embeds Logger (not a field name, only the type)
-Step 2: Logger has method Log()
-Step 3: Go promotes Log() to Server — s.Log() works
-Step 4: Under the hood: s.Log("started") → s.Logger.Log("started")
-        The receiver is Logger, NOT Server
+Step 1: OrderService embeds AuditLog (not a field name, only the type)
+Step 2: AuditLog has method Record()
+Step 3: Go promotes Record() to OrderService — svc.Record() works
+Step 4: Under the hood: svc.Record("order placed") → svc.AuditLog.Record("order placed")
+        The receiver is AuditLog, NOT OrderService
 ```
 
 ### The embedding "inheritance" trap
 
 ```go
-type Base struct{}
-func (b Base) Name() string { return "Base" }
-func (b Base) Greet() string { return "Hello, " + b.Name() }
+type NotificationService struct{}
+func (n NotificationService) Channel() string { return "email" }
+func (n NotificationService) Send() string    { return "sending via " + n.Channel() }
 
-type Derived struct{ Base }
-func (d Derived) Name() string { return "Derived" }
+type OrderNotifier struct{ NotificationService }
+func (o OrderNotifier) Channel() string { return "sms" }
 
-d := Derived{}
-fmt.Println(d.Greet()) // "Hello, Base" — NOT "Hello, Derived"!
+notifier := OrderNotifier{}
+fmt.Println(notifier.Send()) // "sending via email" — NOT "sending via sms"!
 ```
 
 ```
-Step 1: d.Greet() → Go looks for Greet() on Derived
-        Derived doesn't have Greet() directly
-        But embedded Base does → promoted → calls Base.Greet()
+Step 1: notifier.Send() → Go looks for Send() on OrderNotifier
+        OrderNotifier doesn't have Send() directly
+        But embedded NotificationService does → promoted → calls NotificationService.Send()
 
-Step 2: Inside Base.Greet(): "Hello, " + b.Name()
-        b is type Base (the receiver is ALWAYS the embedded type)
-        b.Name() calls Base.Name() → "Base"
+Step 2: Inside NotificationService.Send(): "sending via " + n.Channel()
+        n is type NotificationService (the receiver is ALWAYS the embedded type)
+        n.Channel() calls NotificationService.Channel() → "email"
 
-Step 3: Result: "Hello, Base"
-                 <-- NOT "Hello, Derived"!
+Step 3: Result: "sending via email"
+                 <-- NOT "sending via sms"!
 
-Inside `Base.Greet`, the receiver `b` is a `Base`, not a `Derived`, so `b.Name()` always calls `Base.Name()`. The outer type's `Name()` is never in play for that call. There is no dynamic dispatch to the outer struct.
+Inside `NotificationService.Send`, the receiver `n` is a `NotificationService`, 
+not an `OrderNotifier`, so `n.Channel()` always calls `NotificationService.Channel()`.
+The outer type's `Channel()` is never in play for that call. There is no dynamic dispatch.
 This is delegation, not the outer struct replacing the embedded type's behavior mid-call.
 ```
 
@@ -445,24 +611,24 @@ package main
 
 import "fmt"
 
-type Animal struct{ Sound string }
-func (a Animal) Speak() string { return a.Sound }
+type Config struct{ Env string }
+func (c Config) Label() string { return c.Env }
 
-type Dog struct {
-    Animal
-    Sound string
+type AppConfig struct {
+    Config
+    Env string
 }
 
 func main() {
-    d := Dog{Animal{"woof"}, "bark"}
-    fmt.Println(d.Sound)
-    fmt.Println(d.Speak())
+    ac := AppConfig{Config{"staging"}, "production"}
+    fmt.Println(ac.Env)
+    fmt.Println(ac.Label())
 }
 ```
 
 > [!success]- Answer
 > 
-> `bark` then `woof`. `d.Sound` accesses Dog's own `Sound` field (shadows Animal's). But `d.Speak()` calls `Animal.Speak()` which uses `a.Sound` — Animal's Sound, which is "woof".
+> `production` then `staging`. `ac.Env` accesses AppConfig's own `Env` field (shadows Config's). But `ac.Label()` calls `Config.Label()` which uses `c.Env` — Config's Env, which is "staging".
 
 ### Tier 2: Fix the Bug (5 min)
 
@@ -490,7 +656,7 @@ func main() {
 
 > [!success]- Hint
 > 
-> `String()` is defined on `*User` (pointer receiver), but `u` is a value. Value types don't have pointer-receiver methods in their method set.
+> `String()` is defined on `*User` (pointer receiver), but `u` is a value. Values don't have pointer-receiver methods in their list of methods.
 
 > [!success]- Fix
 > 
@@ -498,10 +664,10 @@ func main() {
 
 ### Tier 3: Build It (15 min)
 
-1. Create a `Shape` interface with `Area() float64`
-2. Implement it for `Circle` (value receiver) and `Rectangle` (pointer receiver)
-3. Write a function `printArea(s Shape)` and call it with both types
-4. Observe which requires `&` and which doesn't. Then verify with `var _ Shape = Circle{}` and `var _ Shape = (*Rectangle)(nil)` compile-time checks.
+1. Create a `Storage` interface with `Save(key string, value []byte) error`
+2. Implement it for `MemoryStore` (value receiver) and `RedisStore` (pointer receiver — it holds a connection string)
+3. Write a function `storeConfig(s Storage)` and call it with both types
+4. Observe which requires `&` and which doesn't. Then verify with `var _ Storage = MemoryStore{}` and `var _ Storage = (*RedisStore)(nil)` compile-time checks.
 
 > Full solutions with explanations → [[exercises/T01 Go Type System - Exercises]]
 
@@ -509,20 +675,20 @@ func main() {
 
 ## 7. Edge Cases & Gotchas
 
-### Value can't satisfy pointer-receiver interface
+### Value can't fit an interface with pointer-receiver methods
 
 ```go
 type Writer interface { Write([]byte) }
-type MyWriter struct{}
-func (w *MyWriter) Write(b []byte) {}
+type ResponseBuffer struct{}
+func (w *ResponseBuffer) Write(b []byte) {}
 
-var w Writer = MyWriter{}  // ❌ COMPILE ERROR
-var w Writer = &MyWriter{} // ✅ OK
+var w Writer = ResponseBuffer{}  // ❌ COMPILE ERROR
+var w Writer = &ResponseBuffer{} // ✅ OK
 ```
 
 ```
-MyWriter method set:  { }           ← no methods (Write is on *MyWriter)
-*MyWriter method set: { Write() }   ← has it
+ResponseBuffer methods:  { }           ← no methods (Write is on *ResponseBuffer)
+*ResponseBuffer methods: { Write() }   ← has it
 
 Interface stores a COPY of the value.
 If Go allowed pointer-receiver methods on a copy:
@@ -532,28 +698,28 @@ Go prevents this at compile time.
 
 **Why**: Go won't silently take the address of a value stored in an interface, because the interface holds a copy — mutations via pointer receiver would be lost.
 
-> **In plain English:** When you put a value into an interface box, Go makes a photocopy. If the method needs to modify the original, a photocopy won't do — so Go blocks it at compile time rather than letting you silently modify a copy.
+> **In plain English:** When you put a value into an interface, Go stores a copy. If the method needs to modify the original, a copy won't do — so Go blocks it at compile time rather than letting you silently modify a copy that nobody else can see.
 
-### Method calling flexibility is syntactic sugar ONLY
+### Method call shorthand does NOT apply to interfaces
 
 ```go
-v := MyWriter{}
+v := ResponseBuffer{}
 v.Write(data) // ✅ works: compiler rewrites to (&v).Write(data)
 
-// BUT for interfaces, this sugar does NOT apply:
+// BUT for interfaces, this shorthand does NOT apply:
 var w Writer = v // ❌ still fails
 ```
 
 ```
 Direct method call:
-  v.Write(data) → compiler sees v is addressable → rewrites to (&v).Write(data)
-  This is syntactic sugar — a convenience the compiler provides.
+  v.Write(data) → compiler sees you can take the address of v with & → rewrites to (&v).Write(data)
+  This is shorthand that Go lets you write — a convenience the compiler provides.
 
 Interface assignment:
-  var w Writer = v → compiler checks method set of MyWriter (not *MyWriter)
-  MyWriter has no Write() → COMPILE ERROR
+  var w Writer = v → compiler checks the methods on ResponseBuffer (not *ResponseBuffer)
+  ResponseBuffer has no Write() → COMPILE ERROR
   
-  The sugar does NOT apply here because the interface would store a COPY,
+  The shorthand does NOT apply here because the interface would store a COPY,
   and taking &copy would be meaningless (not your original v).
 ```
 
@@ -562,28 +728,28 @@ Interface assignment:
 ### Ambiguous embedding
 
 ```go
-type A struct{}
-func (A) Foo() {}
+type Logger struct{}
+func (Logger) Start() { fmt.Println("log start") }
 
-type B struct{}
-func (B) Foo() {}
+type Metrics struct{}
+func (Metrics) Start() { fmt.Println("metric start") }
 
-type C struct{ A; B }
+type APIServer struct{ Logger; Metrics }
 
-c := C{}
-c.Foo()   // ❌ COMPILE ERROR: ambiguous selector
-c.A.Foo() // ✅ disambiguate explicitly
+s := APIServer{}
+s.Start()          // ❌ COMPILE ERROR: ambiguous selector
+s.Logger.Start()   // ✅ disambiguate explicitly
 ```
 
 ```
-C embeds both A and B.
-Both A and B have Foo().
+APIServer embeds both Logger and Metrics.
+Both Logger and Metrics have Start().
 Go promotes BOTH → conflict at the same depth level.
-c.Foo() is ambiguous — which Foo()?
-Fix: call explicitly via c.A.Foo() or c.B.Foo()
+s.Start() is ambiguous — which Start()?
+Fix: call explicitly via s.Logger.Start() or s.Metrics.Start()
 ```
 
-### Map values are not addressable
+### You can't take the address of a map value with &
 
 ```go
 type User struct{ Name string }
@@ -652,41 +818,43 @@ Not all types can be map keys or compared with `==`:
 m := map[[]int]string{} // ❌ COMPILE ERROR: slice not comparable
 ```
 
-> **In plain English:** Some types in Go are too complex to compare with `==` — slices, maps, and functions. It's like asking "are these two recipes the same?" — there's no simple yes/no answer, so Go refuses to guess.
+> **In plain English:** Slices, maps, and functions can't be compared with `==`. They're reference types whose contents can change independently, so a simple equality check would be misleading. Go refuses to do it rather than guess wrong.
 
 ---
 
 ## 8. Performance & Tradeoffs
 
-### Value Receiver vs Pointer Receiver
+Your `UserService` handles 5k RPM. It has a `User` struct (4 fields, ~80 bytes), methods with both value and pointer receivers, and you're passing these through interfaces for dependency injection. Where does the type system actually cost you something?
 
-| Factor | Value Receiver | Pointer Receiver |
-|---|---|---|
-| Copies data? | ✅ Yes (safe, no side effects) | ❌ No (shared, can mutate) |
-| Interface satisfaction | Only value-receiver interfaces | All interfaces |
-| Stack-friendly? | ✅ Stays on stack easily | ❌ May cause escape |
-| Large structs? | ❌ Expensive copy | ✅ 8-byte pointer |
-| Consistency rule | Use for small immutable types | Use if ANY method mutates |
+| Pattern | What it costs | You'd see this in... | Verdict |
+|---|---|---|---|
+| Value receiver on small struct (<128 bytes) | One copy per call (~80 bytes on stack) | `User.FullName()` returning a formatted string | Noise — the copy is stack-allocated, gone in nanoseconds |
+| Pointer receiver on `UserService` with `*sql.DB` | 8-byte pointer, no copy | `(*UserService).FindByID()` every request | Use this — you don't want copies of your DB connection |
+| Defined type `UserID int64` vs raw `int64` | Zero runtime cost — types are erased at compile time | Every function signature in your service | Free type safety — no reason not to use it |
+| Type alias `LegacyID = int64` | Zero cost — compiler resolves at compile time | Migration: `pkg/v1.ID` aliased in `pkg/v2` | Use during refactoring, then remove the alias |
+| Embedding `AuditLog` into `OrderService` | Promoted methods are normal calls — no indirection, no allocation | `svc.Record("order placed")` | Same cost as calling the method on the embedded type directly |
+| Storing value in interface | One heap allocation for the data (if >pointer-sized) | `var repo Repository = &UserRepo{}` → pointer fits in interface, no extra alloc | Pointer-typed values fit without allocation. Value types may allocate. |
 
-> **Bill Kennedy's rule**: If any method on a type uses a pointer receiver, ALL methods should use pointer receiver for consistency. Mixing confuses the reader about mutation intent.
+### What actually hurts
 
-### Defined Type vs Type Alias
+The type system itself costs you almost nothing at runtime — types are a compile-time concept. What bites you is the *indirect* cost of pointer receivers causing heap escapes. Your `UserService` has a `Reload()` method with a pointer receiver. That means `*UserService` is the concrete type everywhere. If you ever store it in an interface (for dependency injection), the compiler can't prove it doesn't escape, so the struct moves to the heap. At 5k RPM, that's 5k allocations/sec for a struct that could've lived on the stack if all methods were value receivers. For a small struct, that shows up in `alloc_objects` under `pprof`.
 
-| Use Case | Defined Type | Type Alias |
-|---|---|---|
-| Domain modeling (`UserID`, `Currency`) | ✅ Prefer — type safety | ❌ No safety |
-| Gradual refactoring | ❌ Breaks callers | ✅ Non-breaking |
-| Adding methods to external type | ✅ Required | ❌ Can't add methods |
-| Cross-package type migration | ❌ New type | ✅ Same type |
+Bill Kennedy's rule: if *any* method on a type uses a pointer receiver, *all* methods should use pointer receiver for consistency. Mixing confuses the reader about mutation intent.
 
-### Embedding vs Field
+### What to measure
 
-| Factor | Embedding | Named Field |
-|---|---|---|
-| Promotes methods | ✅ Yes | ❌ No |
-| Interface satisfaction via promoted methods | ✅ Yes | ❌ No |
-| Name collision risk | ❌ Ambiguity errors | ✅ Explicit access |
-| Clarity of intent | ❌ Can mislead (looks like inheritance) | ✅ Explicit composition |
+```bash
+# See which values escape to the heap because of pointer receivers
+go build -gcflags="-m" ./... 2>&1 | grep "escapes to heap"
+
+# Benchmark value vs pointer receiver for your specific struct size
+go test -bench=BenchmarkReceiver -benchmem ./...
+
+# Profile allocations in a running service
+go tool pprof -alloc_objects http://localhost:6060/debug/pprof/heap
+```
+
+In practice: if your struct is under 128 bytes and doesn't need mutation, value receivers keep it on the stack. If it holds a `*sql.DB`, a `*redis.Client`, or any connection — pointer receivers, no question.
 
 ---
 
@@ -694,8 +862,8 @@ m := map[[]int]string{} // ❌ COMPILE ERROR: slice not comparable
 
 | Misconception | Reality |
 |---|---|
-| Embedding is inheritance | **WRONG** — it's delegation/composition; receiver is always the embedded type |
-| Value `T` has all methods of `*T` | **WRONG** — `T` only has value receiver methods; `*T` has both |
+| Embedding is inheritance | **WRONG** — it's delegation/composition; the receiver is always the embedded type |
+| Value `T` has all the methods `*T` has | **WRONG** — `T` only has value receiver methods; `*T` has both |
 | `type X int` and `int` are the same | **WRONG** — they're distinct types; explicit conversion required |
 | `type X = int` creates a new type | **WRONG** — it's an alias; `X` IS `int` |
 | Zero value means uninitialized | **WRONG** — zero value is a deliberate, defined, safe state |
@@ -709,7 +877,7 @@ m := map[[]int]string{} // ❌ COMPILE ERROR: slice not comparable
 ### Type inspection
 
 ```bash
-go vet ./...                    # catches interface satisfaction issues
+go vet ./...                    # catches interface matching issues
 go build -gcflags="-m"          # shows escape analysis (type-related escapes)
 ```
 
@@ -721,7 +889,7 @@ go build -gcflags="-m"          # shows escape analysis (type-related escapes)
 var _ Handler = (*Server)(nil)
 ```
 
-This is a zero-cost compile-time assertion pattern. Use it to catch interface satisfaction bugs early. If `*Server` doesn't implement `Handler`, this line fails at compile time.
+This is a zero-cost compile-time assertion pattern. Use it to catch interface matching bugs early. If `*Server` doesn't have all the methods `Handler` asks for, this line fails at compile time.
 
 ### Struct size and alignment
 
@@ -739,23 +907,29 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 
 ## 11. Interview Gold Questions
 
-### Q1: Why can't a value type satisfy an interface with pointer receiver methods?
+### Q1: Why can't a value type fit an interface that has pointer receiver methods?
 
 **Answer**: When you assign a value to an interface, the interface stores a **copy** of that value. If Go allowed pointer-receiver methods on that copy, any mutations would happen to the interface's internal copy, not the original — silently losing writes. Go prevents this at compile time. The fix: assign a pointer to the interface (`&val`), or switch to value receivers if mutation isn't needed.
 
 ### Q2: What's the difference between `type X int` and `type X = int`?
 
-**Answer**: `type X int` creates a **new defined type** with `int` as its underlying type. `X` and `int` are distinct — you can't assign between them without explicit conversion, and you can attach methods to `X`. `type X = int` creates a **type alias** — `X` IS `int`, no conversion needed, but you can't add methods to `X`. Use defined types for domain modeling and type safety (`UserID`, `Currency`). Use aliases for gradual refactoring and cross-package migration.
+**Answer**: `type X int` creates a **new defined type** with `int` as its underlying type. `X` and `int` are distinct — you can't assign between them without explicit conversion, and you can attach methods to `X`. `type X = int` creates a **type alias** — `X` IS `int`, no conversion needed, but you can't add methods to `X`. Use defined types for domain modeling (`UserID`, `Currency`) where you want the compiler to catch mix-ups. Use aliases when you're migrating a type from one package to another and don't want to break callers.
 
 ### Q3: How does struct embedding work? Why isn't it inheritance?
 
-**Answer**: Embedding promotes the embedded type's fields and methods to the outer type for convenience, but it's composition, not inheritance. The critical difference: when a promoted method runs, its receiver is always the **embedded type**, not the outer type. So if `Base.Greet()` calls `b.Name()`, it calls `Base.Name()` even if the outer `Derived` type defines its own `Name()`. There's no virtual dispatch. This means embedding can't be used for the Template Method pattern or polymorphism — it's pure delegation.
+**Answer**: Embedding promotes the embedded type's fields and methods to the outer type for convenience, but it's composition, not inheritance. The critical difference: when a promoted method runs, its receiver is always the **embedded type**, not the outer type. So if `NotificationService.Send()` calls `n.Channel()`, it calls `NotificationService.Channel()` even if the outer `OrderNotifier` type defines its own `Channel()`. There's no virtual dispatch. This means embedding can't be used for the Template Method pattern or polymorphism — it's pure delegation.
 
 ---
 
 ## 12. Final Verbal Answer
 
-> "Go has a statically typed system with structural interface satisfaction — types implement interfaces implicitly by having the right method set, no `implements` keyword needed. Every type has an underlying type, a guaranteed zero value, and a method set. The critical rule: a value of type `T` only has value-receiver methods in its method set, while `*T` has both value and pointer receiver methods. This matters for interface satisfaction — a value can't satisfy an interface requiring pointer-receiver methods, because the interface stores a copy and mutations would be lost. Go uses composition over inheritance through struct embedding, which promotes fields and methods but is delegation, not polymorphism — the embedded type is always the receiver. Defined types create new distinct types for type safety, while type aliases are alternate names for the same underlying type. Designing for useful zero values is idiomatic — `sync.Mutex{}`, `bytes.Buffer{}`, and `http.Client{}` all work without initialization."
+> "Go's type system is entirely compile-time — there are no runtime type surprises. Every type you create has three things: what it's made from (the underlying type), what its zero value is, and what methods it has.
+> 
+> The rule that comes up in every interview is the value vs pointer receiver asymmetry. If you define a method on `*T`, only pointers can use it — a plain value `T` can't. This matters when you store something in an interface, because the interface holds a copy. If Go allowed pointer-receiver methods on that copy, mutations would silently hit the copy instead of your original. So Go blocks it at compile time.
+> 
+> Go uses composition instead of inheritance. When you embed a type, its fields and methods get promoted to the outer struct, but it's delegation — the embedded type is always the receiver. If you come from Java or Python and expect the outer struct to override methods mid-call, it won't. There's no dynamic dispatch.
+> 
+> Defined types like `type UserID int64` give you compile-time safety — the compiler won't let you pass a `UserID` where a `SessionID` is expected, even though both are `int64` underneath. Type aliases are just nicknames for gradual refactoring. And every variable in Go starts at its zero value — no uninitialized memory, no constructors needed if you design your types well."
 
 ---
 
@@ -765,7 +939,7 @@ fmt.Println(unsafe.Alignof(MyStruct{}))  // alignment requirement
 
 Preview of most frequently asked:
 
-1. **Why can't a value type satisfy an interface with pointer receiver methods?** `[COMMON]`
+1. **Why can't a value type fit an interface that has pointer receiver methods?** `[COMMON]`
 2. **How does struct embedding work? Why isn't it inheritance? Show a case where it surprises you.** `[COMMON]`
 3. **What's the nil interface trap and how do you avoid it in production?** `[TRICKY]`
 
@@ -774,10 +948,10 @@ Preview of most frequently asked:
 ## Quick Recall (test yourself)
 
 > [!info]- 1. What are the three properties of every Go type?
-> Every type has an **underlying type**, a well-defined **zero value**, and a **method set** (value `T` gets only value receivers; `*T` gets both value and pointer receivers).
+> Every type has an **underlying type**, a well-defined **zero value**, and a **list of methods** (value `T` only has value receiver methods; `*T` has both value and pointer receiver methods).
 
-> [!info]- 2. Can a value type satisfy an interface with pointer receiver methods?
-> **Not as `T` alone** — a value's method set excludes pointer-receiver methods, so it cannot implement an interface that requires `*T` methods; you need a `*T` (or addressable `T` that promotes to `*T` in some call contexts).
+> [!info]- 2. Can a value type fit an interface with pointer receiver methods?
+> **Not as `T` alone** — a value only has value receiver methods, so it can't fit an interface that requires `*T` methods. You need to pass a `*T` instead.
 
 > [!info]- 3. What does struct embedding promote?
 > It **promotes** the embedded type's **field names and methods** onto the outer type for direct access, but the receiver of promoted methods remains the **embedded value**, not a subclass (delegation, not OO inheritance).

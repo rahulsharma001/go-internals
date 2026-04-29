@@ -50,7 +50,7 @@ You don't hand-pick stack vs heap. The compiler does. **Stack** is fast, private
 - Even pointers are copied (the address itself, not the data)
 - Sharing happens only through internal pointers within copied values
 
-> **In plain English:** Stack is your personal desk — fast, private, cleaned up when you leave. Heap is the shared office storage — anyone can access it, but someone (the garbage collector) has to clean it up periodically, which slows things down.
+> **In plain English:** The stack is fast, private memory that gets cleaned up automatically when a function returns. The heap is shared memory that sticks around until the garbage collector finds it's no longer needed — every heap allocation creates future cleanup work.
 
 ```mermaid
 graph TD
@@ -255,7 +255,7 @@ Step 4: update returns — its stack frame is destroyed
   main stack: [ val = 20 ]   the change persists
 ```
 
-> **In plain English:** In Go, nothing is shared unless you explicitly hand over the address. Passing a value is like giving someone a photocopy. Passing a pointer is like giving someone your home address — they can come in and move things around.
+> **In plain English:** In Go, nothing is shared unless you explicitly pass a pointer. When you pass a value, the function gets its own independent copy. When you pass a pointer, the function can read and modify the original.
 
 ### Slice header copy
 
@@ -304,7 +304,7 @@ Step 2: grow(data) — header is COPIED again
   heap 0xC000090000: [100, 20, 30, 4, _, _] ← grow's new array (only grow knows)
 ```
 
-> **In plain English:** When a slice runs out of room and `append` builds a bigger one, it's like moving to a bigger apartment. The function that did the moving knows the new address, but anyone who had your old address still shows up at the old place. That's why you must return and reassign the new slice.
+> **In plain English:** When `append` needs more room than the current backing array has, it allocates a new, bigger array and copies everything over. The function that called `append` gets the updated slice header pointing to the new array, but the caller's copy still points to the old one. That's why you must return and reassign the new slice.
 
 ### Map is a pointer
 
