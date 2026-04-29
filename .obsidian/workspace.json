@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Daily Revision.md",
+                "file": "revision/T08 Map Internals - Revision.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Daily Revision"
+              "title": "T08 Map Internals - Revision"
             }
           },
           {
@@ -79,8 +79,7 @@
               "title": "P03 Mutex & Concurrency Safety Basics"
             }
           }
-        ],
-        "currentTab": 2
+        ]
       }
     ],
     "direction": "vertical"
@@ -137,8 +136,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300,
-    "collapsed": true
+    "width": 300
   },
   "right": {
     "id": "06b9fd80f4139a7a",
@@ -244,10 +242,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "a300f48be971f6f0",
+  "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
-    "Study Plan.md",
     "Daily Revision.md",
+    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
+    "Study Plan.md",
     "T10 Defer, Panic & Recover Internals.md",
     "Roadmap.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
@@ -255,7 +254,6 @@
     "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
     "revision/T01 Go Type System & Value Semantics - Revision.md",
     "revision/T02 Go Memory Allocation & Value Semantics - Revision.md",
-    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
     "T09 Error Handling Patterns.md",
     "T08 Map Internals.md",
