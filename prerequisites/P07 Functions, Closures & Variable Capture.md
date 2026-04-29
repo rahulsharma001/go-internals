@@ -33,9 +33,52 @@ Think **sticky note on a shared whiteboard**, not **a photo of the whiteboard**.
 
 When a closure "remembers" `secret` or `job`, it remembers **where that name lives**. If the outer code changes what's in that slot, the closure sees the update. If five closures all point at the **same** slot (same loop variable), they all see the same final value.
 
-**Error-driven picture — middleware:** You build `AuthMiddleware("hunter2")` once. The function you get back is not a copy of the string for each request. It's code that always reads the **same** `secret` binding until that middleware value is garbage-collected.
+```
+A closure is a function + pointers to outer variables:
 
-**Error-driven picture — loop:** You write `for _, job := range jobs { go func() { process(job) }() }`. Every goroutine's function closes over **one** `job` variable. The loop keeps reusing that name. By the time the goroutines run, that name usually holds the **last** job.
+  ┌────────────────────────────┐
+  │  closure (function value)  │
+  │  ┌──────────────────────┐  │
+  │  │ code: func(w, r) ... │  │
+  │  │ env:  ──→ &secret    │──────→  secret = "hunter2"  (lives on heap)
+  │  │        ──→ &next     │──────→  next = muxHandler   (lives on heap)
+  │  └──────────────────────┘  │
+  └────────────────────────────┘
+  The closure doesn't copy secret. It holds a pointer to the same slot.
+  If someone changed secret, the closure would see the new value.
+```
+
+### The mistake that teaches you
+
+```go
+package main
+
+import (
+	"fmt"
+	"sync"
+)
+
+func main() {
+	jobs := []string{"order-1", "order-2", "order-3"}
+	var wg sync.WaitGroup
+	for _, job := range jobs {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			fmt.Println("processing", job)
+		}()
+	}
+	wg.Wait()
+}
+```
+
+**What you'd expect:** Each goroutine processes a different job — `order-1`, `order-2`, `order-3`.
+
+**What actually happens (pre-Go 1.22):** All three goroutines print `order-3`. On Go 1.22+ the output is correct, but the lesson still matters for older code and interviews.
+
+**Why:** The `for _, job := range jobs` loop uses **one** variable called `job`. Each iteration overwrites the same slot. All three closures point to **that same slot**. By the time the goroutines actually run, the loop has finished and `job` holds `"order-3"`.
+
+**The fix:** Pass the current value as a parameter: `go func(j string) { fmt.Println("processing", j) }(job)`. Now each goroutine gets its own copy at launch time.
 
 ---
 
@@ -43,9 +86,23 @@ When a closure "remembers" `secret` or `job`, it remembers **where that name liv
 
 ### 4.1 First-class functions (nothing fancy)
 
-In Go, a function type is a type like `func(context.Context) error`. You assign it to variables, pass it to helpers, return it from constructors.
+In Go, a function is a value. The type `func(context.Context) error` is a type just like `string` or `int`. You can assign a function to a variable, pass it as an argument, store it in a struct field, or return it from another function.
 
-Your HTTP server does this constantly: you pass `http.HandlerFunc(...)` to `mux.Handle`. That value might be a plain function with no captures, or it might close over `db`, `logger`, `featureFlags` — then it's a closure.
+Your HTTP server does this constantly. When you wire up a route, you're passing a function value to the mux:
+
+```go
+mux := http.NewServeMux()
+
+healthCheck := func(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("ok"))
+}
+
+mux.HandleFunc("/health", healthCheck)
+```
+
+`healthCheck` is a variable holding a function. It has no captures — it doesn't read any names from outside its parameter list. It's just a plain function value, not a closure.
+
+The moment that function reads an outer variable (like `db` or `secret`), it becomes a closure. The next sections show what that looks like.
 
 ---
 
@@ -119,6 +176,15 @@ func NewUserHandler(db *sql.DB, log *slog.Logger) http.Handler {
 
 `NewUserHandler` returns one function value. That value **remembers** `db` and `log`. Your mux does not pass them on every request — the handler closure carries them.
 
+What happens step by step:
+
+1. You call `NewUserHandler(db, log)`. Go creates a stack frame with `db` and `log` as parameters.
+2. The returned `http.HandlerFunc` is a closure. It reads `db` and `log` from the outer scope. The compiler sees that these are needed after `NewUserHandler` returns, so it captures them (the closure holds pointers to the same `db` and `log` values).
+3. You wire `mux.Handle("/users", handler)`. The mux stores the handler value.
+4. A request arrives. The mux calls `handler.ServeHTTP(w, r)`. Inside, the closure reads `db` (to ping) and `log` (to log errors) — the same values that were passed to `NewUserHandler` at startup.
+
+No global variables needed. The closure carries its dependencies.
+
 ---
 
 ### 4.4 Retry wrapper: the work function closes over your request
@@ -138,7 +204,17 @@ func WithRetry(maxAttempts int, fn func() error) error {
 }
 ```
 
-`fn` is often a **closure** built at the call site: it already captured `ctx`, row ids, or an HTTP client. `WithRetry` only calls `fn()`; it does not thread those through. If you instead **return** a function that mutates a single outer `attempt` across calls, that state is shared for every call to that returned func — fine for a limiter, surprising if you expected a fresh counter per caller.
+`fn` is often a **closure** built at the call site. Here's what that looks like in practice:
+
+```go
+err := WithRetry(3, func() error {
+	return httpClient.Do(req)
+})
+```
+
+The function you pass to `WithRetry` closes over `httpClient` and `req` from the caller's scope. `WithRetry` doesn't know about those — it just calls `fn()` up to 3 times. The closure carries the context it needs.
+
+This is the power of closures for retry, circuit-breaker, and timeout wrappers: the wrapper handles the control flow (how many times, how long to wait), and the closure handles the actual work (what to call, with what arguments).
 
 ---
 
@@ -169,6 +245,27 @@ func NewTenantLimiter(requestsPerMinute int) func() bool {
 
 Each call to `NewTenantLimiter` creates **new** `count`, **new** `windowStart`, and **new** closure. Different tenants get different factories — different remembered state.
 
+```
+limiterA := NewTenantLimiter(100)   // tenant A
+limiterB := NewTenantLimiter(50)    // tenant B
+
+  limiterA closure:
+    env → &count_A (starts 0)
+    env → &windowStart_A
+    env → &requestsPerMinute_A (100)
+
+  limiterB closure:
+    env → &count_B (starts 0)       ← completely separate variables
+    env → &windowStart_B
+    env → &requestsPerMinute_B (50)
+
+limiterA()  → increments count_A to 1
+limiterB()  → increments count_B to 1
+  Each tenant's closure mutates its OWN captured state. No sharing.
+```
+
+This is the factory pattern for closures: one function call = one set of captured variables = one isolated instance.
+
 ---
 
 ## 5. Key Rules & Behaviors
@@ -182,6 +279,21 @@ x := 1
 f := func() { fmt.Println(x) }
 x = 2
 f() // 2
+```
+
+```
+Step 1: x := 1
+  x lives at some address, say 0xC00001A000: [1]
+
+Step 2: f := func() { fmt.Println(x) }
+  f is a closure. It captures &x — a pointer to 0xC00001A000.
+  It does NOT copy the value 1.
+
+Step 3: x = 2
+  0xC00001A000: [2]   ← x changed
+
+Step 4: f()
+  f reads *(&x) → reads 0xC00001A000 → sees 2 → prints 2
 ```
 
 ---
@@ -256,6 +368,23 @@ Step 2: Goroutine A's frame has j ──→ copy of job "a". Goroutine B has j �
 
 `defer` runs when the **function** returns, not when the **iteration** ends. A `defer f.Close()` inside `for _, path := range paths` queues one defer per file, but **all** of them run when the **outer** function exits — so you keep every file open until then.
 
+```
+WITHOUT wrapper (all files open until function returns):
+
+  iteration 1: open file1 → defer Close(file1)   ← queued, not executed
+  iteration 2: open file2 → defer Close(file2)   ← queued
+  iteration 3: open file3 → defer Close(file3)   ← queued
+  ... 1000 iterations: 1000 open file descriptors!
+  function returns → Close(file3), Close(file2), Close(file1)  ← all at once
+
+WITH wrapper (each file closed after its iteration):
+
+  iteration 1: func() { open file1, defer Close(file1), process }()  ← Close runs here
+  iteration 2: func() { open file2, defer Close(file2), process }()  ← Close runs here
+  iteration 3: func() { open file3, defer Close(file3), process }()  ← Close runs here
+  Only 1 file open at a time.
+```
+
 Fix: give each iteration its own function frame — extract `processFile(path string) error` or use a small inline wrapper so `defer` runs after that iteration's body:
 
 ```go
@@ -281,7 +410,26 @@ Here the inner `func` closes over `path` for that iteration, but the point is **
 
 ### Go 1.22 loop variables
 
-Since **Go 1.22**, each iteration of a `for` loop creates **new** variables for the loop index and the range value. Many `go func() { use(i) }()` bugs go away without `i := i`.
+Since **Go 1.22**, each iteration of a `for` loop creates **new** variables for the loop index and the range value.
+
+```go
+// Go 1.22+ — this works correctly without any fix:
+for _, job := range jobs {
+	go func() {
+		process(job) // each iteration has its OWN job variable now
+	}()
+}
+```
+
+```
+Pre-1.22: one job variable, all goroutines share it
+  job slot → "a" → "b" → "c"   ← goroutines all read "c"
+
+Go 1.22+:  each iteration creates a new job variable
+  iteration 1: job_1 → "a"   goroutine 1 captures &job_1
+  iteration 2: job_2 → "b"   goroutine 2 captures &job_2
+  iteration 3: job_3 → "c"   goroutine 3 captures &job_3
+```
 
 You still need the mental model when:
 
@@ -293,7 +441,58 @@ You still need the mental model when:
 
 ## 6. Code Examples (Show, Don't Tell)
 
-The backend-shaped examples live in Section 4: `AuthMiddleware(secret)`, `NewUserHandler` (handler closes over `*sql.DB` and logger), `WithRetry` with a caller-built `fn`, `NewTenantLimiter`, plus the job loop and defer pattern in Section 5. No extra toy `apply`/`twice` snippets — same spirit as the rest of this series.
+### Closure mutating outer state: request counter
+
+```go
+func NewRequestCounter() (increment func(), getCount func() int) {
+	var count int
+	increment = func() { count++ }
+	getCount = func() int { return count }
+	return
+}
+
+inc, get := NewRequestCounter()
+inc()
+inc()
+fmt.Println(get()) // 2
+```
+
+```
+Step 1: NewRequestCounter() creates count = 0 on the heap (it's captured).
+
+Step 2: increment and getCount are two closures. Both point to the SAME count:
+  increment.env → &count
+  getCount.env  → &count
+
+Step 3: inc() → count becomes 1. inc() → count becomes 2.
+
+Step 4: get() → reads count → returns 2.
+
+Both closures share one variable. This is how closures enable
+stateful factories without structs or globals.
+```
+
+### Closure with value snapshot (the fix pattern)
+
+```go
+for _, orderID := range orderIDs {
+	id := orderID // snapshot into a NEW variable
+	go func() {
+		processOrder(id) // each goroutine has its own id
+	}()
+}
+```
+
+```
+Without id := orderID:
+  all goroutines → &orderID (one slot) → last value
+
+With id := orderID:
+  iteration 1: id_1 = "ord-001" → goroutine 1 captures &id_1
+  iteration 2: id_2 = "ord-002" → goroutine 2 captures &id_2
+  iteration 3: id_3 = "ord-003" → goroutine 3 captures &id_3
+  Each id is a different variable. No sharing.
+```
 
 ---
 
@@ -357,13 +556,13 @@ func spawnWorkers(jobs []string, process func(string)) {
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | What happens | What to say |
-|------|--------------|-------------|
-| `go func() { use(i) }()` in a loop | All goroutines see final `i` (classic) | "They share one variable. Pass `i` as a param or copy per iteration." |
-| `defer` inside a plain `for` | Defers run when the **outer** function returns | "Wrap the body in a function or extract a helper so defer runs per iteration." |
-| Assuming closure = snapshot | You expected the value at **define** time | "Closures see live outer bindings. Copy into a local or parameter if you need a snapshot." |
-| Storing handlers with shared mutable outer state | Race or wrong tenant data | "If outer state mutates, guard it or pass values explicitly. Don't share maps without sync." |
-| "Go 1.22 fixed closures" | Oversimplified | "Loop vars are per-iteration now, but capture and shared state still need thinking." |
+| Trap | What happens | Why (Section link) | What to say |
+|------|--------------|-------------------|-------------|
+| `go func() { use(i) }()` in a loop | All goroutines see final `i` (classic) | Closure captures the variable's address, not its value (Section 5, "Loop trap") | "They share one variable. Pass `i` as a param or copy per iteration." |
+| `defer` inside a plain `for` | Defers run when the **outer** function returns, not per iteration | `defer` is scoped to the function, not the block (Section 5, "Defer in a loop") | "Wrap the body in a function or extract a helper so defer runs per iteration." |
+| Assuming closure = snapshot | You expected the value at **define** time | Capture is by reference — the closure holds a pointer (Section 5, "Capture is by reference") | "Closures see live outer bindings. Copy into a local or parameter if you need a snapshot." |
+| Storing handlers with shared mutable outer state | Race or wrong tenant data | Multiple goroutines mutating the same captured variable without synchronization | "If outer state mutates, guard it or pass values explicitly. Don't share maps without sync." |
+| "Go 1.22 fixed closures" | Oversimplified — only loop vars changed | Go 1.22 creates new vars per iteration, but general capture rules are unchanged (Section 5, "Go 1.22") | "Loop vars are per-iteration now, but capture and shared state still need thinking." |
 
 ---
 
@@ -385,7 +584,13 @@ A factory like `AuthMiddleware(secret)` returns a function that returns a handle
 
 ## 9. 30-Second Verbal Answer
 
-Functions in Go are first-class values. A **closure** is a function that **remembers** variables from where it was created — middleware remembering a secret, a handler remembering `db` and a logger. Those variables are **shared bindings**, not frozen copies, unless you copy into parameters or locals. That's why **`go func()` in a loop** without passing the loop variable makes every goroutine see the **last** value. Fix by passing the current value into the goroutine or copying per iteration. **`defer` in a loop** without a per-iteration function can defer cleanup until the outer function returns. Go 1.22 made new loop variables each iteration, but you still reason about capture whenever you share outer state.
+> "Functions in Go are first-class values — you can store them, pass them, return them. A closure is a function that remembers variables from where it was created. Think middleware: `AuthMiddleware(secret)` returns a handler that closes over `secret`. Every request hits that handler, and it reads the same `secret` without you passing it each time.
+> 
+> The key thing is that closures capture by reference, not by snapshot. They hold a pointer to the variable, not a copy of its value. That's why the classic loop trap happens — `go func() { use(i) }()` in a loop means every goroutine points to the same `i`, and they all see the last value. The fix is passing the current value as a parameter so each goroutine gets its own copy.
+> 
+> Another trap: `defer` inside a loop runs when the function returns, not when the iteration ends. So you can end up with a thousand open files. Wrap each iteration in a small function so `defer` runs per iteration.
+> 
+> Go 1.22 gave each loop iteration fresh variables, which fixes the goroutine loop trap automatically. But the underlying capture rules are the same — you still need to think about shared state."
 
 ---
 

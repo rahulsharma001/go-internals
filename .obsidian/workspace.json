@@ -78,6 +78,30 @@
               "icon": "lucide-file",
               "title": "P05 Interfaces Basics"
             }
+          },
+          {
+            "id": "76eaf19df250f926",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "T01 Go Type System & Value Semantics.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "T01 Go Type System & Value Semantics"
+            }
           }
         ],
         "currentTab": 2
@@ -246,11 +270,11 @@
   "active": "0e6e5dd9b5a60122",
   "lastOpenFiles": [
     "T01 Go Type System & Value Semantics.md",
-    "revision/T01 Go Type System & Value Semantics - Revision.md",
     "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
-    "revision/T08 Map Internals - Revision.md",
-    "prerequisites/P05 Interfaces Basics.md",
     "Study Plan.md",
+    "prerequisites/P05 Interfaces Basics.md",
+    "revision/T01 Go Type System & Value Semantics - Revision.md",
+    "revision/T08 Map Internals - Revision.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "T13 Goroutine Internals.md",
