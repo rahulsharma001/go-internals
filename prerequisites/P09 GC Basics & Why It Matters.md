@@ -31,6 +31,59 @@ Your service is a loop: **request in → work → response out**. Every time you
 
 **What triggers GC:** you do not call it by hand for normal code. **Allocation** drives it. The runtime tracks how big the live heap is getting. When it crosses the pacing threshold (related to **GOGC**, default 100), a cycle starts. More allocations → more cycles → more background work and occasional pauses.
 
+```
+  Your handler                    Heap                         GC
+  ┌───────────────┐    alloc    ┌──────────────────────┐
+  │ make([]Order)  │ ─────────→ │ []Order backing array │
+  │ json.Marshal() │ ─────────→ │ []byte buffer         │     ┌─────────┐
+  │ fmt.Sprintf()  │ ─────────→ │ string temp           │     │ Mark:   │
+  │ ... response   │            │                        │ ←── │ walk    │
+  └───────────────┘            │ (all short-lived)      │     │ roots   │
+                                └──────────────────────┘     │         │
+  Handler returns →              All unreachable →           │ Sweep:  │
+  stack frame gone               GC frees them               │ reclaim │
+                                                              └─────────┘
+  The more you allocate per request, the more often the GC runs.
+  The more often it runs, the more CPU it burns — you see it as p99 spikes.
+```
+
+### The mistake that teaches you
+
+```go
+package main
+
+import (
+	"fmt"
+	"runtime"
+	"time"
+)
+
+func allocHeavy() {
+	for i := 0; i < 1_000_000; i++ {
+		_ = fmt.Sprintf("order-%d", i) // heap alloc every iteration
+	}
+}
+
+func main() {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+
+	allocHeavy()
+
+	runtime.ReadMemStats(&after)
+	fmt.Printf("Time:     %v\n", time.Since(start))
+	fmt.Printf("GC runs:  %d\n", after.NumGC-before.NumGC)
+	fmt.Printf("Total alloc: %.1f MB\n", float64(after.TotalAlloc-before.TotalAlloc)/1e6)
+}
+```
+
+**What you'd expect:** A million `fmt.Sprintf` calls should be fast — each string is tiny.
+
+**What actually happens:** The program allocates ~50-80 MB total (each `Sprintf` creates a new string on the heap). The GC runs 10-20+ times during the loop. On a hot API path at 5k RPS, this kind of allocation pattern turns into sustained GC pressure and p99 latency spikes.
+
+**Why:** Each `fmt.Sprintf` allocates a new string on the heap. The string is immediately unreachable after `_ =` discards it, but the GC still had to track it, mark it, and sweep it. Multiply that by a million and the GC is doing serious work. Replace with `strings.Builder` or pre-formatted values on hot paths.
+
 ---
 
 ## 4. How It Works (Backend-Useful Level)
@@ -74,16 +127,25 @@ func heapUser() *User {
 ```
 MEMORY TRACE: stack vs heap (GC only traces heap objects)
 
-Step 1: stackUser()
-  stack:  user = User{Name: "ada"}
-  heap:   (often nothing for `user` itself — dies with the frame when you're done copying out)
+Step 1: result := stackUser()
+  stack frame [stackUser]:
+    user = User{Name: "ada"}          ← lives at 0xC000040F00 (stack)
+  Caller receives a COPY of user by value.
+  stackUser returns → frame at 0xC000040F00 is gone. No heap object. GC never saw it.
 
-Step 2: heapUser()
-  stack:  temporary frame while building user
-  heap:   one User object — the returned *User points here
-          GC keeps this object while anything reachable still points at it
+Step 2: ptr := heapUser()
+  Compiler sees `return &user` → user must outlive the frame → ESCAPES to heap.
+  heap:  0xC0000A2000 → User{Name: "ada"}    ← GC tracks this object
+  stack frame [heapUser]:
+    (temporary — gone after return)
+  Caller holds ptr = 0xC0000A2000.
+  GC root chain: goroutine stack → ptr → 0xC0000A2000. Object is REACHABLE.
 
-(aha: returning &local forces heap allocation; by-value return of a small struct often stays off heap.)
+Step 3: ptr = nil (or function holding ptr returns)
+  No root points to 0xC0000A2000 anymore.
+  Next GC cycle: mark phase walks all roots → doesn't find 0xC0000A2000 → UNREACHABLE → swept.
+
+(aha: returning &local forces heap allocation; by-value return of a small struct stays off heap entirely.)
 ```
 
 ### Trace 2 — What "reachable" means in an API handler
@@ -93,31 +155,158 @@ Picture: **HTTP handler** → calls **service** → loads **`[]Order`** → each
 ```
 MEMORY TRACE: handler → service → orders
 
-Step 1: request arrives
-  goroutine stack:  handler has *Service, ctx, writer…
-  heap:             service object, slice header for orders, backing array of Order structs
+Step 1: request arrives, handler calls svc.LoadOrders(ctx)
+  goroutine stack [handler frame]:
+    svc    = 0xC0000B0000 (*OrderService)     ← points to long-lived service on heap
+    orders = []Order{ptr: 0xC0000C4000, len: 50, cap: 64}
+  heap:
+    0xC0000B0000 → OrderService{db: *sql.DB}  ← reachable from stack
+    0xC0000C4000 → [64]Order{...50 filled}    ← reachable from stack via orders.ptr
 
-Step 2: you build JSON from orders
-  heap:             temporary buffers / strings from marshaling (often many short-lived objects)
+  GC root chain: goroutine stack → orders.ptr → 0xC0000C4000. All REACHABLE.
 
-Step 3: response sent, handler returns, no global cache kept
-  stack:            handler frame gone
-  heap:             orders + temporaries no longer reachable from any root → garbage
+Step 2: json.Marshal(orders) — builds response
+  heap (new allocations):
+    0xC0000D0000 → []byte (JSON buffer, grows via append)
+    0xC0000D2000 → temp strings from field formatting
+  Still reachable from stack locals in the marshal call.
 
-(aha: "reachable" is about pointer chains from live code — not about whether you still "need" it logically.)
+Step 3: w.Write(jsonBytes) done, handler returns
+  goroutine stack: handler frame popped. orders, jsonBytes — all local vars gone.
+  heap:
+    0xC0000C4000 → [64]Order{...}       ← NO root points here anymore → GARBAGE
+    0xC0000D0000 → []byte JSON buffer   ← NO root points here anymore → GARBAGE
+    0xC0000B0000 → OrderService{...}    ← still reachable from server struct → KEPT
+
+  Next GC cycle: marks 0xC0000B0000 (reachable). Sweeps 0xC0000C4000 and 0xC0000D0000.
+
+(aha: "reachable" is about pointer chains from live roots — not about whether you still "need" it logically.)
 ```
 
 ---
 
 ## 5. Key Rules & Behaviors
 
-- **Heap allocations** → future GC work. **Rate** matters as much as size.
-- **Stack** values that do not escape are **invisible** to GC sweep — they disappear when the function returns.
-- **Escaping** pointers (`return &local`, storing into globals, interface boxing sometimes) → **heap**.
-- **Fewer, larger, reused** buffers usually beat **many tiny** throwaway allocations on hot paths.
-- **`GOGC`** trades **RAM for GC frequency**. **`GOMEMLIMIT`** (see [[T25 GC Tuning & Memory Limits]]) adds a **soft cap** so the process does not grow without bound — different knob, same family of tradeoffs.
+### 5.1 Allocation rate = future GC work
 
-### 5.2 Code smell quick reference
+```go
+for i := 0; i < 10000; i++ {
+    buf := make([]byte, 4096) // heap alloc each iteration
+    process(buf)
+}
+```
+
+```
+  Each iteration:
+    stack → make([]byte, 4096) → heap object
+    → used briefly → unreachable → GC must reclaim
+
+  10,000 iterations = 10,000 heap objects = 10,000 things GC tracks.
+  Rate matters as much as size.
+```
+
+**Why (Section 4.1):** Every heap object adds to the mark phase workload. High allocation rate triggers more frequent GC cycles.
+
+---
+
+### 5.2 Stack values are invisible to GC
+
+```go
+func processOrder(id int64) int {
+    total := 0            // stack — never escapes
+    tax := total * 18     // stack
+    return total + tax    // all die with the frame
+}
+```
+
+```
+  processOrder frame:
+  ┌──────────────┐
+  │ total = 0    │  ← stack slot
+  │ tax   = 0    │  ← stack slot
+  └──────────────┘
+  Function returns → frame gone. GC never saw these.
+```
+
+**Why (Section 4.2):** Escape analysis keeps values on the stack when possible. Stack cleanup is free — just move the stack pointer.
+
+---
+
+### 5.3 Returning a pointer forces heap allocation
+
+```go
+func newSession(userID string) *Session {
+    s := Session{UserID: userID, CreatedAt: time.Now()}
+    return &s // s escapes to heap — GC will track it
+}
+```
+
+```
+  Compile decides: "s is returned by pointer → escapes."
+
+  Without pointer:
+    stack → Session{...} → copy out by value → frame gone, no heap.
+
+  With pointer:
+    heap → Session{...} → *Session returned → GC tracks until unreachable.
+```
+
+**Why (Section 4.2):** `return &local` means the value must outlive the function frame. The compiler escapes it to the heap, adding GC work.
+
+---
+
+### 5.4 Reuse buffers on hot paths
+
+```go
+var bufPool = sync.Pool{New: func() any { return new(bytes.Buffer) }}
+
+func handle(w http.ResponseWriter, r *http.Request) {
+    buf := bufPool.Get().(*bytes.Buffer)
+    buf.Reset()
+    defer bufPool.Put(buf)
+    // ... encode into buf ...
+}
+```
+
+```
+  Without pool (per request):
+    request 1 → alloc buf → use → unreachable → GC reclaims
+    request 2 → alloc buf → use → unreachable → GC reclaims
+    request 3 → alloc buf → ...  (thousands of short-lived objects)
+
+  With pool:
+    request 1 → Get buf → use → Put back
+    request 2 → Get same buf → use → Put back
+    (one long-lived object reused — GC sees almost nothing new)
+```
+
+**Why (Section 4.1):** Fewer allocations means the GC has less work. Pooling trades a small amount of memory for significantly lower allocation rate.
+
+---
+
+### 5.5 GOGC trades RAM for GC frequency
+
+```go
+// GOGC=100 (default): next GC when heap doubles vs live data
+// GOGC=200: next GC when heap triples vs live data → fewer cycles, more RAM
+// GOGC=50: next GC when heap grows 50% → more cycles, less RAM
+```
+
+```
+  Live heap = 100 MB
+
+  GOGC=100: GC triggers at ~200 MB  → moderate frequency
+  GOGC=200: GC triggers at ~300 MB  → fewer cycles, uses more RAM
+  GOGC=50:  GC triggers at ~150 MB  → more frequent cycles, tighter RAM
+
+  GOMEMLIMIT adds a soft cap: "never grow beyond X" by collecting harder.
+```
+
+**Why (Section 4.1):** GC pacing is relative to live heap. Higher GOGC lets the heap grow more before the next cycle, trading memory for CPU.
+
+---
+
+### 5.6 Code smell quick reference
 
 | Smell | Why it hurts | Direction |
 |-------|----------------|-----------|
@@ -242,7 +431,7 @@ Correlate **NumGC** rising fast with **traffic** spikes. If **HeapAlloc** is fla
 
 ---
 
-## 6.5. Practice Checkpoint
+## 6.7. Practice Checkpoint
 
 ### Tier 1 — Handler pressure (2 min)
 
@@ -301,13 +490,13 @@ func UserIDsLine(ids []int64) string {
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | Reality |
-|------|---------|
-| "Go has no GC pauses" | Pauses are usually **short**, not **zero**. Tail latency still exists. |
-| "`new` always hits heap" | **Escape analysis** decides; keyword is not the rule. |
-| "I'll set `GOGC` first" | **Profile allocations** on real traffic first; tuning without data often hides the bug. |
-| "Stack is faster so I will return `&T` everywhere" | Returning pointers **increases** heap use and GC graph work. Use pointers when semantics need them. |
-| Finalizers fix cleanup | Prefer **`defer`** for files/sockets. Finalizers are **late** and **unreliable** under load. |
+| Trap | Reality | Why (Section link) |
+|------|---------|-------------------|
+| "Go has no GC pauses" | Pauses are usually **short**, not **zero**. Tail latency still exists. | Section 4.1 — STW phases still happen even though most marking is concurrent. |
+| "`new` always hits heap" | **Escape analysis** decides; keyword is not the rule. | Section 4.2 — the compiler, not `new`/`make`, decides stack vs heap. |
+| "I'll set `GOGC` first" | **Profile allocations** on real traffic first; tuning without data often hides the bug. | Section 5.5 — GOGC is a frequency knob; the real fix is reducing allocation rate (Section 5.1). |
+| "Stack is faster so I will return `&T` everywhere" | Returning pointers **increases** heap use and GC graph work. Use pointers when semantics need them. | Section 5.3 — `return &local` forces escape; return by value when the struct is small. |
+| Finalizers fix cleanup | Prefer **`defer`** for files/sockets. Finalizers are **late** and **unreliable** under load. | Section 4.1 — finalizers run after GC sweep, which is non-deterministic and may be delayed under allocation pressure. |
 
 ---
 
@@ -335,7 +524,13 @@ Stack-allocated values live in the goroutine's frame and vanish when the functio
 
 ## 9. 30-Second Verbal Answer
 
-Go uses a **tracing garbage collector**: it finds **reachable** heap objects from stacks and globals, then **frees** the rest. You pay for **heap allocations** with **future GC work** — under API load that often hurts **p99** before **p50**. **Escape analysis** decides stack vs heap; **returning pointers** usually forces **heap**. Reduce pressure with **`strings.Builder`**, **fewer `fmt` temps**, and **`sync.Pool`** for **JSON buffers** where profiling proves it helps. Use **`pprof` heap** to find the real hotspots. **`GOGC`** trades **memory for GC frequency** — e.g. **`GOGC=200`** runs fewer cycles but uses more RAM.
+Go has a tracing garbage collector. It walks all live pointer chains from goroutine stacks and globals, marks every heap object it can reach, and frees the rest. You never call `free` yourself — the runtime handles it.
+
+The cost you actually feel in production is tied to allocation rate. Every heap allocation is something the GC later has to track, mark, and sweep. On a backend doing thousands of requests per second, if each handler allocates fresh slices, fresh JSON buffers, and temp strings, the GC runs more often and your p99 latency spikes while p50 looks fine.
+
+The compiler uses escape analysis to decide what goes on the heap. Values that stay inside one function can live on the stack — no GC cost. But the moment you return a pointer, store something in an interface, or capture a variable in a closure that outlives the frame, it escapes to the heap.
+
+The practical fix is reducing allocation rate on hot paths: reuse buffers with `sync.Pool`, use `strings.Builder` instead of `+=`, avoid `fmt.Sprintf` in tight loops. Always profile with `pprof heap` first — it shows exactly which lines are allocating. `GOGC` lets you trade memory for fewer GC cycles, but that is a knob for after you have fixed the real allocation hot spots.
 
 ---
 
