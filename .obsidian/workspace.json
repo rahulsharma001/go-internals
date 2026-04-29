@@ -79,7 +79,8 @@
               "title": "P03 Mutex & Concurrency Safety Basics"
             }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -242,8 +243,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "b48d0a8de349e84d",
+  "active": "a300f48be971f6f0",
   "lastOpenFiles": [
+    "revision/T08 Map Internals - Revision.md",
     "Daily Revision.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "Study Plan.md",
@@ -269,7 +271,6 @@
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
     "prerequisites/P09 GC Basics & Why It Matters.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
-    "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites",
     "visuals",
     "revision",
