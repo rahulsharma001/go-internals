@@ -489,7 +489,7 @@ handler(1) — success path:
 
 ### Rule 1: Always Check `err != nil` Before Using the Result
 
-**WHY (§4.1):** From §4.1, `error` is an interface. When a function returns `(result, error)`, the result is only valid if the error interface is nil (both type and data slots are nil). Using `result` when `err != nil` risks operating on zero values or stale data.
+**WHY (Section 4.1):** From Section 4.1, `error` is an interface. When a function returns `(result, error)`, the result is only valid if the error interface is nil (both type and data slots are nil). Using `result` when `err != nil` risks operating on zero values or stale data.
 
 ```go
 f, err := os.Open("cfg.json")
@@ -514,7 +514,7 @@ You don't start reading a book before checking someone actually handed you a boo
 
 ### Rule 2: Wrap Errors at Abstraction Boundaries with `%w`
 
-**WHY (§4.3):** From §4.3, `%w` creates a linked list that preserves the original error's identity. Each layer adds context ("what was I doing when this failed?") while keeping the chain walkable by `errors.Is` and `errors.As`.
+**WHY (Section 4.3):** From Section 4.3, `%w` creates a linked list that preserves the original error's identity. Each layer adds context ("what was I doing when this failed?") while keeping the chain walkable by `errors.Is` and `errors.As`.
 
 ```go
 var ErrUserNotFound = errors.New("user not found")
@@ -555,7 +555,7 @@ Picture a moving truck: you write your name on a new label, but the old sticker 
 
 ### Rule 2b: Map Errors to HTTP at the Edge (Handler), Not in the Repo
 
-**WHY (§4.5, §4.6):** From §4.5, `errors.As` can extract typed errors at any depth. The handler is the right place to decide HTTP status codes because it knows the HTTP contract. The repo should never import `net/http`.
+**WHY (Section 4.5, Section 4.6):** From Section 4.5, `errors.As` can extract typed errors at any depth. The handler is the right place to decide HTTP status codes because it knows the HTTP contract. The repo should never import `net/http`.
 
 - **`errors.Is(err, ErrUserNotFound)`** → **404**
 - **`errors.As(err, &validationErr)`** → **400**
@@ -610,7 +610,7 @@ func wrapReq(ctx context.Context, msg string, err error) error {
 }
 ```
 
-**WHY (§4.3):** The `%w` keeps the chain intact, so `errors.Is`/`errors.As` still work downstream. The request ID is baked into the message for log correlation, but the chain structure is preserved for programmatic checks.
+**WHY (Section 4.3):** The `%w` keeps the chain intact, so `errors.Is`/`errors.As` still work downstream. The request ID is baked into the message for log correlation, but the chain structure is preserved for programmatic checks.
 
 ```
 Chain after wrapReq:
@@ -638,7 +638,7 @@ func (e *TemporaryError) Error() string { return "temporary: " + e.Cause.Error()
 func (e *TemporaryError) Unwrap() error { return e.Cause }
 ```
 
-**WHY (§4.4, §4.5):** Retry middleware uses `errors.Is(err, ErrRetryable)` or `errors.As(err, &temp)` to decide whether to retry. The chain walking from §4.4 means the retry marker can be at any depth — the middleware finds it regardless of how many wraps sit above it.
+**WHY (Section 4.4, Section 4.5):** Retry middleware uses `errors.Is(err, ErrRetryable)` or `errors.As(err, &temp)` to decide whether to retry. The chain walking from Section 4.4 means the retry marker can be at any depth — the middleware finds it regardless of how many wraps sit above it.
 
 ```
 Retry decision via chain walk:
@@ -680,7 +680,7 @@ func (e *APIError) Error() string { return e.Public }
 func (e *APIError) Unwrap() error { return e.Cause }
 ```
 
-**WHY (§4.5):** `errors.As` lets the handler extract `*RepoError` to understand what happened, then create an `*APIError` with a safe public message. The Cause field preserves the full chain for logs while Public protects the user from internal details.
+**WHY (Section 4.5):** `errors.As` lets the handler extract `*RepoError` to understand what happened, then create an `*APIError` with a safe public message. The Cause field preserves the full chain for logs while Public protects the user from internal details.
 
 ```
 Error boundary translation:
@@ -698,16 +698,16 @@ Inside the hospital, doctors use medical terminology. At the reception desk, you
 
 ### Rule 3: Use `errors.Is` for Sentinels, `errors.As` for Type Extraction
 
-**WHY (§4.4, §4.5):** `errors.Is` walks the chain comparing values (pointer identity for sentinels). `errors.As` walks the chain trying type assertions. Using `==` skips the chain entirely.
+**WHY (Section 4.4, Section 4.5):** `errors.Is` walks the chain comparing values (pointer identity for sentinels). `errors.As` walks the chain trying type assertions. Using `==` skips the chain entirely.
 
 ```go
 if errors.Is(err, os.ErrNotExist) {
-	// file missing — uses §4.4 chain walking
+	// file missing — uses Section 4.4 chain walking
 }
 
 var v *ValidationError
 if errors.As(err, &v) {
-	_ = v.Field  // uses §4.5 type extraction
+	_ = v.Field  // uses Section 4.5 type extraction
 }
 ```
 
@@ -732,7 +732,7 @@ errors.Is vs errors.As — what each does at each chain level:
 
 ### Rule 4: Do Not Wrap Twice with the Same Context
 
-**WHY (§4.3):** Each `%w` adds a new node to the linked list. Duplicate labels create a chain like `"service: service: service: db error"` — three identical envelopes with no new information, just noise in logs.
+**WHY (Section 4.3):** Each `%w` adds a new node to the linked list. Duplicate labels create a chain like `"service: service: service: db error"` — three identical envelopes with no new information, just noise in logs.
 
 ```go
 // BAD — repeated label
@@ -757,7 +757,7 @@ You don't put two identical address labels on the same box. One clear label is e
 
 ### Rule 5: Return `nil` for Success — Avoid the Typed Nil Interface Trap
 
-**WHY (§4.1):** From §4.1, an error interface is nil only when BOTH type and data slots are nil. A `nil` pointer with a concrete type fills the type slot, making the interface non-nil.
+**WHY (Section 4.1):** From Section 4.1, an error interface is nil only when BOTH type and data slots are nil. A `nil` pointer with a concrete type fills the type slot, making the interface non-nil.
 
 ```go
 type AppError struct{ msg string }
@@ -812,7 +812,7 @@ func LoadForAPI(id string) (*User, error) {
 }
 ```
 
-**WHY (§4.1, Rule 5):** Same mechanism as Rule 5. The `nil *NotFoundError` fills the type slot when assigned to `error`.
+**WHY (Section 4.1, Rule 5):** Same mechanism as Rule 5. The `nil *NotFoundError` fills the type slot when assigned to `error`.
 
 ```
 getUser("valid-id") returns: (*User, nil *NotFoundError)
@@ -1119,14 +1119,14 @@ Package with a **validation** type (`Error()` + **`errors.As`**), a **`%w`** wra
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Because (§4 link) | Fix |
+| Gotcha | What Happens | Because (Section 4 link) | Fix |
 |--------|-------------|-------------------|-----|
-| `==` after wrapping | `wrapped == ErrNotFound` is false even though the sentinel is inside | §4.3 — `%w` creates a new `wrapError` struct. `==` compares the outer struct, not the chain inside. The sentinel is at a deeper level | Use `errors.Is(err, ErrNotFound)` — it walks the chain (§4.4) |
-| `%v` instead of `%w` | `errors.Is` and `errors.As` can't find the original error | §4.3 — `%v` creates a plain `errorString` with no Unwrap method. The chain link is severed — no linked list pointer | Always use `%w` when callers need to unwrap. Use `%v` only when you deliberately want to hide the inner error |
-| Typed nil `*MyError` returned as `error` | `err != nil` is true even when no error occurred | §4.1 — interface stores `[type: *MyError, data: nil]`. Type slot is non-nil, so the interface is non-nil | Guard: `if p != nil { return p }; return nil`. Or return `error` directly, not `*MyError` |
-| Two `errors.New("not found")` compared with `==` | Always false, even though messages match | §4.2 — each `errors.New` allocates a new `*errorString` on the heap. Identity is pointer address, not message content | Define sentinels once at package level: `var ErrNotFound = errors.New("not found")` |
-| Ignoring error with `_ = f()` | Silent data loss, corrupt state, stale cache | §4.1 — the error interface value (16 bytes: type + data) is created and returned, but discarded by `_`. The chain from §4.3 exists but is never walked — the failure is invisible | Handle every error. If truly ignorable, document why with a comment naming who accepted the risk |
-| Wrapping the same label twice | `"service: service: db error"` — duplicate context in logs | §4.3 — each `%w` adds a new linked list node. Two identical labels create two nodes with no new information | Wrap once per abstraction boundary. Each layer should add unique context |
+| `==` after wrapping | `wrapped == ErrNotFound` is false even though the sentinel is inside | Section 4.3 — `%w` creates a new `wrapError` struct. `==` compares the outer struct, not the chain inside. The sentinel is at a deeper level | Use `errors.Is(err, ErrNotFound)` — it walks the chain (Section 4.4) |
+| `%v` instead of `%w` | `errors.Is` and `errors.As` can't find the original error | Section 4.3 — `%v` creates a plain `errorString` with no Unwrap method. The chain link is severed — no linked list pointer | Always use `%w` when callers need to unwrap. Use `%v` only when you deliberately want to hide the inner error |
+| Typed nil `*MyError` returned as `error` | `err != nil` is true even when no error occurred | Section 4.1 — interface stores `[type: *MyError, data: nil]`. Type slot is non-nil, so the interface is non-nil | Guard: `if p != nil { return p }; return nil`. Or return `error` directly, not `*MyError` |
+| Two `errors.New("not found")` compared with `==` | Always false, even though messages match | Section 4.2 — each `errors.New` allocates a new `*errorString` on the heap. Identity is pointer address, not message content | Define sentinels once at package level: `var ErrNotFound = errors.New("not found")` |
+| Ignoring error with `_ = f()` | Silent data loss, corrupt state, stale cache | Section 4.1 — the error interface value (16 bytes: type + data) is created and returned, but discarded by `_`. The chain from Section 4.3 exists but is never walked — the failure is invisible | Handle every error. If truly ignorable, document why with a comment naming who accepted the risk |
+| Wrapping the same label twice | `"service: service: db error"` — duplicate context in logs | Section 4.3 — each `%w` adds a new linked list node. Two identical labels create two nodes with no new information | Wrap once per abstraction boundary. Each layer should add unique context |
 
 ### Gotcha Deep Dive: `%v` Breaks the Chain
 

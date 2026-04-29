@@ -616,7 +616,7 @@ for k, v := range m {
 ```
 
 ```
-Recall from §4.5: the iterator picks a random starting bucket and walks
+Recall from Section 4.5: the iterator picks a random starting bucket and walks
 forward until it circles back. It tracks "I'm at bucket X, slot Y."
 
 Scenario A: "z" APPEARS
@@ -762,7 +762,7 @@ cache := map[string]OrderSummary{
 ```
 
 ```
-WHY the compile error — traced through memory (connects to §4.4):
+WHY the compile error — traced through memory (connects to Section 4.4):
 
   BEFORE growth (B=0, 1 bucket at 0xC000080000):
     hmap.buckets → 0xC000080000
@@ -847,7 +847,7 @@ When it matters:
 
 ### Example 4: Safe Concurrent Map Access
 
-This is the pattern you'll use for any shared map (session store, feature flags, metrics). It builds on everything above — you need to understand why maps aren't safe (§4 — bucket array is being modified) before the lock pattern makes sense.
+This is the pattern you'll use for any shared map (session store, feature flags, metrics). It builds on everything above — you need to understand why maps aren't safe (Section 4 — bucket array is being modified) before the lock pattern makes sense.
 
 ```go
 type SessionStore struct {
@@ -956,14 +956,14 @@ Build a **simple in-memory cache with TTL** using a `map[string]cacheEntry` (or 
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Because (§4 link) | Fix |
+| Gotcha | What Happens | Because (Section 4 link) | Fix |
 |--------|-------------|-------------------|-----|
-| Concurrent read + write | `fatal error: concurrent map read and map write` | hmap.flags detects overlap; bucket array is being modified mid-read (§4.1) | sync.RWMutex or sync.Map |
-| Concurrent writes | `fatal error: concurrent map writes` | Two goroutines writing to the same bucket can corrupt tophash/keys/values (§4.2) | sync.Mutex |
-| Write to nil map | `panic: assignment to entry in nil map` | nil map means the hmap pointer is nil — no bucket array exists to write into (§4.1) | Initialize with `make()` |
-| Struct field assignment | `cannot assign to struct field in map` | Values live in bucket slots that move during growth — can't take a stable address (§4.4) | Copy-edit-write or pointer values |
-| Relying on iteration order | Order changes between runs | Iterator picks random start bucket + offset each time; hash0 differs per map (§4.5) | Sort keys if order matters |
-| Large map never shrinks | Memory stays after mass deletion | Growth allocates a bigger bucket array (§4.4). Delete marks slots empty but the array stays. No reverse operation exists. | Re-create the map |
+| Concurrent read + write | `fatal error: concurrent map read and map write` | hmap.flags detects overlap; bucket array is being modified mid-read (Section 4.1) | sync.RWMutex or sync.Map |
+| Concurrent writes | `fatal error: concurrent map writes` | Two goroutines writing to the same bucket can corrupt tophash/keys/values (Section 4.2) | sync.Mutex |
+| Write to nil map | `panic: assignment to entry in nil map` | nil map means the hmap pointer is nil — no bucket array exists to write into (Section 4.1) | Initialize with `make()` |
+| Struct field assignment | `cannot assign to struct field in map` | Values live in bucket slots that move during growth — can't take a stable address (Section 4.4) | Copy-edit-write or pointer values |
+| Relying on iteration order | Order changes between runs | Iterator picks random start bucket + offset each time; hash0 differs per map (Section 4.5) | Sort keys if order matters |
+| Large map never shrinks | Memory stays after mass deletion | Growth allocates a bigger bucket array (Section 4.4). Delete marks slots empty but the array stays. No reverse operation exists. | Re-create the map |
 | Map of pointers hides nil | `m[key].Field` panics if value is nil pointer | Comma-ok returns zero value (nil for pointers); dereferencing nil panics | Check with comma-ok first |
 
 **The "map never shrinks" gotcha — traced through memory:**

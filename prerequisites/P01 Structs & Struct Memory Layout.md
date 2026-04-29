@@ -151,7 +151,7 @@ One flat layout in memory — not subclassing.
 
 ### 4.4 Struct tags
 
-Those backtick strings on `User` in §4.1 are **tags**. Normal code ignores them. **`encoding/json`**, SQL helpers, and validators read them with **reflection**. JSON uses `name` on the wire; the DB column can be `full_name`. `omitempty` skips zero values in JSON output. Only **exported** fields (capital letter) participate in `json` and most scanners.
+Those backtick strings on `User` in Section 4.1 are **tags**. Normal code ignores them. **`encoding/json`**, SQL helpers, and validators read them with **reflection**. JSON uses `name` on the wire; the DB column can be `full_name`. `omitempty` skips zero values in JSON output. Only **exported** fields (capital letter) participate in `json` and most scanners.
 
 ### 4.5 Memory layout, alignment, padding
 
@@ -233,11 +233,11 @@ Compare orders by ID, or use `slices.Equal` on `Items`, or write your own helper
 
 ### Field ordering affects memory size
 
-Reorder `bool` / `int16` / `int64` in a `Config`-style struct and print `unsafe.Sizeof` — same data, smaller struct when big fields come first. Same lesson as §4.5.
+Reorder `bool` / `int16` / `int64` in a `Config`-style struct and print `unsafe.Sizeof` — same data, smaller struct when big fields come first. Same lesson as Section 4.5.
 
 ### Embedding is not inheritance
 
-Promoted methods still take the **embedded** value as the receiver (same `AuditLog` inside `APIResponse` in §4.3). No superclass, no vtable — just names lifted for convenience.
+Promoted methods still take the **embedded** value as the receiver (same `AuditLog` inside `APIResponse` in Section 4.3). No superclass, no vtable — just names lifted for convenience.
 
 ### Unexported fields stay in the package
 
@@ -256,7 +256,7 @@ func NewUser(name, hash string) User { return User{Name: name, emailHash: hash} 
 
 ### POST /users — JSON body into a struct
 
-`User` is defined once in §4.1 (HTTP + SQL tags on the same type).
+`User` is defined once in Section 4.1 (HTTP + SQL tags on the same type).
 
 ```go
 func createUser(w http.ResponseWriter, r *http.Request) {

@@ -410,7 +410,7 @@ POINTER CHAIN (every hop shown):
 
 The method works on a complete copy of the struct. Any field changes die when the method returns.
 
-**WHY (§4.2):** From §4.2, the compiler passes the struct as the first argument by value — Go copies every byte into a new stack slot. The method increments the copy's field. When the stack frame dies, the copy dies with it.
+**WHY (Section 4.2):** From Section 4.2, the compiler passes the struct as the first argument by value — Go copies every byte into a new stack slot. The method increments the copy's field. When the stack frame dies, the copy dies with it.
 
 ```go
 type BatchWriter struct {
@@ -444,7 +444,7 @@ FIX: func (w *BatchWriter) Append(line string) { w.lines = append(...) }
 
 The method receives a pointer to the original struct. Field writes go through that address and are visible to the caller.
 
-**WHY (§4.2, §4.5):** From §4.2, pointer receiver passes 8 bytes (the address). The method writes to `s.field` which the compiler turns into `*s + offset(field)` — a write to the same memory the caller holds.
+**WHY (Section 4.2, Section 4.5):** From Section 4.2, pointer receiver passes 8 bytes (the address). The method writes to `s.field` which the compiler turns into `*s + offset(field)` — a write to the same memory the caller holds.
 
 ```go
 func (o *Order) AddItem(item LineItem) {
@@ -476,7 +476,7 @@ Step 3: ord.AddItem(LineItem{SKU:"X", Qty:2}) → compiler passes &ord (0xA0)
 
 `T` can only call methods with value receivers. `*T` can call methods with both value and pointer receivers. This determines interface satisfaction.
 
-**WHY (§4.3, §4.4):** From §4.3, Go auto-inserts `&` for direct calls but NOT for interface matching. From §4.4, the interface stores a copy of `T`, which doesn't have a stable address — Go can't safely create a pointer to it.
+**WHY (Section 4.3, Section 4.4):** From Section 4.3, Go auto-inserts `&` for direct calls but NOT for interface matching. From Section 4.4, the interface stores a copy of `T`, which doesn't have a stable address — Go can't safely create a pointer to it.
 
 ```go
 type Notifier interface {
@@ -508,7 +508,7 @@ Method set lookup:
 
 You can call a method on a nil pointer. The method runs. But if it tries to read a field without checking nil first, it panics.
 
-**WHY (§4.2, §4.4 from T07):** The method receives `nil` (address 0x0) as its receiver. The call itself is fine — it's just a function call. But reading `c.items` means "read memory at 0x0 + offset" which hits unmapped memory → SIGSEGV → panic.
+**WHY (Section 4.2, Section 4.4 from T07):** The method receives `nil` (address 0x0) as its receiver. The call itself is fine — it's just a function call. But reading `c.items` means "read memory at 0x0 + offset" which hits unmapped memory → SIGSEGV → panic.
 
 ```go
 type Cart struct {
@@ -556,7 +556,7 @@ cart.FirstItemUnsafe() with nil receiver:
 
 If `Save` is `func (r *PostgresRepo)`, make `FindByID` a pointer receiver too. Mixing confuses code reviewers and creates subtle bugs where some methods see the real struct and others see a copy.
 
-**WHY (§4.4):** From §4.4, interface satisfaction depends on the method set. If you mix receivers, `PostgresRepo` might implement some interfaces but not others depending on which methods are pointer vs value. Consistency eliminates this entire class of bugs.
+**WHY (Section 4.4):** From Section 4.4, interface satisfaction depends on the method set. If you mix receivers, `PostgresRepo` might implement some interfaces but not others depending on which methods are pointer vs value. Consistency eliminates this entire class of bugs.
 
 ```go
 // WRONG: mixed receivers
@@ -874,13 +874,13 @@ func main() {
 
 ## 7. Gotchas & Interview Traps
 
-| Trap | What Happens | Because (§4 link) | Fix |
+| Trap | What Happens | Because (Section 4 link) | Fix |
 |------|-------------|-------------------|-----|
-| "I mutated in a method but nothing changed" | Value receiver copied the struct; mutation died with the copy | §4.2 — value receiver copies entire struct into new stack slot. Field writes go to the copy, not the original | Use `*Type` receiver when mutating fields |
-| Value type doesn't implement interface | Compile error: missing method | §4.4 — method set of `T` only includes value receiver methods. Pointer receiver methods are on `*T` only. Interface checks method set, not individual calls | Pass `*T` instead, or change receiver to value if the type is small and safe |
-| `v.Method()` works but `var i Interface = v` doesn't | Auto-insert of `&` only works for direct calls, not interface assignment | §4.3 — compiler rewrites `v.Method()` as `(&v).Method()` for convenience, but can't do the same for interface storage because the copy inside the interface has no stable address | Always pass `&v` into interfaces when methods use pointer receivers |
-| Nil receiver panic | Method called on nil pointer, tried to read a field | §4.3 — method call auto-inserts `&` on the nil pointer (call succeeds). But field access reads 0x0 + offset → unmapped memory → SIGSEGV. Same nil crash mechanism as T07 §4.4 | Guard with `if r == nil { return ... }` before any field access |
-| Mixed receivers on same type | Some methods see original, others see copy; interfaces partially satisfied | §4.4 + Rule 5 — method set of `T` includes only value methods, `*T` includes both. Mixed receivers create confusing partial interface matches | One style per type: pointer for service/repo types, value for tiny read-only types |
+| "I mutated in a method but nothing changed" | Value receiver copied the struct; mutation died with the copy | Section 4.2 — value receiver copies entire struct into new stack slot. Field writes go to the copy, not the original | Use `*Type` receiver when mutating fields |
+| Value type doesn't implement interface | Compile error: missing method | Section 4.4 — method set of `T` only includes value receiver methods. Pointer receiver methods are on `*T` only. Interface checks method set, not individual calls | Pass `*T` instead, or change receiver to value if the type is small and safe |
+| `v.Method()` works but `var i Interface = v` doesn't | Auto-insert of `&` only works for direct calls, not interface assignment | Section 4.3 — compiler rewrites `v.Method()` as `(&v).Method()` for convenience, but can't do the same for interface storage because the copy inside the interface has no stable address | Always pass `&v` into interfaces when methods use pointer receivers |
+| Nil receiver panic | Method called on nil pointer, tried to read a field | Section 4.3 — method call auto-inserts `&` on the nil pointer (call succeeds). But field access reads 0x0 + offset → unmapped memory → SIGSEGV. Same nil crash mechanism as T07 Section 4.4 | Guard with `if r == nil { return ... }` before any field access |
+| Mixed receivers on same type | Some methods see original, others see copy; interfaces partially satisfied | Section 4.4 + Rule 5 — method set of `T` includes only value methods, `*T` includes both. Mixed receivers create confusing partial interface matches | One style per type: pointer for service/repo types, value for tiny read-only types |
 
 ### Gotcha Deep Dive: Slice Append in Value Receiver
 

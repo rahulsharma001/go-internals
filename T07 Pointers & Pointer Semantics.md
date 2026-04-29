@@ -429,7 +429,7 @@ THREE STACK FRAMES, THREE COPIES OF THE POINTER, ONE SHARED USER:
 
 A **value receiver** gets a copy of the struct. A **pointer receiver** gets the address and can modify the original.
 
-**WHY this matters (§4.1, §4.5):** From §4.1, we know a struct might be 40+ bytes. A value receiver copies all of it into a new stack slot. A pointer receiver copies 8 bytes (the address). But more importantly — from §4.5 — only the pointer receiver writes to the *same* memory the caller holds.
+**WHY this matters (Section 4.1, Section 4.5):** From Section 4.1, we know a struct might be 40+ bytes. A value receiver copies all of it into a new stack slot. A pointer receiver copies 8 bytes (the address). But more importantly — from Section 4.5 — only the pointer receiver writes to the *same* memory the caller holds.
 
 ```go
 package main
@@ -490,7 +490,7 @@ This is the biggest pointer trap in Go when wiring handlers to interfaces.
 - Type `T` (value) can only call methods with **value receivers**
 - Type `*T` (pointer) can call methods with **both** value and pointer receivers
 
-**WHY (§4.1, §4.3):** A pointer receiver needs a *stable memory address* to write through. When you store a bare `T` inside an interface, Go might have placed it somewhere that doesn't have a stable address (e.g., a temporary copy). Go refuses to silently take its address because that would hide a heap allocation and create a pointer the caller doesn't know about.
+**WHY (Section 4.1, Section 4.3):** A pointer receiver needs a *stable memory address* to write through. When you store a bare `T` inside an interface, Go might have placed it somewhere that doesn't have a stable address (e.g., a temporary copy). Go refuses to silently take its address because that would hide a heap allocation and create a pointer the caller doesn't know about.
 
 ```go
 type UserStore interface {
@@ -544,7 +544,7 @@ WHY the compiler rejects PostgresStore{}:
 
 Before Go 1.22, the loop variable was reused across iterations. Taking its address gave you a pointer to the same slot every time.
 
-**WHY (§4.2):** `&i` gives you the address of `i`. If there's only ONE `i` variable reused across all iterations (pre-1.22 behavior), every `&i` returns the same address. After the loop, that address holds the final value.
+**WHY (Section 4.2):** `&i` gives you the address of `i`. If there's only ONE `i` variable reused across all iterations (pre-1.22 behavior), every `&i` returns the same address. After the loop, that address holds the final value.
 
 ```go
 // Go < 1.22: BUG — all pointers alias the same variable
@@ -589,7 +589,7 @@ Same bug class showed up when scanning database rows: `for rows.Next() { rows.Sc
 
 You almost never need `*UserStore` (pointer to interface). The interface value is already a small two-word container.
 
-**WHY (§4.1):** An interface value is 16 bytes: a type pointer (8B) + a data pointer (8B). It already carries a pointer to your concrete type. Adding `*` wraps a pointer around something that's already pointer-like — useless indirection.
+**WHY (Section 4.1):** An interface value is 16 bytes: a type pointer (8B) + a data pointer (8B). It already carries a pointer to your concrete type. Adding `*` wraps a pointer around something that's already pointer-like — useless indirection.
 
 ```go
 package main
@@ -641,7 +641,7 @@ Passing *UserStore: copies 8 bytes (a pointer to the 16-byte container above).
 
 Types containing `sync.Mutex` must use pointer receivers and never be passed by value. Copying a locked mutex gives you a second mutex with independent state.
 
-**WHY (§4.1, §4.5):** From §4.1, passing by value copies every byte of the struct. A `sync.Mutex` is a struct with internal state fields (lock state, waiter count). Copying those bytes creates a second, independent mutex. From §4.5, only pointer passing ensures all callers operate on the same lock.
+**WHY (Section 4.1, Section 4.5):** From Section 4.1, passing by value copies every byte of the struct. A `sync.Mutex` is a struct with internal state fields (lock state, waiter count). Copying those bytes creates a second, independent mutex. From Section 4.5, only pointer passing ensures all callers operate on the same lock.
 
 ```go
 package main
@@ -967,15 +967,15 @@ Implement **`WalkMiddleware`**: a tiny stack of `func(http.Handler) http.Handler
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Because (§4 link) | Fix |
+| Gotcha | What Happens | Because (Section 4 link) | Fix |
 |--------|-------------|-------------------|-----|
-| Nil `*User` before `json.Encode` | Panic: nil pointer dereference | §4.4 — dereferencing nil reads address 0x0, which is unmapped memory. CPU triggers SIGSEGV, Go converts to panic | Guard with `if u == nil` before encoding; return 400 early if binding produced nil |
-| Value receiver on mutex-backed cache | Two independent locks; race under load | §4.1 + §4.5 — value receiver copies every byte of the struct, including the mutex's internal state. Two goroutines each lock their own copy — no real synchronization | Pointer receivers on all methods; never pass the struct by value |
-| Comparing `*User` with `==` | Compares addresses, not fields | §4.1 — a pointer IS an address (8 bytes). `==` on two pointers checks if both hold the same address, not whether the structs they point at have equal fields | Compare IDs explicitly, or use `reflect.DeepEqual`, or dereference and compare `*a == *b` (only works if all fields are comparable) |
-| Returning typed nil `*APIError` as `error` | `if err != nil` is true even though data pointer is nil | §4.4 — the interface wraps `[type: *APIError, data: nil]`. The type slot is non-nil, so the interface is non-nil | Always `return nil` for the no-error path; never return a typed nil pointer through an interface |
-| `&i` in `for` loop (pre-Go 1.22) | Every pointer aliases the same loop variable | §4.2 — `&i` gives the address of `i`. Pre-1.22, there's ONE `i` variable reused each iteration, so every `&i` is the same address | Upgrade to Go 1.22+, or copy: `v := i; ptrs = append(ptrs, &v)` |
-| `&m["key"]` on a map value | Compile error: can't take address | §4.2 — `&` gives a stable address, but map values get relocated during growth/evacuation (runtime moves values between buckets). A pointer from `&` would become dangling after growth | Copy to local: `u := m["key"]`; edit; write back `m["key"] = u` |
-| Writing to a nil map | `panic: assignment to entry in nil map` | §4.4 — a nil pointer has no backing structure. A nil map has no underlying `hmap` allocated — no buckets to write to. Dereferencing nil storage triggers the same class of crash as nil pointer | Initialize with `make(map[K]V)` or a literal `map[K]V{}` before first store |
+| Nil `*User` before `json.Encode` | Panic: nil pointer dereference | Section 4.4 — dereferencing nil reads address 0x0, which is unmapped memory. CPU triggers SIGSEGV, Go converts to panic | Guard with `if u == nil` before encoding; return 400 early if binding produced nil |
+| Value receiver on mutex-backed cache | Two independent locks; race under load | Section 4.1 + Section 4.5 — value receiver copies every byte of the struct, including the mutex's internal state. Two goroutines each lock their own copy — no real synchronization | Pointer receivers on all methods; never pass the struct by value |
+| Comparing `*User` with `==` | Compares addresses, not fields | Section 4.1 — a pointer IS an address (8 bytes). `==` on two pointers checks if both hold the same address, not whether the structs they point at have equal fields | Compare IDs explicitly, or use `reflect.DeepEqual`, or dereference and compare `*a == *b` (only works if all fields are comparable) |
+| Returning typed nil `*APIError` as `error` | `if err != nil` is true even though data pointer is nil | Section 4.4 — the interface wraps `[type: *APIError, data: nil]`. The type slot is non-nil, so the interface is non-nil | Always `return nil` for the no-error path; never return a typed nil pointer through an interface |
+| `&i` in `for` loop (pre-Go 1.22) | Every pointer aliases the same loop variable | Section 4.2 — `&i` gives the address of `i`. Pre-1.22, there's ONE `i` variable reused each iteration, so every `&i` is the same address | Upgrade to Go 1.22+, or copy: `v := i; ptrs = append(ptrs, &v)` |
+| `&m["key"]` on a map value | Compile error: can't take address | Section 4.2 — `&` gives a stable address, but map values get relocated during growth/evacuation (runtime moves values between buckets). A pointer from `&` would become dangling after growth | Copy to local: `u := m["key"]`; edit; write back `m["key"] = u` |
+| Writing to a nil map | `panic: assignment to entry in nil map` | Section 4.4 — a nil pointer has no backing structure. A nil map has no underlying `hmap` allocated — no buckets to write to. Dereferencing nil storage triggers the same class of crash as nil pointer | Initialize with `make(map[K]V)` or a literal `map[K]V{}` before first store |
 
 ### Gotcha Deep Dive: Map Value Addressability
 

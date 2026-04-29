@@ -77,7 +77,7 @@ func Validate(email string) error {
 }
 ```
 
-You'll learn exactly *why* this happens (the two-word structure of an interface value) in §4.5 below.
+You'll learn exactly *why* this happens (the two-word structure of an interface value) in Section 4.5 below.
 
 ---
 
@@ -312,7 +312,7 @@ n2: envelope labeled "*EmailNotifier", but empty  → n2 == nil is FALSE
          ↑ the label is there, so Go says "this envelope has something"
 ```
 
-`n2` has a label stamped on it. Go considers it non-nil even though there's nothing inside. This is the **typed-nil trap**. It bites you most often when returning errors (see §4.7 below).
+`n2` has a label stamped on it. Go considers it non-nil even though there's nothing inside. This is the **typed-nil trap**. It bites you most often when returning errors (see Section 4.7 below).
 
 ---
 
@@ -326,7 +326,7 @@ type error interface {
 }
 ```
 
-That's it. Any struct that has an `Error() string` method is automatically a valid `error`. Same rule you learned in §4.2 — if you have the right methods, you're in. No `implements` keyword.
+That's it. Any struct that has an `Error() string` method is automatically a valid `error`. Same rule you learned in Section 4.2 — if you have the right methods, you're in. No `implements` keyword.
 
 You use this to create custom error types that carry structured information beyond just a message string:
 
@@ -552,7 +552,7 @@ func ParseJSONBody(r io.Reader, v any) error {
 
 This function works with an HTTP request body, a file, or a `bytes.Buffer` in tests — because they all have `Read`.
 
-**`any`** is `interface{}` — an interface with zero methods. Everything fulfills it. You see it in JSON unmarshaling (`map[string]any`), caches, and generic containers. The trade-off: you lose type safety and need type assertions to get concrete values back out (§4.8).
+**`any`** is `interface{}` — an interface with zero methods. Everything fulfills it. You see it in JSON unmarshaling (`map[string]any`), caches, and generic containers. The trade-off: you lose type safety and need type assertions to get concrete values back out (Section 4.8).
 
 ---
 
@@ -765,13 +765,13 @@ func SaveDraft(ctx context.Context, email string) error {
 
 ## 7. Gotchas & Interview Traps
 
-| # | Trap | What happens | Why (§4 link) |
+| # | Trap | What happens | Why (Section 4 link) |
 |---|------|-------------|---------------|
-| 1 | Return nil `*ValidationError` through `error` | Caller sees `err != nil` even on success | §4.7 — the interface label is set (it says `*ValidationError`), so the envelope is non-nil even though the contents are empty |
-| 2 | `v.(*User)` without comma-ok on cache `any` | Panics at runtime if wrong type | §4.8 — assertion checks the label against `*User`; mismatch with no `ok` triggers panic |
-| 3 | `BatchJob{}` assigned to `JobRunner` | Compile error | §4.9 — `Run` is defined on `*BatchJob`, not `BatchJob`; pointer receiver methods don't exist on the value type |
-| 4 | Fat interface with 8+ methods | Every test needs an 8-method mock | §4.10 — keep interfaces to 1-3 methods; define in the consumer package |
-| 5 | Comparing two interfaces holding different concrete types | `==` returns false even if the values "look the same" | §4.5 — comparison checks both label and contents; different concrete types mean different labels |
+| 1 | Return nil `*ValidationError` through `error` | Caller sees `err != nil` even on success | Section 4.7 — the interface label is set (it says `*ValidationError`), so the envelope is non-nil even though the contents are empty |
+| 2 | `v.(*User)` without comma-ok on cache `any` | Panics at runtime if wrong type | Section 4.8 — assertion checks the label against `*User`; mismatch with no `ok` triggers panic |
+| 3 | `BatchJob{}` assigned to `JobRunner` | Compile error | Section 4.9 — `Run` is defined on `*BatchJob`, not `BatchJob`; pointer receiver methods don't exist on the value type |
+| 4 | Fat interface with 8+ methods | Every test needs an 8-method mock | Section 4.10 — keep interfaces to 1-3 methods; define in the consumer package |
+| 5 | Comparing two interfaces holding different concrete types | `==` returns false even if the values "look the same" | Section 4.5 — comparison checks both label and contents; different concrete types mean different labels |
 
 ---
 

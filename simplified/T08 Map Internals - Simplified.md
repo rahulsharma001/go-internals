@@ -188,13 +188,13 @@ func (sm *SafeMap) Set(key string, val int) {
 ---
 ## Where each block lands in the full note (anchor map)
 
-- **§1** → [[T08 Map Internals#1. Concept]]
-- **§2** → [[T08 Map Internals#2. Core Insight (TL;DR)]]
-- **§3** → [[T08 Map Internals#3. Mental Model (Lock this in)]]
-- **§4** → open [[T08 Map Internals]] and go to the heading **"4. How It Actually Works (Internals)"** (the long internals walkthrough; bracket tag in the main note: intermediate to advanced)
-- **§5** → [[T08 Map Internals#5. Key Rules & Behaviors]]
-- **§6** → [[T08 Map Internals#6. Code Examples (Show, Don't Tell)]] · [[T08 Map Internals#6.5. Practice Checkpoint]]
-- **§7** → [[T08 Map Internals#7. Edge Cases & Gotchas]]
+- **Section 1** → [[T08 Map Internals#1. Concept]]
+- **Section 2** → [[T08 Map Internals#2. Core Insight (TL;DR)]]
+- **Section 3** → [[T08 Map Internals#3. Mental Model (Lock this in)]]
+- **Section 4** → open [[T08 Map Internals]] and go to the heading **"4. How It Actually Works (Internals)"** (the long internals walkthrough; bracket tag in the main note: intermediate to advanced)
+- **Section 5** → [[T08 Map Internals#5. Key Rules & Behaviors]]
+- **Section 6** → [[T08 Map Internals#6. Code Examples (Show, Don't Tell)]] · [[T08 Map Internals#6.5. Practice Checkpoint]]
+- **Section 7** → [[T08 Map Internals#7. Edge Cases & Gotchas]]
 
 Interview-first chapters **10–12** in the main file add drills, one-liners, and the big question bank; **section 13** points to the full `[[questions/T08 Map Internals - Interview Questions]]` file.
 

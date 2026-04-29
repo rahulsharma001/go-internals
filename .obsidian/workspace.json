@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T10 Defer, Panic & Recover Internals.md",
+                "file": "Daily Revision.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T10 Defer, Panic & Recover Internals"
+              "title": "Daily Revision"
             }
           }
         ]
@@ -197,6 +197,7 @@
   "active": "b48d0a8de349e84d",
   "lastOpenFiles": [
     "Study Plan.md",
+    "T10 Defer, Panic & Recover Internals.md",
     "Roadmap.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
     "T01 Go Type System & Value Semantics.md",
@@ -221,7 +222,6 @@
     "prerequisites/P09 GC Basics & Why It Matters.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
-    "prerequisites/P02 Methods & Receivers.md",
     "prerequisites",
     "visuals",
     "revision",

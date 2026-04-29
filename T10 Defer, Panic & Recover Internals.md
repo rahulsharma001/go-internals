@@ -531,7 +531,7 @@ PANIC path (something truly broke):
 
 ### Rule 1: Defer Arguments Are Evaluated at the `defer` Line, Not at Exit Time
 
-**WHY (§4.2):** From §4.2, the runtime creates a `_defer` record with snapshotted argument values. The record stores copies of the evaluated expressions, not references to variables.
+**WHY (Section 4.2):** From Section 4.2, the runtime creates a `_defer` record with snapshotted argument values. The record stores copies of the evaluated expressions, not references to variables.
 
 ```go
 func main() {
@@ -558,7 +558,7 @@ A phone order is taken the moment you say `defer` — the kitchen writes down "n
 
 ### Rule 2: LIFO — Last `defer` Registered Runs First
 
-**WHY (§4.1):** From §4.1, each `defer` pushes to the FRONT of the linked list. Walking the list from front to back means the newest runs first.
+**WHY (Section 4.1):** From Section 4.1, each `defer` pushes to the FRONT of the linked list. Walking the list from front to back means the newest runs first.
 
 ```go
 func main() {
@@ -584,7 +584,7 @@ The last Post-It you stack on the pile is the first one you peel when you clean 
 
 ### Rule 3: Named Return Values Can Be Written by Deferred Functions
 
-**WHY (§4.3):** From §4.3, `return expr` assigns to the named variable first, then defers run. The closure captures the named variable by reference, so it can read and write the current value.
+**WHY (Section 4.3):** From Section 4.3, `return expr` assigns to the named variable first, then defers run. The closure captures the named variable by reference, so it can read and write the current value.
 
 ```go
 func addErrorContext() (err error) {
@@ -625,7 +625,7 @@ A named return is a labeled mailbox. The defer can open it and relabel the conte
 
 ### Rule 4: `recover` Must Be Called Inside a Deferred Function
 
-**WHY (§4.4):** From §4.4, `recover()` only works during panic unwinding when called from a deferred function. Called anywhere else, it returns `nil`. The runtime checks: "am I currently executing a deferred function during a panic unwind?" If not, recover is a no-op.
+**WHY (Section 4.4):** From Section 4.4, `recover()` only works during panic unwinding when called from a deferred function. Called anywhere else, it returns `nil`. The runtime checks: "am I currently executing a deferred function during a panic unwind?" If not, recover is a no-op.
 
 ```go
 // BROKEN: recover not in defer
@@ -673,7 +673,7 @@ The fire extinguisher must be mounted ON the door (directly in the defer). If yo
 
 ### Rule 5: Panics Are Goroutine-Isolated — Parent Cannot Catch Child
 
-**WHY (§4.5):** From §4.5, each goroutine has its own defer chain. The runtime walks only the panicking goroutine's chain. The parent goroutine's chain is on a separate linked list that is never consulted during the child's panic.
+**WHY (Section 4.5):** From Section 4.5, each goroutine has its own defer chain. The runtime walks only the panicking goroutine's chain. The parent goroutine's chain is on a separate linked list that is never consulted during the child's panic.
 
 ```go
 func main() {
@@ -897,7 +897,7 @@ Panicking request:
   recover() intercepts → server stays alive
 
 LIMITATION: if the handler spawns a goroutine and THAT panics,
-this recover does NOT catch it (§4.5 — goroutine isolation).
+this recover does NOT catch it (Section 4.5 — goroutine isolation).
 The spawned goroutine must have its own defer+recover.
 ```
 
@@ -928,7 +928,7 @@ func main() { fmt.Println(f()) }
 > 3. The closure does `x += 1`, changing `x` from 10 to 11
 > 4. The function returns the current value of `x`, which is now 11
 >
-> This works because `x` is a **named return value** — it lives in the stack frame and defer can modify it after `return` sets it but before the function exits (§4.3).
+> This works because `x` is a **named return value** — it lives in the stack frame and defer can modify it after `return` sets it but before the function exits (Section 4.3).
 
 ### Tier 2: Fix the bug (5 min)
 
@@ -949,7 +949,7 @@ You have a `defer` **inside a `for` loop** over database connections (like `Proc
 >     if err != nil { return err }
 > }
 > ```
-> Or extract `func processOneOrder(ctx context.Context, db *sql.DB, ord Order) error` and call it from the loop. The key: defer binds to the enclosing FUNCTION, not the loop iteration (§4.1).
+> Or extract `func processOneOrder(ctx context.Context, db *sql.DB, ord Order) error` and call it from the loop. The key: defer binds to the enclosing FUNCTION, not the loop iteration (Section 4.1).
 
 ### Tier 3: Build it (15 min)
 
@@ -961,15 +961,15 @@ Build a small **`StartWorker(fn func())` helper** that **starts `fn` in a new go
 
 ## 7. Edge Cases & Gotchas
 
-| Gotcha | What Happens | Because (§4 link) | Fix |
+| Gotcha | What Happens | Because (Section 4 link) | Fix |
 |--------|-------------|-------------------|-----|
-| `defer` in a `for` loop | All N defers fire at outer function return, not per iteration. N connections/files stay open simultaneously | §4.1 — defer pushes to the function's chain, not the loop's. The chain only runs when the function exits | Wrap loop body in IIFE or extract to helper function so each iteration is a separate function scope |
-| `recover()` outside `defer` | Returns `nil` — no panic is caught | §4.4 — runtime only honors recover() when called directly inside a deferred function during panic unwind | Always use `defer func() { if v := recover(); ... }()` pattern |
-| `recover()` in nested function inside defer | Returns `nil` — wrong call depth | §4.4 — recover must be at depth 1 from the deferred function, not depth 2+ | Call recover() directly in the `defer func()` body, not in a helper |
-| Parent tries to catch child goroutine's panic | Unrecovered panic crashes the entire program | §4.5 — each goroutine has its own defer chain. Parent's chain is never consulted for child's panic | Child must carry its own defer+recover and send errors on a channel |
-| `os.Exit(n)` bypasses all defers | Deferred functions never run — process terminates immediately | §4.1 — os.Exit calls the OS exit syscall directly. The runtime doesn't walk the defer chain | Return from main() instead, or do explicit cleanup before os.Exit |
-| `defer` in `init()` | Defers run when `init` ends, not at program shutdown | §4.1 — defer binds to the enclosing function. `init` is a function that runs once at startup | Don't use init() defers for global cleanup. Use explicit shutdown hooks |
-| Closure vs argument in `defer` | Closure reads current value at exit; argument reads snapshot from defer line | §4.2 — arguments are evaluated and copied into the _defer record immediately. Closures capture variable references | Use `defer f(x)` for snapshots; use `defer func() { f(x) }()` when you need the latest value |
+| `defer` in a `for` loop | All N defers fire at outer function return, not per iteration. N connections/files stay open simultaneously | Section 4.1 — defer pushes to the function's chain, not the loop's. The chain only runs when the function exits | Wrap loop body in IIFE or extract to helper function so each iteration is a separate function scope |
+| `recover()` outside `defer` | Returns `nil` — no panic is caught | Section 4.4 — runtime only honors recover() when called directly inside a deferred function during panic unwind | Always use `defer func() { if v := recover(); ... }()` pattern |
+| `recover()` in nested function inside defer | Returns `nil` — wrong call depth | Section 4.4 — recover must be at depth 1 from the deferred function, not depth 2+ | Call recover() directly in the `defer func()` body, not in a helper |
+| Parent tries to catch child goroutine's panic | Unrecovered panic crashes the entire program | Section 4.5 — each goroutine has its own defer chain. Parent's chain is never consulted for child's panic | Child must carry its own defer+recover and send errors on a channel |
+| `os.Exit(n)` bypasses all defers | Deferred functions never run — process terminates immediately | Section 4.1 — os.Exit calls the OS exit syscall directly. The runtime doesn't walk the defer chain | Return from main() instead, or do explicit cleanup before os.Exit |
+| `defer` in `init()` | Defers run when `init` ends, not at program shutdown | Section 4.1 — defer binds to the enclosing function. `init` is a function that runs once at startup | Don't use init() defers for global cleanup. Use explicit shutdown hooks |
+| Closure vs argument in `defer` | Closure reads current value at exit; argument reads snapshot from defer line | Section 4.2 — arguments are evaluated and copied into the _defer record immediately. Closures capture variable references | Use `defer f(x)` for snapshots; use `defer func() { f(x) }()` when you need the latest value |
 
 ### Gotcha Deep Dive: `os.Exit` Skips All Defers
 

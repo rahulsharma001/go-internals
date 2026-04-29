@@ -293,7 +293,7 @@ You still need the mental model when:
 
 ## 6. Code Examples (Show, Don't Tell)
 
-The backend-shaped examples live in §4: `AuthMiddleware(secret)`, `NewUserHandler` (handler closes over `*sql.DB` and logger), `WithRetry` with a caller-built `fn`, `NewTenantLimiter`, plus the job loop and defer pattern in §5. No extra toy `apply`/`twice` snippets — same spirit as the rest of this series.
+The backend-shaped examples live in Section 4: `AuthMiddleware(secret)`, `NewUserHandler` (handler closes over `*sql.DB` and logger), `WithRetry` with a caller-built `fn`, `NewTenantLimiter`, plus the job loop and defer pattern in Section 5. No extra toy `apply`/`twice` snippets — same spirit as the rest of this series.
 
 ---
 

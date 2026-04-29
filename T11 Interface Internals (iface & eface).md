@@ -460,7 +460,7 @@ f, bad := i.(float64) // 0, false — no panic
 // x := i.(string)   // WOULD panic
 ```
 
-Minimal **typed-nil** trace (same mechanics as **§3**’s `getUserHandler`): `var err error = (*NotFoundError)(nil)` → `iface{ tab: live, data: nil }` → `err != nil` is **true**.
+Minimal **typed-nil** trace (same mechanics as **Section 3**’s `getUserHandler`): `var err error = (*NotFoundError)(nil)` → `iface{ tab: live, data: nil }` → `err != nil` is **true**.
 
 ## 6.5. Practice Checkpoint
 
