@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "revision/T08 Map Internals - Revision.md",
+                "file": "T01 Go Type System & Value Semantics.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -28,7 +28,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T08 Map Internals - Revision"
+              "title": "T01 Go Type System & Value Semantics"
             }
           },
           {
@@ -245,18 +245,19 @@
   },
   "active": "0e6e5dd9b5a60122",
   "lastOpenFiles": [
+    "T01 Go Type System & Value Semantics.md",
+    "revision/T01 Go Type System & Value Semantics - Revision.md",
+    "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
+    "revision/T08 Map Internals - Revision.md",
+    "prerequisites/P05 Interfaces Basics.md",
     "Study Plan.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "T13 Goroutine Internals.md",
-    "revision/T08 Map Internals - Revision.md",
     "Daily Revision.md",
     "T10 Defer, Panic & Recover Internals.md",
     "Roadmap.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
-    "T01 Go Type System & Value Semantics.md",
-    "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
-    "revision/T01 Go Type System & Value Semantics - Revision.md",
     "revision/T02 Go Memory Allocation & Value Semantics - Revision.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
     "T09 Error Handling Patterns.md",
@@ -269,7 +270,6 @@
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "questions/T08 Map Internals - Interview Questions.md",
-    "prerequisites/P05 Interfaces Basics.md",
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
     "prerequisites",
     "visuals",
