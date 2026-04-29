@@ -32,30 +32,6 @@
             }
           },
           {
-            "id": "0683ab118d67e9df",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Study Plan.md",
-                "mode": "source",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
-              "icon": "lucide-file",
-              "title": "Study Plan"
-            }
-          },
-          {
             "id": "a300f48be971f6f0",
             "type": "leaf",
             "state": {
@@ -77,6 +53,30 @@
               },
               "icon": "lucide-file",
               "title": "P03 Mutex & Concurrency Safety Basics"
+            }
+          },
+          {
+            "id": "0e6e5dd9b5a60122",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "prerequisites/P05 Interfaces Basics.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "P05 Interfaces Basics"
             }
           }
         ],
@@ -243,12 +243,14 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "a300f48be971f6f0",
+  "active": "0e6e5dd9b5a60122",
   "lastOpenFiles": [
+    "Study Plan.md",
+    "prerequisites/P07 Functions, Closures & Variable Capture.md",
+    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
+    "T13 Goroutine Internals.md",
     "revision/T08 Map Internals - Revision.md",
     "Daily Revision.md",
-    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
-    "Study Plan.md",
     "T10 Defer, Panic & Recover Internals.md",
     "Roadmap.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
@@ -269,8 +271,6 @@
     "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites/P05 Interfaces Basics.md",
     "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
-    "prerequisites/P09 GC Basics & Why It Matters.md",
-    "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites",
     "visuals",
     "revision",

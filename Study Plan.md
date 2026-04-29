@@ -54,7 +54,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 - [x] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
 - [x] [[prerequisites/P02 Methods & Receivers]] (~25 min)
-- [ ] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
+- [x] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
 - [x] [[prerequisites/P04 Hash Functions & Hashing Basics]] (~15 min)
 - [ ] [[prerequisites/P05 Interfaces Basics]] (~20 min)
 - [x] [[prerequisites/P06 Function Call Stack]] (~15 min)
