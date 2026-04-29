@@ -62,7 +62,7 @@
               "type": "markdown",
               "state": {
                 "file": "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
-                "mode": "source",
+                "mode": "preview",
                 "source": false,
                 "backlinks": true,
                 "backlinkOpts": {
