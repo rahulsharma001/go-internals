@@ -93,8 +93,8 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Prerequisites (complete these first):**
 
-- [ ] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
-- [ ] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
+- [x] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
+- [x] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
 
 > P03 (Mutex basics) and P06 (Call Stack) were completed in Week 1-2.
 
