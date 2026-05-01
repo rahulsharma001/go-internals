@@ -14,6 +14,7 @@ Complete these before this topic:
 
 - [[prerequisites/P06 Function Call Stack]]
 - [[prerequisites/P07 Functions, Closures & Variable Capture]]
+- [[prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics]]
 
 ---
 

@@ -93,14 +93,15 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 
 **Prerequisites (complete these first):**
 
-- [x] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
-- [x] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
+- [ ] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
+- [ ] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
+- [ ] [[prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics]] (~25 min)
 
 > P03 (Mutex basics) and P06 (Call Stack) were completed in Week 1-2.
 
 **Topics:**
 
-- [ ] [[T13 Goroutine Internals]] (~2 hrs) -- needs P06, P07
+- [ ] [[T13 Goroutine Internals]] (~2 hrs) -- needs P06, P07, P10
 - [ ] [[T14 GMP Scheduler]] (~2 hrs) -- needs P08
 - [ ] [[T15 Channel Internals]] (~2 hrs)
 - [ ] [[T16 Buffered vs Unbuffered Channels]] (~1 hrs)

@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T13 Goroutine Internals.md",
+                "file": "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T13 Goroutine Internals"
+              "title": "P10 OS Threads, Processes, and Go Scheduling Basics"
             }
           }
         ],
@@ -269,9 +269,10 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "T13 Goroutine Internals.md",
+    "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
     "Study Plan.md",
     "T01 Go Type System & Value Semantics.md",
-    "T13 Goroutine Internals.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites/P05 Interfaces Basics.md",
     "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
@@ -294,7 +295,6 @@
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "questions/T08 Map Internals - Interview Questions.md",
-    "questions/T07 Pointers & Pointer Semantics - Interview Questions.md",
     "prerequisites",
     "visuals",
     "revision",
