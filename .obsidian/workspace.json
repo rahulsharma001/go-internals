@@ -269,8 +269,9 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
-    "T13 Goroutine Internals.md",
+    "prerequisites/P08 OS Threads vs Green Threads.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
+    "T13 Goroutine Internals.md",
     "Study Plan.md",
     "T01 Go Type System & Value Semantics.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
@@ -294,7 +295,6 @@
     "exercises/T08 Map Internals - Exercises.md",
     "T07 Pointers & Pointer Semantics.md",
     "prerequisites/P04 Hash Functions & Hashing Basics.md",
-    "questions/T08 Map Internals - Interview Questions.md",
     "prerequisites",
     "visuals",
     "revision",
