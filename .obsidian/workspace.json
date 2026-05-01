@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P10 OS Threads, Processes, and Go Scheduling Basics"
+              "title": "Study Plan"
             }
           }
         ],
@@ -269,8 +269,12 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
-    "Study Plan.md",
+    "questions/Week 1 MCQ - Foundations (T07-T09).md",
+    "T14 GMP Scheduler.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
+    "questions/Week 2 MCQ - Foundations (T10-T12).md",
+    "questions/T14 GMP Scheduler - Interview Questions.md",
+    "Study Plan.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "T13 Goroutine Internals.md",
     "T01 Go Type System & Value Semantics.md",
@@ -291,10 +295,6 @@
     "visuals/T05 GIN Framework - Visual Map.md",
     "visuals/T09 Error Handling Patterns - Visual Map.md",
     "visuals/T08 Map Internals - Visual Map.md",
-    "prerequisites/P06 Function Call Stack.md",
-    "exercises/T08 Map Internals - Exercises.md",
-    "T07 Pointers & Pointer Semantics.md",
-    "prerequisites/P04 Hash Functions & Hashing Basics.md",
     "prerequisites",
     "visuals",
     "revision",

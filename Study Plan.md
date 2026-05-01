@@ -76,6 +76,9 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 - Update resume with Go-specific bullet points
 - Apply to 10-15 companies (LinkedIn, Naukri, direct)
 - Schedule first interviews for week 3 (use early ones as practice)
+- Daily MCQ drill (10-15 min):
+  - Week 1 topics (T07-T09) -> [[questions/Week 1 MCQ - Foundations (T07-T09)]]
+  - Week 2 topics (T10-T12) -> [[questions/Week 2 MCQ - Foundations (T10-T12)]]
 
 **By end of week 2, you should be able to answer:**
 1. "When should you use a pointer receiver vs a value receiver?" (T07)
