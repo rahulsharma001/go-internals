@@ -269,10 +269,10 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
-    "prerequisites/P08 OS Threads vs Green Threads.md",
-    "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
-    "T13 Goroutine Internals.md",
     "Study Plan.md",
+    "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
+    "prerequisites/P08 OS Threads vs Green Threads.md",
+    "T13 Goroutine Internals.md",
     "T01 Go Type System & Value Semantics.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "prerequisites/P05 Interfaces Basics.md",

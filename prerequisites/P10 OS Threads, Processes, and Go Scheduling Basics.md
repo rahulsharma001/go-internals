@@ -500,6 +500,298 @@ Walkthrough:
   5) DB reply arrives -> original goroutine resumes -> response sent
 ```
 
+### Example D: Go concurrency program #1 (I/O-style waiting) with comments on each line
+
+```go
+package main // declares the executable package
+
+import ( // imports packages used by this file
+	"fmt"     // prints logs to stdout
+	"runtime" // reads and sets Go scheduler settings
+	"sync"    // provides WaitGroup for goroutine coordination
+	"time"    // provides sleep/timing utilities
+)
+
+func fakeDBCall(id int) string { // simulates a blocking I/O call
+	time.Sleep(150 * time.Millisecond) // parks this goroutine while timer/network-like wait happens
+	return fmt.Sprintf("user-%d", id)  // returns fake data after wait
+}
+
+func main() { // process entrypoint after runtime startup
+	fmt.Println("start: goroutines =", runtime.NumGoroutine()) // prints initial goroutine count
+	fmt.Println("GOMAXPROCS =", runtime.GOMAXPROCS(0))         // reads current parallel CPU lane count
+
+	var wg sync.WaitGroup // tracks child goroutines so main waits correctly
+
+	for i := 1; i <= 5; i++ { // creates 5 concurrent request-like tasks
+		wg.Add(1) // increments wait counter before starting goroutine
+
+		id := i // creates per-iteration copy to avoid closure capture confusion
+
+		go func() { // starts a new goroutine (G) managed by Go scheduler
+			defer wg.Done() // decrements wait counter when this goroutine exits
+
+			fmt.Println("start task", id) // logs start of this goroutine's work
+
+			user := fakeDBCall(id) // goroutine parks during sleep (simulated DB wait)
+
+			fmt.Println("done task", id, "->", user) // logs completion after resume
+		}() // immediately invokes anonymous function as goroutine body
+	}
+
+	wg.Wait() // blocks main goroutine until all child goroutines finish
+
+	fmt.Println("end: goroutines =", runtime.NumGoroutine()) // should return near initial count
+}
+```
+
+#### When you run it with `go run` (full cycle, step by step)
+
+```text
+Step 1: Shell executes `go run main.go`.
+  - `go` tool compiles source to a temporary binary.
+  - linker creates executable with Go runtime included.
+
+Step 2: OS starts a new process for that binary.
+  - process gets virtual memory space (code, heap, stacks).
+  - initial OS thread is created by OS for process startup.
+
+Step 3: Go runtime bootstrap runs before your main().
+  - runtime initializes scheduler internals.
+  - runtime reads CPU count and sets GOMAXPROCS default.
+  - runtime creates initial scheduler state (G/M/P structures).
+
+Step 4: runtime starts main goroutine (G_main) on an M with an attached P.
+  - your main() begins executing.
+  - `runtime.GOMAXPROCS(0)` reads already-initialized value.
+
+Step 5: loop launches 5 goroutines.
+  - each `go func` creates a new G and puts it in runnable queue.
+  - available Ms with Ps pick runnable Gs.
+
+Step 6: goroutines call `fakeDBCall` -> `time.Sleep`.
+  - each sleeping goroutine transitions to waiting (parked).
+  - OS thread M is not blocked permanently by that goroutine.
+  - M runs other runnable goroutines.
+
+Step 7: timer events fire after ~150ms.
+  - parked goroutines become runnable again.
+  - scheduler queues them; Ms pick and resume execution.
+
+Step 8: goroutines print results and exit.
+  - deferred `wg.Done()` executes on each goroutine exit.
+  - wait counter reaches zero.
+
+Step 9: main goroutine unblocks from `wg.Wait()`, prints final line, returns.
+  - process exits when no non-daemon Go work remains.
+  - OS reclaims process resources.
+```
+
+### Example E: Go concurrency program #2 (CPU-bound work + GOMAXPROCS) with comments on each line
+
+```go
+package main // executable package
+
+import ( // imports needed packages
+	"fmt"     // print logs
+	"runtime" // scheduler/CPU controls
+	"sync"    // WaitGroup sync
+	"time"    // timing helper for rough benchmark
+)
+
+func cpuWork(n int) int { // CPU-heavy function to show parallel lane limits
+	sum := 0 // local accumulator on goroutine stack
+	for i := 0; i < n; i++ { // tight CPU loop
+		sum += (i % 7) * (i % 11) // arithmetic keeps CPU busy
+	}
+	return sum // returns computed result
+}
+
+func main() { // entrypoint
+	runtime.GOMAXPROCS(2) // explicitly sets two parallel execution lanes for Go code
+	fmt.Println("GOMAXPROCS set to", runtime.GOMAXPROCS(0)) // verifies current setting
+
+	start := time.Now() // captures start time for elapsed measurement
+
+	var wg sync.WaitGroup // tracks worker completion
+	results := make([]int, 4) // shared result slice allocated on heap
+
+	for w := 0; w < 4; w++ { // starts 4 CPU-bound goroutines
+		wg.Add(1) // increments wait counter
+		idx := w // capture safe index copy
+
+		go func() { // worker goroutine body
+			defer wg.Done() // decrements counter on exit
+			results[idx] = cpuWork(20_000_000) // runs CPU-heavy function
+		}() // launches goroutine
+	}
+
+	wg.Wait() // waits until all CPU workers finish
+
+	fmt.Println("elapsed:", time.Since(start)) // reports runtime
+	fmt.Println("sample result:", results[0])  // prevents optimization-elision confusion
+}
+```
+
+#### When you run this Go CPU example (how threads pick work)
+
+```text
+Step 1: `go run` compiles + links + launches process (same startup flow as Example D).
+
+Step 2: runtime sets up scheduler.
+  - you override default with `runtime.GOMAXPROCS(2)`.
+  - this means at most two Ms run Go code in parallel at once.
+
+Step 3: main goroutine launches 4 worker goroutines.
+  - 4 goroutines become runnable.
+  - only two can execute simultaneously (because GOMAXPROCS=2).
+  - remaining runnable goroutines wait in run queues.
+
+Step 4: as one running goroutine yields/completes time slice, scheduler picks next runnable one.
+  - execution interleaves among all 4 workers.
+  - true parallel execution lanes remain capped at 2.
+
+Step 5: all workers eventually finish; `wg.Wait` unblocks; process exits.
+
+Key learning:
+  - Goroutine count (4 here, or 100k elsewhere) is not the same as parallel CPU lanes.
+  - GOMAXPROCS controls parallel Go execution capacity.
+```
+
+### Example F: C++ concurrency example (thread pool style) with comments on each line
+
+```cpp
+#include <condition_variable> // thread wait/notify primitive
+#include <functional>         // std::function for generic tasks
+#include <iostream>           // console output
+#include <mutex>              // std::mutex and std::unique_lock
+#include <queue>              // task queue container
+#include <thread>             // std::thread
+#include <vector>             // worker thread storage
+
+int main() { // process entrypoint
+    std::queue<std::function<void()>> tasks; // shared task queue
+    std::mutex mtx;                          // protects queue and stop flag
+    std::condition_variable cv;              // wakes sleeping workers when tasks arrive
+    bool stop = false;                       // signals worker shutdown
+
+    const int workerCount = 3;               // fixed OS thread pool size
+    std::vector<std::thread> workers;        // owns worker threads
+    workers.reserve(workerCount);            // avoids vector realloc moves
+
+    for (int i = 0; i < workerCount; ++i) {  // creates worker OS threads
+        workers.emplace_back([&]() {         // thread entry lambda
+            while (true) {                   // worker loop
+                std::function<void()> task;  // local holder for one task
+
+                { // start critical section
+                    std::unique_lock<std::mutex> lock(mtx); // lock shared state
+
+                    cv.wait(lock, [&]() { // sleep thread until task exists or stop is true
+                        return stop || !tasks.empty();
+                    });
+
+                    if (stop && tasks.empty()) { // graceful shutdown condition
+                        return;                  // exits this worker thread
+                    }
+
+                    task = std::move(tasks.front()); // take next task from queue
+                    tasks.pop();                     // remove consumed task
+                } // end critical section (unlock mutex)
+
+                task(); // execute task outside lock for better concurrency
+            }
+        });
+    }
+
+    for (int j = 1; j <= 6; ++j) { // produce 6 tasks
+        { // lock scope for queue push
+            std::lock_guard<std::mutex> lock(mtx); // lock queue
+            tasks.push([j]() {                     // enqueue one work item
+                std::cout << "task " << j          // print task id
+                          << " on thread "         // print execution context text
+                          << std::this_thread::get_id()
+                          << "\n";
+            });
+        } // unlock queue
+        cv.notify_one(); // wake one sleeping worker thread
+    }
+
+    { // begin shutdown signal section
+        std::lock_guard<std::mutex> lock(mtx); // lock shared stop flag
+        stop = true;                           // tell workers to exit when queue drains
+    } // unlock
+    cv.notify_all(); // wake all workers so they can observe stop signal
+
+    for (auto& t : workers) { // join all worker threads
+        t.join();              // blocks until thread completes
+    }
+
+    std::cout << "all tasks complete\n"; // final status line
+    return 0; // process exits
+}
+```
+
+#### When C++ concurrency program runs (full cycle)
+
+```text
+Step 1: You compile binary (e.g. g++) and run executable.
+  - OS starts process and initial main thread.
+
+Step 2: `std::thread` creation asks OS for native threads.
+  - each worker is a real kernel-scheduled OS thread.
+  - each thread gets its own thread stack.
+
+Step 3: workers block on `condition_variable::wait`.
+  - blocked workers sleep at OS level until notified.
+
+Step 4: main thread pushes tasks, calls `notify_one`.
+  - one worker wakes, locks queue, pops task, executes.
+  - OS scheduler decides which worker thread runs on which core.
+
+Step 5: when all tasks dispatched, main sets stop=true and `notify_all`.
+  - workers wake, see stop condition after queue drains, exit.
+
+Step 6: main calls `join` on all worker threads and exits process.
+
+Key contrast with Go:
+  - C++ worker threads here are direct OS threads.
+  - Go goroutines are runtime tasks multiplexed over fewer OS threads.
+```
+
+### Go vs C++ quick comparison (for interview answers)
+
+| Dimension | Go goroutines | C++ `std::thread` model |
+|---|---|---|
+| Unit you create directly | goroutine (`go`) | OS thread (`std::thread`) |
+| Who schedules units | Go runtime + OS threads | OS scheduler directly on threads |
+| Typical scale | very high task count | lower thread count, often pooled |
+| Waiting I/O behavior | goroutine parks, thread reused | thread usually blocked unless async framework used |
+| Complexity | easier default concurrency ergonomics | powerful but more manual control burden |
+
+### 60-second side-by-side execution timeline (memorize this)
+
+```text
+Go (`go run main.go`)                            C++ (`./app`)
+----------------------------------------         ----------------------------------------
+1) Tool compiles + links binary                  1) Binary already compiled (or compile first)
+2) OS starts process + initial OS thread         2) OS starts process + main OS thread
+3) Go runtime bootstraps G/M/P scheduler         3) No language runtime scheduler layer by default
+4) main goroutine starts on M+P                  4) main thread runs main()
+5) `go` creates many goroutines (G)              5) `std::thread` creates real OS threads
+6) Gs enter runtime run queues                   6) Threads enter OS runnable/blocked states
+7) Ms pick runnable Gs via Ps                    7) OS scheduler picks threads directly
+8) I/O wait -> goroutine parks                   8) I/O wait -> thread often blocks
+9) M immediately runs another G                  9) Blocked thread cannot run other task
+10) event arrives -> G runnable -> resume        10) event arrives -> same thread wakes/resumes
+11) all Gs done -> process exits                 11) join threads -> process exits
+```
+
+Fast memory hook:
+
+- **Go:** "tasks are cheap; threads are reused."
+- **C++ threads:** "threads are the tasks unless you build your own task runtime."
+
 ---
 
 ## 6.5. Practice Checkpoint
