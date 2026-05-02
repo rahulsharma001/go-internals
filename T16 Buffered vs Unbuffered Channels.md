@@ -474,7 +474,7 @@ func main() {
 > ```
 > (five lines, order nondeterministic; at most two goroutines print at a time)
 > ```
-> **Why:** Semaphore — only two struct{}{} tokens in the buffer "available" for concurrent holders; others block on `sem <-` until someone runs `defer` release. Section 4.5.
+> **Why:** Bounded channel as semaphore — at most two goroutines hold `sem <-` at once before others block on acquire. Section 4.5.
 
 ---
 
@@ -600,14 +600,14 @@ close(ch)
 **Scenario 2:** Teammate wants **buffer 1_000_000**.
 
 > [!success]- Model Answer
-> **Memory hazard + delayed alerting** — right-size against SLA; consider **external broker**.**
+> **Memory hazard + delayed alerting** — right-size against SLA; consider **external broker**.
 
 ---
 
 **Scenario 3:** Strict parent waits **two children** — channel design?
 
 > [!success]- Model Answer
-> **`sync.WaitGroup`** or **`done := make(chan struct{})`** twice — simplicity beats clever buffer sizing.**
+> **`sync.WaitGroup`** or **`done := make(chan struct{})`** twice — simplicity beats clever buffer sizing.
 
 ---
 
@@ -722,13 +722,13 @@ func BenchmarkBuffered(b *testing.B) {
 
 **Q3:** Channel vs mutex?
 
-**Answer:** Channel **includes** mutex-style locking internally for `hchan` fields.** Mutex wins for tiny shared state; channel wins for **staging work** between goroutines.**
+**Answer:** Channel **includes** mutex-style locking internally for `hchan` fields. Mutex wins for tiny shared state; channel wins for **staging work** between goroutines.
 
 ---
 
 ## 12. Final Verbal Answer
 
-If someone asks me buffered vs unbuffered, I'd say it's the same runtime channel with different **`dataqsiz`**. Zero means **no `buf`** — sends and receives **meet in the middle** or block. Non-zero means **up to k values** sit in memory between sides — sends block when **full**, receives when **empty**. Closing works the same; buffered just might still have values to drain.** I use unbuffered when I care about **who was ready when**, and buffered when I need **bounded decoupling** — and I'm careful with huge buffers because they **lie** about how healthy the consumer is until they **can't** anymore.
+If someone asks me buffered vs unbuffered, I'd say it's the same runtime channel with different **`dataqsiz`**. Zero means **no `buf`** — sends and receives **meet in the middle** or block. Non-zero means **up to k values** sit in memory between sides — sends block when **full**, receives when **empty**. Closing works the same; buffered might still hold values until you drain them. I use unbuffered when I care about **who was ready when**, and buffered when I need **bounded decoupling**. I'm careful with huge buffers because they hide an unhealthy consumer until they cannot anymore.
 
 ---
 
