@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Study Plan.md",
+                "file": "questions/Week 1 MCQ - Foundations (T07-T09).md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Study Plan"
+              "title": "Week 1 MCQ - Foundations (T07-T09)"
             }
           }
         ],
@@ -269,12 +269,14 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "Study Plan.md",
+    "questions/T15 Channel Internals - Interview Questions.md",
+    "T15 Channel Internals.md",
     "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "T14 GMP Scheduler.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
     "questions/Week 2 MCQ - Foundations (T10-T12).md",
     "questions/T14 GMP Scheduler - Interview Questions.md",
-    "Study Plan.md",
     "prerequisites/P08 OS Threads vs Green Threads.md",
     "T13 Goroutine Internals.md",
     "T01 Go Type System & Value Semantics.md",
@@ -293,8 +295,6 @@
     "T09 Error Handling Patterns.md",
     "T08 Map Internals.md",
     "visuals/T05 GIN Framework - Visual Map.md",
-    "visuals/T09 Error Handling Patterns - Visual Map.md",
-    "visuals/T08 Map Internals - Visual Map.md",
     "prerequisites",
     "visuals",
     "revision",

@@ -187,6 +187,8 @@ Greq_501 -> runnable queue
 M with P picks Greq_501 and resumes
 ```
 
+> **In plain English:** GMP is like a dispatch desk in a hospital. Patients are goroutines, doctors are OS threads, and treatment rooms are Ps. If one doctor gets stuck on one patient for a long procedure, the room is reassigned so the rest of the queue keeps moving.
+
 ---
 
 ## 5. Key Rules & Behaviors
@@ -347,26 +349,28 @@ Observe how scheduler keeps system responsive.
 
 ## 8. Performance & Tradeoffs
 
-Scheduler design tradeoffs:
+Your API gateway does 2,500 requests per second. Each request fans out to user-service, order-service, and payment-service.  
+Your real question is not "Is GMP good?" Your real question is "Will scheduler behavior stay stable when latency spikes?"
 
-| Decision | Benefit | Cost |
-|---|---|---|
-| per-P local queues | low contention, better cache locality | balancing logic needed |
-| work stealing | better core utilization | stealing overhead |
-| syscall handoff | avoids global stalls | more runtime complexity |
-| preemption | fairness and latency control | interrupt bookkeeping |
+| Pattern | What it costs | You'd see this in... | Verdict |
+|---|---|---|---|
+| per-P local queue first | very low queue lock pressure | steady multi-core request load | ✅ strong default |
+| global queue fallback | occasional shared queue contention | bursty traffic when many goroutines spawn at once | ✅ needed for fairness |
+| work stealing | steal bookkeeping overhead | one core idle, another overloaded | ✅ worth it for balance |
+| syscall handoff (P detached from blocked M) | handoff coordination overhead | DB or network stalls in hot handlers | ✅ critical for resilience |
+| excessive CPU goroutine fan-out | runnable queue growth + scheduling churn | heavy compute tasks with tiny work chunks | ❌ can hurt p99 |
 
-Production lens:
+What actually hurts in production:
 
-- Too many runnable CPU-heavy Gs can increase scheduling overhead.
-- I/O-heavy workloads benefit strongly because parked Gs are cheap.
-- Use profiling, not guesses, before tuning.
+The common failure mode is not "GMP is slow."  
+It is "too many runnable CPU-bound goroutines" plus downstream bottlenecks, which creates queue buildup and tail-latency spikes.
 
-Useful commands:
+What to measure:
 
 ```bash
 GODEBUG=schedtrace=1000,scheddetail=1 go test ./...
 go tool pprof -http=:0 http://localhost:6060/debug/pprof/goroutine
+go tool pprof -http=:0 http://localhost:6060/debug/pprof/block
 go tool trace trace.out
 ```
 
@@ -399,15 +403,21 @@ Use these when interview asks "how would you verify scheduler issues in producti
 
 ### Q1: Why does Go need P in addition to G and M?
 
-Because P carries local runnable queues and runtime execution context; decoupling P from M enables syscall handoff and efficient scheduling.
+Nuanced answer: P holds scheduling context and local runnable queue. If M blocks in syscall, P can move to another M, which keeps runnable goroutines moving. Without P, scheduler flexibility and throughput would drop.
+
+Interview-ready verbal summary: "P is the movable workbench. It lets Go keep work flowing even when one thread blocks."
 
 ### Q2: What happens in GMP when a goroutine blocks in syscall?
 
-Running M may block in kernel; runtime detaches P and reassigns it to another M so other runnable Gs continue.
+Nuanced answer: running M enters kernel wait, runtime detaches its P, reattaches that P to another M, and schedules other runnable goroutines. When syscall completes, original goroutine becomes runnable again and resumes later.
+
+Interview-ready verbal summary: "Blocked thread does not mean blocked scheduler. P is handed off."
 
 ### Q3: If `GOMAXPROCS=4`, can 10,000 goroutines still exist?
 
-Yes. Goroutine count is independent. `GOMAXPROCS` controls parallel execution lanes, not task count.
+Nuanced answer: yes. Goroutines are task count; `GOMAXPROCS` is parallel execution lane count. Many goroutines may be runnable or waiting, while only around 4 run Go code in parallel.
+
+Interview-ready verbal summary: "10k tasks can exist, 4 lanes execute at once."
 
 ---
 

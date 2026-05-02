@@ -68,6 +68,11 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 - [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05
 - [ ] [[T12 Interface Design Principles]] (~1.5 hrs) -- needs T11
 
+**Week 2 bridge prerequisites (request one-by-one if needed):**
+
+- [ ] [[prerequisites/P11 Typed Nil, Interface Values & Type Assertions Basics]] (~20 min)
+- [ ] [[prerequisites/P12 Panic Boundaries, Recovery Strategy & Safe Defer Patterns]] (~20 min)
+
 **Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
 
 > **Status (Apr 28):** Week 1-2 is fully complete (all P-notes and T-notes checked). Move directly to Week 3-4.
@@ -105,7 +110,7 @@ These 6 topics are done. They're in your Daily Revision rotation already.
 **Topics:**
 
 - [ ] [[T13 Goroutine Internals]] (~2 hrs) -- needs P06, P07, P10
-- [ ] [[T14 GMP Scheduler]] (~2 hrs) -- needs P08
+- [ ] [[T14 GMP Scheduler]] (~2 hrs) -- needs P08, P10, T13
 - [ ] [[T15 Channel Internals]] (~2 hrs)
 - [ ] [[T16 Buffered vs Unbuffered Channels]] (~1 hrs)
 - [ ] [[T17 Select Statement Internals]] (~1.5 hrs)
