@@ -730,7 +730,9 @@ close(ch)  // panic: close of nil channel
 
 ## 6. Interview Practice (MANDATORY — Active Recall Format)
 
-### 6.1. MCQs (Multiple Choice Questions)
+### 6.1. MCQs (Optional Warm-Up — 3 Questions Max)
+
+**Note:** MCQs are NOT a primary interview format for senior Go roles. Use these only as a quick knowledge check before diving into coding problems. Real interviews test coding ability, system design, and verbal explanation under pressure.
 
 **Q1.** What is the size of a channel variable `ch := make(chan int, 100)` on a 64-bit system?
 
@@ -761,96 +763,6 @@ D) Block until buffer is drained
 
 > [!success]- Answer
 > **C** — The runtime checks `closed == 1 AND qcount > 0`. If true, it returns buffered data normally. Only after the buffer is fully drained (`qcount == 0`) do receives start returning zero values with `ok = false`. (Section 4.5)
-
-**Q4.** Why do unbuffered channels use direct copy instead of going through a buffer?
-
-A) Performance optimization to avoid memory allocation  
-B) Because the hchan struct has no `buf` field for unbuffered  
-C) Both: `dataqsiz = 0` means no buffer, so direct copy is the only option  
-D) To enforce FIFO ordering
-
-> [!success]- Answer
-> **C** — Unbuffered channels have `dataqsiz = 0` and `buf = nil` (no buffer allocated). When sender and receiver rendezvous, the runtime copies the value directly from sender's `sudog.elem` to receiver's variable. This is both a consequence of no buffer AND a performance win (no intermediate allocation). (Section 4.4)
-
-**Q5.** In the `hchan` struct, what does `sendx` represent?
-
-A) Number of sends performed on the channel  
-B) Index in the circular buffer where the next send writes  
-C) Pointer to the next sender in `sendq`  
-D) Size of the send queue
-
-> [!success]- Answer
-> **B** — `sendx` is the **write index** in the circular buffer. After each successful send, `sendx = (sendx + 1) % dataqsiz`. It wraps around when reaching capacity. `recvx` is the symmetric read index. (Section 4.1)
-
-**Q6.** Which operation on a nil channel causes a panic (rather than blocking)?
-
-A) Send: `ch <- 42`  
-B) Receive: `<-ch`  
-C) Close: `close(ch)`  
-D) All of the above
-
-> [!success]- Answer
-> **C** — Sending and receiving on a nil channel block forever (the goroutine is parked). Only `close(nil)` panics immediately with "close of nil channel" because closing nil is undefined behavior. (Section 5.6)
-
-**Q7.** After `close(ch)`, what happens to goroutines already waiting in `recvq`?
-
-A) They stay blocked until new sends arrive  
-B) They panic  
-C) They are woken and receive zero values  
-D) They are removed from the queue and discarded
-
-> [!success]- Answer
-> **C** — The `close()` operation wakes ALL goroutines in `recvq`. Each receives the zero value for the channel's element type with `ok = false`. This ensures receivers don't block forever when a channel is closed. (Section 4.5)
-
-**Q8.** When does `qcount` in the `hchan` struct decrease?
-
-A) On every send operation  
-B) On every receive operation that reads from the buffer  
-C) When the channel is closed  
-D) When a goroutine is added to `sendq`
-
-> [!success]- Answer
-> **B** — `qcount` tracks the number of elements currently in the buffer. It increments on successful sends (when data goes into buffer) and decrements on successful receives (when data is taken from buffer). It does NOT change when goroutines block in `sendq`/`recvq` or when the channel is closed. (Section 4.1)
-
-**Q9.** What is the `sudog` struct used for in channel operations?
-
-A) It's the internal name for the circular buffer  
-B) It wraps a goroutine waiting in `sendq` or `recvq`, holding metadata like the value to send/receive  
-C) It's a debugging structure for race detection  
-D) It stores the channel's lock state
-
-> [!success]- Answer
-> **B** — A `sudog` (pseudo-goroutine) wraps a blocked goroutine when it's parked in `sendq` or `recvq`. It holds fields like `elem` (pointer to the value being sent/received) and links to form a linked list. When the goroutine is woken, the runtime uses the `sudog` to complete the operation. (Section 4.2, Section 4.3)
-
-**Q10.** Why does sending to a closed channel panic instead of returning an error?
-
-A) For performance — checking closed status on every send would be too slow  
-B) Because Go channels don't return errors  
-C) To catch programming bugs early — sending after close is always a logic error  
-D) Historical accident
-
-> [!success]- Answer
-> **C** — Sending to a closed channel is a logic error in your program flow. Go panics immediately to surface the bug. If it returned an error, developers might accidentally ignore it, leading to silent data loss or race conditions. Panicking forces you to fix the coordination between sender and closer. (Section 5.4)
-
-**Q11.** In a buffered channel with capacity 5, if `sendx = 3` and `recvx = 1`, where is the data stored?
-
-A) Only at index 1-3  
-B) Wrapped: indices 1, 2, 3  
-C) Depends on `qcount`  
-D) Cannot determine without `qcount`
-
-> [!success]- Answer
-> **D** — You need `qcount` to know how full the buffer is. If `qcount = 2`, data is at indices 1, 2. If `qcount = 4`, data wraps: indices 1, 2, 3, 4. `sendx` and `recvx` alone don't tell you occupancy — they're just write/read cursors. The buffer is a circular array. (Section 4.1, Section 4.2)
-
-**Q12.** Which of the following is true about the `hchan.lock` mutex?
-
-A) It's only used for buffered channels  
-B) It's held for the entire duration of a blocked send/receive  
-C) It's locked before any operation and unlocked before parking a goroutine  
-D) It's a read-write lock for performance
-
-> [!success]- Answer
-> **C** — The runtime locks `hchan.lock` at the start of every send/receive/close operation to safely check channel state. If the goroutine needs to block, the runtime parks it using `goparkunlock()`, which unlocks the mutex before parking. This prevents holding the lock while blocked (deadlock). (Section 4.2, Section 4.3)
 
 ---
 
