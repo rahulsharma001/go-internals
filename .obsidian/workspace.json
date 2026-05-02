@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "questions/Week 1 MCQ - Foundations (T07-T09).md",
+                "file": "T15 Channel Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Week 1 MCQ - Foundations (T07-T09)"
+              "title": "T15 Channel Internals"
             }
           }
         ],
@@ -270,9 +270,11 @@
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
     "Study Plan.md",
+    "T09 Error Handling Patterns.md",
+    "T11 Interface Internals (iface & eface).md",
+    "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "questions/T15 Channel Internals - Interview Questions.md",
     "T15 Channel Internals.md",
-    "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "T14 GMP Scheduler.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
     "questions/Week 2 MCQ - Foundations (T10-T12).md",
@@ -292,9 +294,7 @@
     "T03 Strings, Runes & UTF-8 Internals.md",
     "revision/T02 Go Memory Allocation & Value Semantics - Revision.md",
     "prerequisites/P01 Structs & Struct Memory Layout.md",
-    "T09 Error Handling Patterns.md",
     "T08 Map Internals.md",
-    "visuals/T05 GIN Framework - Visual Map.md",
     "prerequisites",
     "visuals",
     "revision",
