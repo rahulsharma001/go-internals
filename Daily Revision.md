@@ -1,13 +1,20 @@
 # Daily Revision
 
-> Your 8-week master guide: [[Study Plan]]. Check it first to know what to study today.
+> **Master guide:** [[Study Plan]] — **80/20 Senior Go track.** Open it first: each week has a **Focus band** (hot ROI topics) and a **Maintenance band** (older material kept warm with less time).
+
+> **This week's bands** *(paste/update each Monday from Study Plan §6):*
+>
+> - **Focus band (full blurt, no peek):** *(fill — usually Wave B/C/D topics you are learning or just finished)*
+> - **Maintenance band (5-second answer or skim-only):** *(fill — usually Wave A + completed waves)*
 
 > **How to use this file:**
-> 1. Open every morning. One scroll, top to bottom.
+> 1. Open every morning. Scroll **Focus band topics first** (most minutes).
 > 2. Read each question. Try to answer from memory first.
 > 3. Tap the question to reveal the 1-2 line answer. Check yourself.
 > 4. Still weak after reading the answer? Click "Drill deeper" at the bottom.
-> ~2 min per topic. For "maintenance" topics (strong ones), just skim the questions without opening.
+> 5. Then hit **Maintenance band** topics — skim or 5-second answers only unless a topic feels rusty.
+
+> **Time budget:** ~2–3 min per topic in Focus; ~30–60 sec per topic in Maintenance. The 80/20 rule applies here too: most daily time on the few topics that match this week's interview band from [[Study Plan]].
 
 ---
 

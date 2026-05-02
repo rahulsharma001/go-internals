@@ -1,294 +1,255 @@
-# 8-Week Go Interview Battle Plan
+# Study Plan — 80/20 Senior Go Track
 
-> **Start date:** April 26, 2026
-> **End date:** June 20, 2026
-> **Daily time:** 1.5-2 hrs study + 15-20 min revision + 15-20 min interview prep
-> **Morning warmup:** [[Daily Revision]] (15-20 min, every morning, non-negotiable)
-> **Goal:** Crack a Senior Golang Developer role within notice period
+> **Purpose:** Front-load the small set of topics that account for most senior Go interview signal, then apply while you finish the long tail. This file is the single source of truth for **what "done enough" means** and **what to revise each morning** in [[Daily Revision]].
+>
+> **Companion files:** [[Roadmap]] (full dependency order + SKIP markers) · [[Daily Revision]] (active recall) · [[INTERVIEW_PREP_STATUS]]
 
 ---
 
-## What Week Am I On?
+## 1. The 80/20 contract (how this plan stays honest)
 
-| Week | Dates | Focus |
-|------|-------|-------|
-| 1 | Apr 26 - May 2 | Foundations: Pointers, Maps, Errors |
-| 2 | May 3 - May 9 | Foundations: Defer/Panic, Interfaces |
-| 3 | May 10 - May 16 | Concurrency Core: Goroutines, Scheduler, Channels |
-| 4 | May 17 - May 23 | Concurrency Core: Select, Mutex, Context |
-| 5 | May 24 - May 30 | Patterns + GC: Worker Pool, Fan-Out, Shutdown |
-| 6 | May 31 - Jun 6 | Patterns + GC: Leaks, GC Deep Dive, GC Tuning |
-| 7 | Jun 7 - Jun 13 | Production Go: net/http, gRPC, database/sql, Observability |
-| 8 | Jun 14 - Jun 20 | Full Revision + Mock Interviews + Close Offers |
+Senior Go loops rarely reward uniform coverage. Signal clusters into a few areas ([[Roadmap]] "Quick Reference" weights):
 
----
+| Interview band | Typical weight | Your notes (primary homes) |
+|----------------|----------------|----------------------------|
+| **Concurrency** (goroutines, scheduler, channels, `select`, mutex, `context`) | ~30–40% | T13–T19, T20–T23, P03, P07, P08 |
+| **Memory + GC** (escape ideas, GC behavior, tuning knobs) | ~15–20% | T02, P09, T24, T25 |
+| **Interfaces** (nil interface, `iface`/`eface`, design) | ~10–15% | P05, T11, T12 |
+| **Errors + control flow** | ~10% | T09, T10, P07 |
+| **Core value semantics + DS** (types, pointers, slices, maps, strings) | ~10–15% | T01, T07, T03, T04, T08 |
+| **Production bridge** (HTTP/gRPC/DB/observability) | ~15–20% in many loops | T26–T29 |
 
-## How to Use This File
+**Definition used in this plan:** The **80% pack** is *not* "80% of all roadmap topics". It is **the smallest topic set that covers ~80% of what repeats across senior Go interviews**, aligned with the bands above.
 
-1. **Morning (15-20 min):** Open [[Daily Revision]], scroll top to bottom, do blurt checks
-2. **Study session (1-1.5 hrs):** Come here, find your current week. Complete all **Prerequisites** first (short P-notes, ~15-25 min each). Then start the main **Topics**.
-3. **Before each main topic:** Check which P-notes it needs (shown after `--`). If unchecked, do those first.
-4. **Evening (15-20 min):** Do the week's "Interview Action" and try the self-test questions out loud
-5. **After each prerequisite or topic:** Tick the checkbox here, then move to the next one
+**Definition of "done enough" for first-wave applications:** You can **explain trade-offs out loud**, **predict tricky outputs**, and **sketch a correct concurrent design** (shutdown, bounded workers, fan-in) without reading the note.
 
 ---
 
-## Already Completed (Before This Plan)
+## 2. The 80% pack — explicit topic list (wikilinks)
 
-These 6 topics are done. They're in your Daily Revision rotation already.
+These are the **high-ROI spine**. Order respects dependencies from [[Roadmap]]; within a wave you may parallelize read-only review, but **do not skip prerequisites** when learning net-new material.
 
-- [ ] [[T01 Go Type System & Value Semantics]] (~2 hrs)
-- [ ] [[T02 Go Memory Allocation & Value Semantics]] (~2 hrs)
-- [x] [[T03 Strings, Runes & UTF-8 Internals]] (~1.5 hrs)
-- [x] [[T04 Arrays & Slice Internals]] (~2 hrs)
-- [x] [[frameworks/T05 GIN Framework]] (~1.5 hrs)
-- [ ] [[databases/T06 MongoDB]] (~2 hrs)
+### Wave A — Language core (already strong for you; keep in daily maintenance)
 
----
+- [[T01 Go Type System & Value Semantics]]
+- [[T02 Go Memory Allocation & Value Semantics]]
+- [[T07 Pointers & Pointer Semantics]]
+- [[T03 Strings, Runes & UTF-8 Internals]]
+- [[T04 Arrays & Slice Internals]]
+- [[T08 Map Internals]]
 
-## Week 1-2: Complete Foundations + Start Applying
+### Wave B — Errors, closures, defer/panic (high frequency, medium depth)
 
-**Goal:** Fill the remaining foundation gaps so every later topic has solid ground to stand on.
+- [[prerequisites/P07 Functions, Closures & Variable Capture]]
+- [[T09 Error Handling Patterns]]
+- [[T10 Defer, Panic & Recover Internals]]
 
-**Prerequisites (complete these first):**
+### Wave C — Interfaces (the other big "Go senior" differentiator besides concurrency)
 
-- [x] [[prerequisites/P01 Structs & Struct Memory Layout]] (~25 min)
-- [x] [[prerequisites/P02 Methods & Receivers]] (~25 min)
-- [x] [[prerequisites/P03 Mutex & Concurrency Safety Basics]] (~20 min)
-- [x] [[prerequisites/P04 Hash Functions & Hashing Basics]] (~15 min)
-- [x] [[prerequisites/P05 Interfaces Basics]] (~20 min)
-- [x] [[prerequisites/P06 Function Call Stack]] (~15 min)
+- [[prerequisites/P05 Interfaces Basics]]
+- [[T11 Interface Internals (iface & eface)]]
+- [[T12 Interface Design Principles]]
 
-**Topics:**
+### Wave D — Concurrency primitives (the largest single band)
 
-- [x] [[T07 Pointers & Pointer Semantics]] (~1.5 hrs) -- needs P01, P02, P03
-- [x] [[T08 Map Internals]] (~2 hrs) -- needs P01, P04
-- [ ] [[T09 Error Handling Patterns]] (~1.5 hrs) -- needs P05
-- [x] [[T10 Defer, Panic & Recover Internals]] (~1.5 hrs) -- needs P06
-- [ ] [[T11 Interface Internals (iface & eface)]] (~2 hrs) -- needs P01, P02, P05
-- [ ] [[T12 Interface Design Principles]] (~1.5 hrs) -- needs T11
+Prereqs:
 
-**Week 2 bridge prerequisites (request one-by-one if needed):**
+- [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
+- [[prerequisites/P08 OS Threads vs Green Threads]]
 
-- [ ] [[prerequisites/P11 Typed Nil, Interface Values & Type Assertions Basics]] (~20 min)
-- [ ] [[prerequisites/P12 Panic Boundaries, Recovery Strategy & Safe Defer Patterns]] (~20 min)
+Core T-notes (do **not** reorder blindly — follow [[Roadmap]] Phase 4):
 
-**Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
+- [[T13 Goroutine Internals]]
+- [[T14 GMP Scheduler]]
+- [[T15 Channel Internals]]
+- [[T16 Buffered vs Unbuffered Channels]]
+- [[T17 Select Statement Internals]]
+- [[T18 Mutex & RWMutex Internals]]
+- [[T19 Context Package Internals]]
 
-> **Status (Apr 28):** Week 1-2 is fully complete (all P-notes and T-notes checked). Move directly to Week 3-4.
+### Wave E — GC depth (pairs with memory band)
 
-**Interview Action:**
-- Update resume with Go-specific bullet points
-- Apply to 10-15 companies (LinkedIn, Naukri, direct)
-- Schedule first interviews for week 3 (use early ones as practice)
-- Daily MCQ drill (10-15 min):
-  - Week 1 topics (T07-T09) -> [[questions/Week 1 MCQ - Foundations (T07-T09)]]
-  - Week 2 topics (T10-T12) -> [[questions/Week 2 MCQ - Foundations (T10-T12)]]
+- [[prerequisites/P09 GC Basics & Why It Matters]]
+- [[T24 Garbage Collector Deep Dive]]
+- [[T25 GC Tuning (GOGC & GOMEMLIMIT)]]
 
-**By end of week 2, you should be able to answer:**
-1. "When should you use a pointer receiver vs a value receiver?" (T07)
-2. "Why is Go's map not safe for concurrent use? What's the internal structure?" (T08)
-3. "How do you wrap errors and check for specific error types?" (T09)
-4. "What's the order of deferred calls? When are arguments evaluated?" (T10)
-5. "What's the difference between iface and eface internally?" (T11)
-6. "What does 'accept interfaces, return structs' mean and why?" (T12)
+### Wave F — Applied concurrency (what coding rounds actually ask you to build)
 
----
+- [[T20 Worker Pool Pattern]]
+- [[T21 Fan-Out / Fan-In Pattern]]
+- [[T22 Graceful Shutdown]]
+- [[T23 Goroutine Leak Prevention]]
 
-## Week 3-4: Concurrency Core (the 30-40% zone)
+### Wave G — Production bridge (system-design + "real Go" signal)
 
-**Goal:** This is the most tested area in Go interviews. Master the primitives.
+- [[T26 net/http Internals]]
+- [[T27 gRPC with Go]]
+- [[T28 database/sql & Connection Pooling]]
+- [[T29 Observability (Logging, Metrics, Tracing)]]
 
-**Prerequisites (complete these first):**
-
-- [x] [[prerequisites/P07 Functions, Closures & Variable Capture]] (~20 min)
-- [x] [[prerequisites/P08 OS Threads vs Green Threads]] (~15 min)
-- [ ] [[prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics]] (~25 min)
-
-> P03 (Mutex basics) and P06 (Call Stack) were completed in Week 1-2.
-
-**Topics:**
-
-- [ ] [[T13 Goroutine Internals]] (~2 hrs) -- needs P06, P07, P10
-- [ ] [[T14 GMP Scheduler]] (~2 hrs) -- needs P08, P10, T13
-- [ ] [[T15 Channel Internals]] (~2 hrs)
-- [ ] [[T16 Buffered vs Unbuffered Channels]] (~1 hrs)
-- [ ] [[T17 Select Statement Internals]] (~1.5 hrs)
-- [ ] [[T18 Mutex & RWMutex Internals]] (~1.5 hrs) -- needs P03
-- [ ] [[T19 Context Package Internals]] (~1.5 hrs)
-
-**Estimated total:** ~12 hrs across 14 days (~50 min/day study, includes prerequisites)
-
-> **Pacing note:** P07/P08 are already done. 7 T-notes in 14 days = 1 note every 2 days. Start with T13/T14 (foundation for all concurrency topics) before moving to channels/select.
-
-**Interview Action:**
-- Give 2-3 interviews (these are calibration rounds, not your best shots)
-- After each interview, log what was asked in the Interview Log section below
-- Adjust study order if interviews reveal unexpected gaps
-
-**By end of week 4, you should be able to answer:**
-1. "How does Go's scheduler work? Explain G, M, and P." (T14)
-2. "What happens internally when you send a value on a channel?" (T15)
-3. "When would you use a buffered channel vs unbuffered?" (T16)
-4. "How does select choose between multiple ready channels?" (T17)
-5. "Explain starvation mode in sync.Mutex." (T18)
-6. "How does context cancellation propagate through a goroutine tree?" (T19)
+**Everything else** in [[Roadmap]] marked SKIP or optional is **intentionally not part of the 80% pack** unless an interview log proves otherwise.
 
 ---
 
-## Week 5-6: Concurrency Patterns + GC
+## 3. Calendar: aggressive track (≈2 weeks to "80% pack first pass")
 
-**Goal:** Move from knowing primitives to applying them. Plus GC knowledge for the "production experience" signal.
+Use this when your goal is **start applying soon** and you can sustain **~2 h/day deep work** + **20–30 min/day** [[Daily Revision]].
 
-**Prerequisites (complete these first):**
+| Day block | Focus | Outcome |
+|-----------|------|---------|
+| **Days 1–3** | Close Wave B + Wave C gaps (T09, T10, T11, T12; P05/P07 if rusty) | You can answer interface nil traps + error wrapping cold |
+| **Days 4–10** | Wave D (T13→T19) as the main job | Concurrency band covered end-to-end once |
+| **Days 11–14** | Wave E (P09, T24, T25) + start Wave F (pick **two** of T20–T23 first) | GC story + at least two coding-round patterns solid |
 
-- [ ] [[prerequisites/P09 GC Basics & Why It Matters]] (~20 min)
+**Parallel rule (applications):** Starting **Day 4–7** is reasonable **if** Wave A is already comfortable and you have **T15 + P03 + T18** at least read once (you can explain blocking, close rules, and mutex vs channel trade-offs). Use early applications as **calibration**, not as your only shot at dream companies.
 
-> All other prerequisites were completed in earlier weeks.
-
-**Topics:**
-
-- [ ] [[T20 Worker Pool Pattern]] (~1.5 hrs)
-- [ ] [[T21 Fan-Out Fan-In Pattern]] (~1.5 hrs)
-- [ ] [[T22 Graceful Shutdown]] (~1.5 hrs)
-- [ ] [[T23 Goroutine Leak Prevention]] (~1.5 hrs)
-- [ ] [[T24 Garbage Collector Deep Dive]] (~2 hrs) -- needs P09
-- [ ] [[T25 GC Tuning (GOGC & GOMEMLIMIT)]] (~1.5 hrs)
-
-**Estimated total:** ~9.8 hrs across 14 days (~42 min/day study, includes prerequisites)
-
-**Interview Action:**
-- Give 3-4 interviews (you should be noticeably better now)
-- Focus on system design rounds -- use concurrency patterns in your designs
-- Log all questions asked
-
-**By end of week 6, you should be able to answer:**
-1. "Implement a worker pool with bounded concurrency." (T20)
-2. "How do you fan-out work to N goroutines and collect results?" (T21)
-3. "Walk me through graceful shutdown of an HTTP server." (T22)
-4. "How do you detect and prevent goroutine leaks?" (T23)
-5. "Explain Go's tri-color mark-and-sweep GC." (T24)
-6. "When would you tune GOGC vs GOMEMLIMIT?" (T25)
+**Honest ceiling:** A *first pass* through the 80% pack in ~2 weeks is viable for strong engineers; *fluency* (mock-level smoothness) usually needs **repetition + mocks** across **another 2–3 weeks**. Treat Week 3–4 as **retrieval + mocks**, not as "learn new theory."
 
 ---
 
-## Week 7: Production Go + System Design
+## 4. Calendar: balanced track (≈4 weeks to fluency on the 80% pack)
 
-**Goal:** Bridge Go knowledge into system design interviews. These topics show you've built real things.
+Use this if you want **higher confidence per topic** or you are limited to **~45–60 min/day**.
 
-**Topics:**
+| Week | Focus |
+|------|--------|
+| **Week 1** | Wave B + Wave C |
+| **Week 2** | Wave D (T13–T16) |
+| **Week 3** | Wave D (T17–T19) + Wave E |
+| **Week 4** | Wave F + start Wave G (HTTP + one of gRPC/DB/observability) |
 
-- [ ] [[T26 net/http Internals]] (~2 hrs)
-- [ ] [[T27 gRPC with Go]] (~1.5 hrs)
-- [ ] [[T28 database/sql & Connection Pooling]] (~1.5 hrs)
-- [ ] [[T29 Observability (Logging, Metrics, Tracing)]] (~1.5 hrs)
-
-**Estimated total:** ~6.5 hrs across 7 days (~1 hr/day study)
-
-**Interview Action:**
-- Schedule your top-choice company interviews this week or next
-- Focus on system design rounds -- use net/http, gRPC, DB pooling knowledge
-- 2-3 interviews
-
-**By end of week 7, you should be able to answer:**
-1. "How does net/http handle concurrent connections? Goroutine-per-request model?" (T26)
-2. "Compare gRPC vs REST for microservice communication." (T27)
-3. "How does database/sql connection pooling work? SetMaxOpenConns vs SetMaxIdleConns?" (T28)
-4. "How would you set up observability in a Go microservice?" (T29)
+**Application rule:** Begin **end of Week 2** to **mid Week 3** depending on mock performance.
 
 ---
 
-## Week 8: Full Revision + Close Offers
+## 5. Daily rhythm (must match the 80/20 spine)
 
-**Goal:** No new topics. Consolidate everything and close deals.
+### Morning — [[Daily Revision]] (20–30 min)
 
-**Daily routine this week:**
+Split topics into two bands (update the bands weekly — see §6):
 
-1. **Morning (30 min):** Full Daily Revision pass -- all topics
-2. **Midday (45 min):** Pick 3 weak topics from the revision, open their revision cards, do the full recall grid
-3. **Afternoon (30 min):** Mock interview -- pick 5 random questions from the Interview Gold Questions sections across all notes, answer them out loud with a timer (30 sec each)
+1. **Focus band (this week):** Full blurt. No peeking until you have an answer shape.
+2. **Maintenance band (everything behind you):** **5-second answer** or skim-only for topics you rate 3/3 confidence.
 
-**Interview Action:**
-- Final round interviews with top-choice companies
-- Negotiate offers
-- Use verbal answers (Section 12) for last-minute prep before each call
+This is the same 80/20 idea as the roadmap: **most minutes on the few things that are hot in interviews right now**, not equal time on every historical topic.
 
-**Mock Interview Protocol:**
-1. Open any topic's Interview Questions file
-2. Read just the question (cover the answer)
-3. Set a 60-second timer
-4. Answer out loud -- structure: "The key insight is... Internally... The gotcha is..."
-5. Uncover the answer, compare
-6. Score yourself: 3 = nailed it, 2 = close, 1 = missed key points
-7. Topics scoring 1 get extra revision tomorrow
+### Deep work block (45–120 min)
 
----
+Rotation:
 
-## What I Skipped and Why
+1. **One** net-new section from the current wave (concept-first, then code — your SKILL pattern).
+2. **Two** retrieval items from Section 6 of that note: **Predict the output** or **trick question** (not MCQ volume).
+3. **One** verbal question (Section 12 / "Interview Gold") answered out loud with a 60–90 s cap.
 
-These topics are marked SKIP in the [[Roadmap]]. They're either rarely asked, too academic, or covered enough by the topics you ARE studying.
+### Evening (15–20 min)
 
-| # | Topic | Why Skipped |
-|---|-------|-------------|
-| 1.7 | Struct Layout & Memory Alignment | Rarely asked; know "field ordering affects padding" is enough |
-| 2.1 | Functions, Closures & Anonymous Functions | Covered as P07 prerequisite note (not a standalone T-note) |
-| 2.4 | Init Functions & Package Initialization | Rarely asked; know "init runs before main, avoid side effects" is enough |
-| 3.2 | Type Assertions & Type Switches | Covered within Interface Internals (T11) |
-| 3.4 | Empty Interface (any) & Boxing | Covered within Interface Internals (T11) |
-| 4.3 | Preemption (Cooperative & Asynchronous) | Know "Go 1.14 added async preemption via signals" -- one sentence is enough |
-| 4.8 | sync Package Deep Dive | WaitGroup/Once covered in concurrency topics; sync.Map/Pool rarely asked in depth |
-| 4.9 | Atomic Operations | Know "use sync/atomic for lock-free counters" -- details rarely asked |
-| 5.1 | Memory Allocator Internals | mcache/mcentral/mheap covered in T02; deeper detail rarely asked |
-| 5.4 | Escape Analysis Deep Dive | Basics covered in T02; "use -gcflags='-m'" is the practical answer |
-| 5.5 | sync.Pool Internals | Know "per-P pool, cleared on GC" -- implementation details rarely asked |
-| 5.6 | Stack Management | Know "contiguous stacks, auto-grow from 2KB" -- covered in goroutine internals |
-| 6.1 | Go Memory Model (Happens-Before) | Academic; practical rules covered in mutex/channel topics |
-| 6.2 | Data Races & Race Detector | Know "-race flag" and "two goroutines, one writing, no sync" -- covered in concurrency topics |
-| 6.3 | Memory Ordering & sync/atomic | Academic; rarely asked beyond "use sync/atomic" |
-| 7.2 | Pipeline Pattern | Covered as a variant within Fan-Out/Fan-In (T21) |
-| 7.4 | Rate Limiter (Token Bucket & Leaky Bucket) | System design topic; know "golang.org/x/time/rate" is enough |
-| 7.5 | Pub-Sub & Event-Driven Patterns | Architecture pattern; not Go-specific enough for Go interviews |
-| 8.2 | Network Poller (netpoll) | Deep runtime internals; know "epoll-based, goroutine parks on I/O" is enough |
-| 8.3 | io.Reader / io.Writer Patterns | Know the interfaces; composability rarely tested in depth |
-| 9.1 | Reflection Internals | Rarely asked; know "reflect.Type/Value, slow, avoid in hot paths" |
-| 9.2 | unsafe Package | Know "unsafe.Pointer for type punning, bypasses safety" -- details rarely asked |
-| 9.3 | Generics (Type Parameters) | Still new; interviews test basic syntax at most |
-| 9.4 | Code Generation & go generate | Build tooling, not interview material |
-| 10.1 | Testing Patterns in Go | Practical skill; you already know table-driven tests |
-| 10.2 | Benchmarking & Performance Profiling | Know "testing.B, pprof" -- practical skill, not theory-heavy |
-| 10.3 | Fuzzing | Rarely asked; know "native fuzzing in Go 1.18" |
-| 10.4 | Race Detector & Debugging Tools | Covered in concurrency topics |
-| 11.1 | Go Compiler Pipeline | Academic; rarely asked beyond "SSA-based" |
-| 11.2 | Inlining & Compiler Optimizations | Know "inlining budget, //go:noinline" -- one-line answers |
-| 11.3 | Linker & Binary Layout | Academic; not interview material |
-| 11.4 | Build Tags, Cross-Compilation & CGO | Practical skill; rarely asked in interviews |
-| 12.2 | Configuration & Feature Flags | Not Go-specific |
-| 12.3 | Dependency Injection in Go | Know "constructor injection" -- patterns vary by team |
-| 12.4 | Microservices Patterns in Go | Architecture topic; not Go-specific enough |
-| 12.5 | High-Performance Go | Advanced optimization; covered partially in GC tuning |
+- One **timed** explanation: pick "channel close rules", "context cancellation", or "nil interface" — rotate.
+- If you have energy: **one** small LeetCode medium in Go (implementation, not math trivia) **or** 30 min system-design whiteboard on a service you've shipped.
+
+### Weekly (non-negotiable for interview readiness)
+
+- **≥2 mock sessions** (behavioral + technical or pure technical). Notes-only prep does not simulate pressure.
 
 ---
 
-## Interview Log
+## 6. Weekly Focus / Maintenance bands (copy/paste into [[Daily Revision]] top each Monday)
 
-Track what companies actually ask. Update this after every interview.
+Template:
 
-| Date | Company | Round | Topics Asked | How I Did (1-3) | Notes |
-|------|---------|-------|--------------|-----------------|-------|
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
-| | | | | | |
+```markdown
+> **This week's Focus band (full blurt):** T15, T16, T17 (example)
+> **This week's Maintenance band (5-sec / skim):** T01, T02, T04, T08 (example)
+```
+
+**Rule:** Focus band = whatever you are *actively learning or freshly finished* (usually **Wave D** topics while in that phase). Maintenance band = **Wave A** topics + completed waves.
+
+---
+
+## 7. Application gates (aligned with 80/20, not with "I read everything")
+
+| Gate | Minimum evidence | Where to apply |
+|------|------------------|----------------|
+| **Gate 0 — Practice employers** | Wave A solid + T09/T10 + can implement `WaitGroup` / mutex fix under time | High-volume, lower-stakes companies, referrals you use for calibration |
+| **Gate 1 — Serious loops** | Wave D first pass done + can explain T15/T19 cold + 2 mocks ≥ 3/5 quality | Target employers |
+| **Gate 2 — Top of funnel / bar-raising teams** | Wave D fluency + Wave E + most of Wave F + Wave G started + mock streak | Dream employers |
+
+If you apply earlier than Gate 1, do it **deliberately** as data collection — log questions in the Interview Log below.
+
+---
+
+## 8. Checklists — track first-pass completion (edit checkboxes as you go)
+
+### 8.1 Wave B — Errors & control flow
+
+- [ ] [[T09 Error Handling Patterns]]
+- [ ] [[T10 Defer, Panic & Recover Internals]]
+- [x] [[prerequisites/P07 Functions, Closures & Variable Capture]]
+
+### 8.2 Wave C — Interfaces
+
+- [x] [[prerequisites/P05 Interfaces Basics]]
+- [ ] [[T11 Interface Internals (iface & eface)]]
+- [ ] [[T12 Interface Design Principles]]
+
+### 8.3 Wave D — Concurrency primitives
+
+- [x] [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
+- [x] [[prerequisites/P08 OS Threads vs Green Threads]]
+- [ ] [[T13 Goroutine Internals]]
+- [ ] [[T14 GMP Scheduler]]
+- [x] [[T15 Channel Internals]]
+- [ ] [[T16 Buffered vs Unbuffered Channels]]
+- [ ] [[T17 Select Statement Internals]]
+- [ ] [[T18 Mutex & RWMutex Internals]]
+- [ ] [[T19 Context Package Internals]]
+
+### 8.4 Wave E — GC
+
+- [x] [[prerequisites/P09 GC Basics & Why It Matters]]
+- [ ] [[T24 Garbage Collector Deep Dive]]
+- [ ] [[T25 GC Tuning (GOGC & GOMEMLIMIT)]]
+
+### 8.5 Wave F — Patterns
+
+- [ ] [[T20 Worker Pool Pattern]]
+- [ ] [[T21 Fan-Out / Fan-In Pattern]]
+- [ ] [[T22 Graceful Shutdown]]
+- [ ] [[T23 Goroutine Leak Prevention]]
+
+### 8.6 Wave G — Production bridge
+
+- [ ] [[T26 net/http Internals]]
+- [ ] [[T27 gRPC with Go]]
+- [ ] [[T28 database/sql & Connection Pooling]]
+- [ ] [[T29 Observability (Logging, Metrics, Tracing)]]
+
+> **Note:** Checkboxes above are **reset to a honest default** (based on files you had marked done in the vault). Fix them to match *your* Obsidian reality — the structure matters more than the default ticks.
+
+---
+
+## 9. Interview log (keep forever — this beats generic research)
+
+| Date | Company | Round | Go topics tested | Self-score (1–3) | Gap to patch |
+|------|---------|-------|------------------|------------------|--------------|
 | | | | | | |
 | | | | | | |
 
-**Pattern tracker:** After 5+ interviews, tally which topics appear most. If something appears 3+ times that you haven't studied, bump it up.
+**After every three interviews:** If the same theme appears twice (e.g., `context`, channel close, GC pacing), promote that theme into **next week's Focus band** in [[Daily Revision]] even if it feels "already done."
 
 ---
 
-> See [[Roadmap]] for the full topic list with SKIP markers.
-> See [[Daily Revision]] for your morning warmup.
+## 10. What we deliberately stopped doing (quality bar)
+
+- **No high-volume MCQ blocks** as a primary study mode — use **predict-output + verbal gold + mocks**.
+- **No equal-time revision** — maintenance stays thin; focus stays thick.
+- **No pretending two weeks equals two months of fluency** — parallelize **applications + repetition**, not **applications + brand-new theory mountains**.
+
+---
+
+## 11. Legacy 8-week outline (optional backdrop)
+
+If you prefer a longer horizon, keep using [[Roadmap]] phases as the dependency skeleton. The **80% pack** in §2 is what you must not defer; everything SKIP-marked there stays SKIP unless your interview log contradicts it.
+
+---
+
+**Self-audit (internal):** This plan (a) names the 80% set explicitly, (b) orders waves by interview ROI × dependencies, (c) ties [[Daily Revision]] to Focus/Maintenance bands, (d) separates **first-pass** from **fluency**, and (e) gives application gates that do not require finishing the entire vault.

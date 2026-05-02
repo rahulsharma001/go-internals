@@ -4,7 +4,7 @@
 >
 > **Status legend**: ✅ Done | 🔄 In Progress | ⬜ Not Started | ⏭ SKIP (see reason)
 >
-> **Battle plan:** ~30 topics are active. Skipped topics have a one-line reason. See [[Study Plan]] for the weekly schedule.
+> **Battle plan:** ~30 topics are active; SKIP topics stay skipped unless your interview log proves otherwise. See [[Study Plan]] for the **80/20 Senior Go track** (what to finish first, daily revision bands, application gates).
 
 ---
 
@@ -55,7 +55,7 @@ This is the **most heavily tested** area in Go interviews (30-40% of questions).
 | 4.1 | [[T13 Goroutine Internals]] | ⬜ | Goroutine struct (g), stack growth/shrinking, states (runnable/running/waiting/dead), cost (~2KB) |
 | 4.2 | [[T14 GMP Scheduler]] | ⬜ | G-M-P model, local/global run queues, work stealing, handoff, GOMAXPROCS, syscall handling |
 | 4.3 | [[Preemption (Cooperative & Asynchronous)]] | ⏭ SKIP | Know "Go 1.14 added async preemption via signals" — one sentence is enough |
-| 4.4 | [[T15 Channel Internals]] | ⬜ | hchan struct, circular buffer, sudog queues, send/recv paths, direct copy optimization |
+| 4.4 | [[T15 Channel Internals]] | ✅ | hchan struct, circular buffer, sudog queues, send/recv paths, direct copy optimization |
 | 4.5 | [[T16 Buffered vs Unbuffered Channels]] | ⬜ | Semantics difference, performance tradeoffs, when to use which, capacity as semaphore |
 | 4.6 | [[T17 Select Statement Internals]] | ⬜ | Random case selection, blocking vs default, compiler optimizations, poll order |
 | 4.7 | [[T18 Mutex & RWMutex Internals]] | ⬜ | State field, normal vs starvation mode, spin-lock fast path, reader/writer fairness |
