@@ -61,7 +61,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "prerequisites/P05 Interfaces Basics.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -76,7 +76,31 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "P05 Interfaces Basics"
+              "title": "Study Plan"
+            }
+          },
+          {
+            "id": "0ab7e63382941e9b",
+            "type": "leaf",
+            "state": {
+              "type": "markdown",
+              "state": {
+                "file": "T15 Channel Internals.md",
+                "mode": "source",
+                "source": false,
+                "backlinks": true,
+                "backlinkOpts": {
+                  "collapseAll": false,
+                  "extraContext": false,
+                  "sortOrder": "alphabetical",
+                  "showSearch": false,
+                  "searchQuery": "",
+                  "backlinkCollapsed": false,
+                  "unlinkedCollapsed": true
+                }
+              },
+              "icon": "lucide-file",
+              "title": "T15 Channel Internals"
             }
           },
           {
@@ -267,14 +291,15 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "76eaf19df250f926",
+  "active": "0ab7e63382941e9b",
   "lastOpenFiles": [
     "Study Plan.md",
+    "prerequisites/P05 Interfaces Basics.md",
+    "T15 Channel Internals.md",
     "T09 Error Handling Patterns.md",
     "T11 Interface Internals (iface & eface).md",
     "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "questions/T15 Channel Internals - Interview Questions.md",
-    "T15 Channel Internals.md",
     "T14 GMP Scheduler.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
     "questions/Week 2 MCQ - Foundations (T10-T12).md",
@@ -283,7 +308,6 @@
     "T13 Goroutine Internals.md",
     "T01 Go Type System & Value Semantics.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
-    "prerequisites/P05 Interfaces Basics.md",
     "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
     "revision/T01 Go Type System & Value Semantics - Revision.md",
     "revision/T08 Map Internals - Revision.md",

@@ -96,6 +96,7 @@ Every Go error — sentinel, custom struct, wrapped chain — ends up stored in 
 `error` is an interface. Every interface value in Go is a **16-byte container** with two slots: a **type pointer** (what concrete type is inside?) and a **data pointer** (where does the actual value live?).
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -113,21 +114,77 @@ func main() {
 ```
 
 ```
-Step 1: errors.New("something broke") creates a *errorString on the heap
-  heap 0xC000010040: errorString{ s: "something broke" }
+┌─────────────────────────────────────────────────────────────────────────┐
+│ // file: src/errors/errors.go                                           │
+│ type errorString struct {                                               │
+│     s string                                                            │
+│ }                                                                        │
+│                                                                          │
+│ func (e *errorString) Error() string { return e.s }                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-Step 2: var err error = ... stores it in the interface container
-  stack (err): [ type ptr → *errors.errorString | data ptr → 0xC000010040 ]
-                       ↑                               ↑
-                 "what type is inside"          "where the actual value lives"
+**MEMORY TRACE: Interface value wrapping a concrete error**
+
+```
+Step 1: errors.New("something broke") allocates errorString on heap
+  heap 0xC000010040:
+    ┌─────────────────────────────────┐
+    │ errorString{                    │
+    │   s: "something broke"          │
+    │ }                               │
+    └─────────────────────────────────┘
+
+
+Step 2: var err error = ... stores it in the interface container on stack
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ storage for variable err (16 bytes total)                             │
+  │ ┌────────────────────────────┬──────────────────────────────────┐     │
+  │ │ type ptr (8 bytes)         │ data ptr (8 bytes)              │     │
+  │ │ → *errors.errorString      │ 0xC000010040                    │─────┼────┐
+  │ └────────────────────────────┴──────────────────────────────────┘     │    │
+  │       ↑                                 ↑                             │    │
+  │ "what type is inside"         "where the value lives"                │    │
+  └───────────────────────────────────────────────────────────────────────┘    │
+                                                                               │
+  Points to heap ────────────────────────────────────────────────────────────►│
+                                                                               ▼
+                                            ┌─────────────────────────────────┐
+                                            │ heap 0xC000010040               │
+                                            │                                 │
+                                            │ errorString{                    │
+                                            │   s: "something broke"          │
+                                            │ }                               │
+                                            └─────────────────────────────────┘
+
 
 Step 3: err.Error() → Go reads the type ptr → finds Error() method → calls it
-  Returns "something broke"
+  1. Read type ptr from err → identifies *errors.errorString
+  2. Look up Error() method in *errorString's method set
+  3. Read data ptr (0xC000010040) → dereference to get the errorString value
+  4. Call (*errorString).Error() → returns e.s → "something broke"
 
-KEY:
-  err is NOT a string. err is a 16-byte interface box.
-  The box says "I contain a *errors.errorString at address 0xC000010040."
-  When err == nil, BOTH slots are nil: [ type: nil | data: nil ]
+
+Step 4: err == nil comparison
+  Check BOTH slots:
+    type ptr == nil? NO (*errors.errorString)
+    data ptr == nil? NO (0xC000010040)
+  Result: err != nil
+
+
+  If err WERE nil:
+    ┌────────────────────────────┬──────────────────────────────────┐
+    │ type ptr (8 bytes)         │ data ptr (8 bytes)              │
+    │ nil                        │ nil                             │
+    └────────────────────────────┴──────────────────────────────────┘
+    BOTH slots must be nil for err == nil to be true
+
+
+KEY INSIGHT:
+  err is NOT a string. err is a 16-byte interface box with two pointers.
+  The first pointer says "I'm holding a *errors.errorString."
+  The second pointer says "The actual data is at heap address 0xC000010040."
+  When you compare errors with ==, you're comparing these two pointers — not the text.
 ```
 
 > **In plain English:** An `error` is a labeled box. The label says what type of error is inside (sentinel? custom struct?). The box holds a pointer to the actual error data. When you compare errors, you're comparing boxes — not the messages printed on them.
@@ -137,6 +194,7 @@ KEY:
 `errors.New` returns a `*errorString` — a private type with one field: the message string. The critical insight: **identity is by pointer address, not by message text.**
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -154,25 +212,95 @@ func main() {
 }
 ```
 
+**MEMORY TRACE: Why two "not found" sentinels are NOT equal**
+
 ```
 Step 1: var ErrNotFound = errors.New("not found")
-  heap 0xC000010040: errorString{ s: "not found" }
-  ErrNotFound interface: [ type: *errorString | data: 0xC000010040 ]
+  errors.New allocates a NEW errorString on heap
+
+  heap 0xC000010040:
+    ┌─────────────────────────────────┐
+    │ errorString{                    │
+    │   s: "not found"                │
+    │ }                               │
+    └─────────────────────────────────┘
+
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ storage for variable ErrNotFound                                      │
+  │ ┌────────────────────────────┬──────────────────────────────────┐     │
+  │ │ type ptr                   │ data ptr                        │     │
+  │ │ → *errors.errorString      │ 0xC000010040                    │─────┼────┐
+  │ └────────────────────────────┴──────────────────────────────────┘     │    │
+  └───────────────────────────────────────────────────────────────────────┘    │
+                                                                               │
+                                                                               ▼
+                                            ┌─────────────────────────────────┐
+                                            │ heap 0xC000010040               │
+                                            │ errorString{ s: "not found" }   │
+                                            └─────────────────────────────────┘
+
 
 Step 2: var ErrAlsoNotFound = errors.New("not found")
-  heap 0xC000010050: errorString{ s: "not found" }    ← DIFFERENT allocation!
-  ErrAlsoNotFound interface: [ type: *errorString | data: 0xC000010050 ]
+  errors.New allocates ANOTHER errorString on heap (DIFFERENT address!)
 
-Step 3: ErrNotFound == ErrAlsoNotFound
-  Same type? Yes (*errorString == *errorString)
-  Same data pointer? 0xC000010040 != 0xC000010050 → FALSE
+  heap 0xC000010050:
+    ┌─────────────────────────────────┐
+    │ errorString{                    │
+    │   s: "not found"                │
+    │ }                               │
+    └─────────────────────────────────┘
 
-  Even though both say "not found", they are DIFFERENT pointers → not equal.
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │ storage for variable ErrAlsoNotFound                                  │
+  │ ┌────────────────────────────┬──────────────────────────────────┐     │
+  │ │ type ptr                   │ data ptr                        │     │
+  │ │ → *errors.errorString      │ 0xC000010050                    │─────┼────┐
+  │ └────────────────────────────┴──────────────────────────────────┘     │    │
+  └───────────────────────────────────────────────────────────────────────┘    │
+                                                                               │
+                                                                               ▼
+                                            ┌─────────────────────────────────┐
+                                            │ heap 0xC000010050               │
+                                            │ errorString{ s: "not found" }   │
+                                            └─────────────────────────────────┘
 
-WHY this design:
-  If equality were by string, any errors.New("not found") anywhere in your
-  codebase would accidentally match YOUR ErrNotFound sentinel.
-  Pointer identity means only YOUR specific sentinel matches.
+
+Step 3: ErrNotFound == ErrAlsoNotFound comparison
+  Go compares the interface values:
+
+  ErrNotFound:      [ type: *errorString | data: 0xC000010040 ]
+  ErrAlsoNotFound:  [ type: *errorString | data: 0xC000010050 ]
+
+  Check 1: Same type pointer? YES (*errorString == *errorString)
+  Check 2: Same data pointer? NO (0xC000010040 != 0xC000010050)
+
+  Result: FALSE
+
+  Even though both errorString structs contain the SAME TEXT ("not found"),
+  they live at DIFFERENT heap addresses.
+  Go compares the pointers, NOT the string content.
+
+
+WHY this design matters:
+
+  If errors.New("not found") in some random library accidentally matched
+  YOUR ErrNotFound sentinel, your code would break.
+
+  Pointer identity means: only the EXACT sentinel variable you declared matches.
+
+  Example collision if equality were by string:
+    package A: var ErrNotFound = errors.New("not found")
+    package B: var ErrNotFound = errors.New("not found")
+    A.ErrNotFound == B.ErrNotFound would be TRUE → WRONG!
+
+  With pointer identity:
+    0xC000010040 != 0xC000010050 → FALSE → CORRECT
+
+
+KEY INSIGHT:
+  Sentinel errors are identified by their memory address (serial number),
+  not by their message text (what's written on the form).
+  errors.Is checks the serial number — not the text.
 ```
 
 Think of it like serial-numbered forms. Two forms can say the same thing, but they have different serial numbers (memory addresses). `errors.Is` checks the serial number — not the text.
@@ -182,6 +310,7 @@ Think of it like serial-numbered forms. Two forms can say the same thing, but th
 When you wrap with `fmt.Errorf("...: %w", err)`, Go creates a `wrapError` struct that holds the formatted message AND a pointer to the original error. This creates a **linked list** of errors.
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -213,50 +342,148 @@ func main() {
 ```
 
 ```
-Step 1: repoCall() returns ErrDBTimeout
-  ErrDBTimeout: [ type: *errorString | data: 0xA0 ]
-  heap 0xA0: errorString{ s: "database timeout" }
+┌─────────────────────────────────────────────────────────────────────────┐
+│ // file: src/fmt/errors.go                                              │
+│ type wrapError struct {                                                 │
+│     msg string                                                          │
+│     err error      // pointer to the next error in the chain            │
+│ }                                                                        │
+│                                                                          │
+│ func (e *wrapError) Unwrap() error { return e.err }                    │
+└─────────────────────────────────────────────────────────────────────────┘
+```
 
-Step 2: serviceCall() wraps with %w
-  heap 0xB0: wrapError{
-    msg:  "load user: database timeout"
-    err:  → ErrDBTimeout (0xA0)     ← linked list pointer!
-  }
-  Returns: [ type: *wrapError | data: 0xB0 ]
+**MEMORY TRACE: Building the wrap chain**
 
-Step 3: handlerCall() wraps again with %w
-  heap 0xC0: wrapError{
-    msg:  "GET /users/1: load user: database timeout"
-    err:  → serviceCall's wrapError (0xB0)     ← another link!
-  }
-  Returns: [ type: *wrapError | data: 0xC0 ]
+```
+Step 1: repoCall() returns ErrDBTimeout (sentinel at package level)
 
-THE CHAIN IN MEMORY:
+  ┌─────────────────────────────────────────────┐
+  │ storage for variable ErrDBTimeout           │
+  │ ┌─────────────────┬─────────────────────┐   │
+  │ │ type ptr        │ data ptr            │   │
+  │ │ *errorString    │ 0xC000010040        │───┼─────┐
+  │ └─────────────────┴─────────────────────┘   │     │
+  └─────────────────────────────────────────────┘     │
+                                                       ▼
+                                    ┌──────────────────────────────────┐
+                                    │ heap 0xC000010040                │
+                                    │                                  │
+                                    │ errorString{                     │
+                                    │   s: "database timeout"          │
+                                    │ }                                │
+                                    └──────────────────────────────────┘
 
-  err (from handler)
-  ┌──────────────────────────────────────────────┐
-  │ wrapError at 0xC0                            │
-  │ msg: "GET /users/1: load user: db timeout"   │
-  │ err: ─────────────────────────────────────┐   │
-  └───────────────────────────────────────────│───┘
-                                              ▼
-  ┌──────────────────────────────────────────────┐
-  │ wrapError at 0xB0                            │
-  │ msg: "load user: database timeout"           │
-  │ err: ─────────────────────────────────────┐   │
-  └───────────────────────────────────────────│───┘
-                                              ▼
-  ┌──────────────────────────────────────────────┐
-  │ *errorString at 0xA0                         │
-  │ s: "database timeout"                        │
-  │ (no Unwrap — this is the end of the chain)   │
-  └──────────────────────────────────────────────┘
 
-COMPARE with %v (NO link):
+Step 2: serviceCall() wraps with fmt.Errorf("load user: %w", err)
+        Go allocates a wrapError struct on heap
+
+  ┌─────────────────────────────────────────────┐
+  │ storage for variable err (in serviceCall)   │
+  │ ┌─────────────────┬─────────────────────┐   │
+  │ │ type ptr        │ data ptr            │   │
+  │ │ *wrapError      │ 0xC000010080        │───┼─────┐
+  │ └─────────────────┴─────────────────────┘   │     │
+  └─────────────────────────────────────────────┘     │
+                                                       ▼
+                     ┌────────────────────────────────────────────────────┐
+                     │ heap 0xC000010080                                  │
+                     │                                                    │
+                     │ wrapError{                                         │
+                     │   msg: "load user: database timeout"               │
+                     │   err: ───────────────────────────────────┐        │
+                     │ }                                         │        │
+                     └───────────────────────────────────────────┼────────┘
+                                                                 │
+                                 points to ErrDBTimeout          │
+                                 (from Step 1)                   ▼
+                                              ┌──────────────────────────────────┐
+                                              │ heap 0xC000010040                │
+                                              │                                  │
+                                              │ errorString{                     │
+                                              │   s: "database timeout"          │
+                                              │ }                                │
+                                              └──────────────────────────────────┘
+
+
+Step 3: handlerCall() wraps again with fmt.Errorf("GET /users/1: %w", err)
+        Creates ANOTHER wrapError, pointing to serviceCall's wrapError
+
+  ┌─────────────────────────────────────────────┐
+  │ storage for variable err (in handlerCall)   │
+  │ ┌─────────────────┬─────────────────────┐   │
+  │ │ type ptr        │ data ptr            │   │
+  │ │ *wrapError      │ 0xC0000100C0        │───┼─────┐
+  │ └─────────────────┴─────────────────────┘   │     │
+  └─────────────────────────────────────────────┘     │
+                                                       ▼
+        ┌───────────────────────────────────────────────────────────────┐
+        │ heap 0xC0000100C0                                             │
+        │                                                               │
+        │ wrapError{                                                    │
+        │   msg: "GET /users/1: load user: database timeout"           │
+        │   err: ───────────────────────────────────────────┐           │
+        │ }                                                 │           │
+        └───────────────────────────────────────────────────┼───────────┘
+                                                            │
+                                    points to serviceCall's │
+                                    wrapError (from Step 2) ▼
+                     ┌────────────────────────────────────────────────────┐
+                     │ heap 0xC000010080                                  │
+                     │                                                    │
+                     │ wrapError{                                         │
+                     │   msg: "load user: database timeout"               │
+                     │   err: ───────────────────────────────────┐        │
+                     │ }                                         │        │
+                     └───────────────────────────────────────────┼────────┘
+                                                                 │
+                                                                 ▼
+                                              ┌──────────────────────────────────┐
+                                              │ heap 0xC000010040                │
+                                              │                                  │
+                                              │ errorString{                     │
+                                              │   s: "database timeout"          │
+                                              │ }                                │
+                                              └──────────────────────────────────┘
+
+
+Step 4: errors.Is(err, ErrDBTimeout) walks the chain
+        
+  errors.Is starts at the outermost err (0xC0000100C0)
+  
+  Check 1: Is 0xC0000100C0 == ErrDBTimeout (0xC000010040)? NO
+           Call err.Unwrap() → returns wrapError.err → follows arrow to 0xC000010080
+  
+  Check 2: Is 0xC000010080 == ErrDBTimeout (0xC000010040)? NO
+           Call err.Unwrap() → returns wrapError.err → follows arrow to 0xC000010040
+  
+  Check 3: Is 0xC000010040 == ErrDBTimeout (0xC000010040)? YES!
+           Return TRUE
+
+
+THE CHAIN AS A LINKED LIST:
+  
+  handlerCall's err → serviceCall's wrapError → repoCall's ErrDBTimeout
+     (0xC0000100C0)           (0xC000010080)              (0xC000010040)
+
+
+COMPARE: %v vs %w (NO link vs WITH link)
+
   fmt.Errorf("load user: %v", err) creates:
-  heap 0xD0: errorString{ s: "load user: database timeout" }
-  ← just a string, NO err pointer, NO Unwrap() method
-  errors.Is(this, ErrDBTimeout) → false — chain is broken
+    heap 0xC0000100D0: errorString{ s: "load user: database timeout" }
+    ↑ just a string, NO err field, NO Unwrap() method
+    errors.Is(this, ErrDBTimeout) → false — chain is broken
+
+  fmt.Errorf("load user: %w", err) creates:
+    heap 0xC000010080: wrapError{ msg: "...", err: → 0xC000010040 }
+    ↑ has err field pointing to original, Unwrap() returns it
+    errors.Is(this, ErrDBTimeout) → true — chain is intact
+
+
+KEY INSIGHT:
+  %w creates a linked list where each node points to the next error.
+  errors.Is walks this list by calling Unwrap() repeatedly.
+  %v breaks the chain — it just formats the text, no pointer link.
 ```
 
 > **In plain English:** `%w` is a window in the envelope — you can reach through it and grab what's inside. `%v` is a photocopy — it prints the same text on the outside, but there's nothing inside to grab. That's why `errors.Is` works with `%w` but fails with `%v`.
@@ -266,6 +493,7 @@ COMPARE with %v (NO link):
 `errors.Is(err, target)` is a simple loop: compare `err` to `target`, then call `err.Unwrap()` to get the next error, repeat until you find a match or hit the end.
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -285,32 +513,100 @@ func main() {
 }
 ```
 
+**MEMORY TRACE: errors.Is walking the unwrap chain**
+
 ```
-errors.Is(layer3, ErrAuth) — step by step:
+Setup: Three-layer wrap chain
 
-  Iteration 1: compare layer3 with ErrAuth
-    layer3 is wrapError{msg: "handler: ...", err: layer2}
-    layer3 == ErrAuth? NO (different types, different pointers)
-    layer3 has Unwrap() → call it → get layer2
+  layer3 (handler level)         layer2 (middleware level)      layer1 (validate level)      ErrAuth (sentinel)
+  ┌─────────────────────┐        ┌──────────────────────┐       ┌──────────────────────┐     ┌──────────────────┐
+  │ heap 0xC0000100C0   │        │ heap 0xC000010080    │       │ heap 0xC000010050    │     │ heap 0xC000010040│
+  │                     │        │                      │       │                      │     │                  │
+  │ wrapError{          │        │ wrapError{           │       │ wrapError{           │     │ errorString{     │
+  │   msg: "handler..." │        │   msg: "middle..."   │       │   msg: "validate..." │     │   s: "unauth..." │
+  │   err: ─────────────┼────────┼─→ err: ─────────────┼───────┼─→ err: ─────────────┼─────┼─→ }              │
+  │ }                   │        │ }                    │       │ }                    │     │                  │
+  └─────────────────────┘        └──────────────────────┘       └──────────────────────┘     └──────────────────┘
 
-  Iteration 2: compare layer2 with ErrAuth
-    layer2 is wrapError{msg: "middleware: ...", err: layer1}
-    layer2 == ErrAuth? NO
-    layer2 has Unwrap() → call it → get layer1
 
-  Iteration 3: compare layer1 with ErrAuth
-    layer1 is wrapError{msg: "validate token: ...", err: ErrAuth}
-    layer1 == ErrAuth? NO
-    layer1 has Unwrap() → call it → get ErrAuth
+errors.Is(layer3, ErrAuth) — step by step iteration:
 
-  Iteration 4: compare ErrAuth with ErrAuth
-    Same type (*errorString)? YES
-    Same data pointer (0xA0 == 0xA0)? YES
-    → MATCH! Return true.
+  Iteration 1: Compare layer3 (0xC0000100C0) with ErrAuth (0xC000010040)
+    ┌─────────────────────┐
+    │ heap 0xC0000100C0   │  ← current err being checked
+    │ wrapError{...}      │
+    └─────────────────────┘
 
-  layer3 == ErrAuth only compares the OUTER box:
-    layer3 is wrapError at 0xC0, ErrAuth is *errorString at 0xA0
-    Different types → false immediately. No chain walking.
+    Check: Is this the same as ErrAuth?
+      Type: *wrapError vs *errorString → NO
+      Data pointer: 0xC0000100C0 != 0xC000010040 → NO
+    
+    Not a match. Call layer3.Unwrap()
+      → returns wrapError.err → 0xC000010080 (layer2)
+    
+    Move to next →
+
+
+  Iteration 2: Compare layer2 (0xC000010080) with ErrAuth (0xC000010040)
+    ┌──────────────────────┐
+    │ heap 0xC000010080    │  ← current err being checked
+    │ wrapError{...}       │
+    └──────────────────────┘
+
+    Check: Is this the same as ErrAuth?
+      Type: *wrapError vs *errorString → NO
+      Data pointer: 0xC000010080 != 0xC000010040 → NO
+    
+    Not a match. Call layer2.Unwrap()
+      → returns wrapError.err → 0xC000010050 (layer1)
+    
+    Move to next →
+
+
+  Iteration 3: Compare layer1 (0xC000010050) with ErrAuth (0xC000010040)
+    ┌──────────────────────┐
+    │ heap 0xC000010050    │  ← current err being checked
+    │ wrapError{...}       │
+    └──────────────────────┘
+
+    Check: Is this the same as ErrAuth?
+      Type: *wrapError vs *errorString → NO
+      Data pointer: 0xC000010050 != 0xC000010040 → NO
+    
+    Not a match. Call layer1.Unwrap()
+      → returns wrapError.err → 0xC000010040 (ErrAuth)
+    
+    Move to next →
+
+
+  Iteration 4: Compare ErrAuth (0xC000010040) with ErrAuth (0xC000010040)
+    ┌──────────────────┐
+    │ heap 0xC000010040│  ← current err being checked
+    │ errorString{...} │
+    └──────────────────┘
+
+    Check: Is this the same as ErrAuth?
+      Type: *errorString vs *errorString → YES
+      Data pointer: 0xC000010040 == 0xC000010040 → YES
+    
+    MATCH! Return TRUE.
+
+
+COMPARE: errors.Is vs ==
+
+  errors.Is(layer3, ErrAuth):
+    → Walks: 0xC0000100C0 → 0xC000010080 → 0xC000010050 → 0xC000010040 → MATCH
+    → Returns: true
+
+  layer3 == ErrAuth:
+    → Compares ONLY: 0xC0000100C0 vs 0xC000010040
+    → Different types (*wrapError vs *errorString)
+    → Returns: false immediately (no chain walking)
+
+
+KEY INSIGHT:
+  errors.Is opens every envelope in the chain one by one.
+  == only checks the outermost envelope and gives up.
 ```
 
 > **In plain English:** `errors.Is` is like a detective opening nested envelopes one by one, checking the serial number at each level. `==` is a lazy clerk who only looks at the outside label and gives up immediately.
@@ -320,6 +616,7 @@ errors.Is(layer3, ErrAuth) — step by step:
 `errors.As(err, &target)` walks the same chain but instead of comparing values, it tries a **type assertion** at each level. When it finds a match, it populates your pointer.
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -359,33 +656,125 @@ func main() {
 }
 ```
 
+**MEMORY TRACE: errors.As walking the chain to find a specific type**
+
 ```
-errors.As(err, &ve) — step by step:
+Setup: Two-layer wrap chain with custom error type
 
-  err is: wrapError{msg: "create user: validation: email: required",
-                     err: → *ValidationError{Field:"email", Reason:"required"}}
+  Original ValidationError created by validate():
+    heap 0xC000010040:
+      ┌──────────────────────────────────┐
+      │ ValidationError{                 │
+      │   Field:  "email"                │
+      │   Reason: "required"             │
+      │ }                                │
+      └──────────────────────────────────┘
 
-  Iteration 1: try type assertion on err
-    err is *wrapError — can it be assigned to *ValidationError? NO
-    err has Unwrap() → call it → get the inner error
+  serviceCall() wraps it with %w:
+    heap 0xC000010080:
+      ┌────────────────────────────────────────────────────┐
+      │ wrapError{                                         │
+      │   msg: "create user: validation: email: required"  │
+      │   err: ─────────────────────────────────┐          │
+      │ }                                       │          │
+      └─────────────────────────────────────────┼──────────┘
+                                                │
+                                                ▼
+                              ┌──────────────────────────────────┐
+                              │ heap 0xC000010040                │
+                              │ ValidationError{                 │
+                              │   Field: "email", Reason: "req..." │
+                              └──────────────────────────────────┘
 
-  Iteration 2: try type assertion on inner error
-    inner is *ValidationError — can it be assigned to *ValidationError? YES!
-    Set ve = inner (*ValidationError)
-    Return true
+  Stack in main():
+    ┌─────────────────────────────────────────┐
+    │ storage for variable err                │
+    │ ┌──────────────┬────────────────────┐   │
+    │ │ type ptr     │ data ptr           │   │
+    │ │ *wrapError   │ 0xC000010080       │───┼───┐
+    │ └──────────────┴────────────────────┘   │   │
+    └─────────────────────────────────────────┘   │
+                                                  ▼
+                                   (points to wrapError)
 
-  Now ve points at the ValidationError:
-    ve → heap: [ Field: "email" | Reason: "required" ]
-    You can read ve.Field, ve.Reason — the structured data from the original error.
+    ┌─────────────────────────────────────────┐
+    │ storage for variable ve                 │
+    │ (uninitialized *ValidationError)        │
+    │ nil                                     │
+    └─────────────────────────────────────────┘
+
+
+errors.As(err, &ve) — step by step iteration:
+
+  Iteration 1: Try type assertion on err (the outer wrapError)
+    Current err: 0xC000010080 (*wrapError)
+
+    Question: Can a *wrapError be assigned to a *ValidationError?
+    Answer: NO — different types
+
+    err has Unwrap() → call it → returns wrapError.err → 0xC000010040
+    Move to next →
+
+
+  Iteration 2: Try type assertion on inner error (the ValidationError)
+    Current err: 0xC000010040 (*ValidationError)
+
+    Question: Can a *ValidationError be assigned to a *ValidationError?
+    Answer: YES! — exact type match
+
+    Perform assignment:
+      ve = 0xC000010040  (copy the pointer)
+    
+    Return TRUE
+
+
+After errors.As returns:
+
+  ┌─────────────────────────────────────────┐
+  │ storage for variable ve                 │
+  │ 0xC000010040                            │──────┐
+  └─────────────────────────────────────────┘      │
+                                                    │
+                                                    ▼
+                              ┌──────────────────────────────────┐
+                              │ heap 0xC000010040                │
+                              │ ValidationError{                 │
+                              │   Field:  "email"                │
+                              │   Reason: "required"             │
+                              │ }                                │
+                              └──────────────────────────────────┘
+
+  Now you can access:
+    ve.Field  → "email"
+    ve.Reason → "required"
+
 
 WHY this matters for HTTP handlers:
-  Your handler doesn't unwrap manually. It calls:
+
+  Without errors.As (manual unwrap):
+    var ve *ValidationError
+    if err, ok := err.(interface{ Unwrap() error }); ok {
+        inner := err.Unwrap()
+        if ve, ok = inner.(*ValidationError); ok {
+            // field info available
+        }
+    }
+
+  With errors.As (automatic unwrap):
     var ve *ValidationError
     if errors.As(err, &ve) {
-        http.Error(w, ve.Error(), 400)   ← structured 400 with field info
-        return
+        // field info available — works regardless of wrap depth
+        http.Error(w, fmt.Sprintf("invalid %s", ve.Field), 400)
     }
-  The wrapping from service/repo layers is transparent.
+
+  The wrapping layers (service, middleware, handler) are transparent.
+  errors.As walks through them automatically.
+
+
+KEY INSIGHT:
+  errors.As is like searching through a stack of folders for a specific form type.
+  It opens each folder (unwraps), checks if the contents match the shape you need,
+  and when it finds a match, gives you a pointer to that specific form.
 ```
 
 Think of it like searching through a stack of folders for a specific form — say, a validation report. You flip through each folder until you find one that matches the shape you need, then pull out the form and read its fields.
@@ -395,6 +784,7 @@ Think of it like searching through a stack of folders for a specific form — sa
 Here's a complete trace of how an error flows through a real service stack:
 
 ```go
+// file: main.go
 package main
 
 import (
@@ -424,13 +814,6 @@ func serviceGetUser(id int) (*User, error) {
 	return user, nil
 }
 
-type ValidationError struct {
-	Field, Reason string
-}
-func (e *ValidationError) Error() string {
-	return e.Field + ": " + e.Reason
-}
-
 func handler(id int) {
 	user, err := serviceGetUser(id)
 	if err != nil {
@@ -451,34 +834,109 @@ func main() {
 }
 ```
 
+**MEMORY TRACE: Error flowing through repo → service → handler**
+
 ```
-handler(0) — error path traced through memory:
+Call: handler(0) — error path
 
-  Step 1: repoFindUser(0)
-    id == 0 → return nil, ErrNotFound
-    ErrNotFound: [ type: *errorString | data: 0xA0 ]
-    heap 0xA0: { s: "not found" }
+  Step 1: handler calls serviceGetUser(0)
+          serviceGetUser calls repoFindUser(0)
 
-  Step 2: serviceGetUser wraps: fmt.Errorf("get user 0: %w", err)
-    heap 0xB0: wrapError{
-      msg: "get user 0: not found",
-      err: → 0xA0 (ErrNotFound)        ← chain link preserved
-    }
-    Returns: [ type: *wrapError | data: 0xB0 ]
+    repoFindUser(0):
+      id == 0 → return nil, ErrNotFound
+
+    ┌─────────────────────────────────────────────┐
+    │ storage for variable ErrNotFound (package)  │
+    │ ┌─────────────────┬─────────────────────┐   │
+    │ │ type ptr        │ data ptr            │   │
+    │ │ *errorString    │ 0xC000010040        │───┼─────┐
+    │ └─────────────────┴─────────────────────┘   │     │
+    └─────────────────────────────────────────────┘     │
+                                                         ▼
+                                      ┌──────────────────────────────────┐
+                                      │ heap 0xC000010040                │
+                                      │ errorString{ s: "not found" }    │
+                                      └──────────────────────────────────┘
+
+
+  Step 2: serviceGetUser receives err = ErrNotFound
+          Wraps with fmt.Errorf("get user %d: %w", id, err)
+
+    heap 0xC000010080:
+      ┌────────────────────────────────────────────────────┐
+      │ wrapError{                                         │
+      │   msg: "get user 0: not found"                     │
+      │   err: ─────────────────────────────────────┐      │
+      │ }                                           │      │
+      └─────────────────────────────────────────────┼──────┘
+                                                    │
+                               points to ErrNotFound│
+                                                    ▼
+                                      ┌──────────────────────────────────┐
+                                      │ heap 0xC000010040                │
+                                      │ errorString{ s: "not found" }    │
+                                      └──────────────────────────────────┘
+
+    Returns to handler:
+      ┌─────────────────────────────────────────────┐
+      │ storage for variable err (in handler)       │
+      │ ┌─────────────────┬─────────────────────┐   │
+      │ │ type ptr        │ data ptr            │   │
+      │ │ *wrapError      │ 0xC000010080        │───┼─────┐
+      │ └─────────────────┴─────────────────────┘   │     │
+      └─────────────────────────────────────────────┘     │
+                                                           ▼
+                                          (points to wrapError from Step 2)
+
 
   Step 3: handler checks errors.Is(err, ErrNotFound)
-    Iteration 1: err at 0xB0 == ErrNotFound at 0xA0? NO
-    Unwrap → get ErrNotFound at 0xA0
-    Iteration 2: 0xA0 == 0xA0? YES → match!
-    → prints "404: get user 0: not found"
 
-  The error message is human-readable ("get user 0: not found")
-  AND machine-parseable (errors.Is finds ErrNotFound through the chain).
+    errors.Is walks the chain:
 
-handler(1) — success path:
-  repoFindUser(1) → returns &User{...}, nil
-  serviceGetUser → user is non-nil, err is nil
-  handler prints user → "200: {ID:1 Name:rahul}"
+    Iteration 1: Is err (0xC000010080) == ErrNotFound (0xC000010040)? NO
+                 Different types (*wrapError vs *errorString)
+                 Call err.Unwrap() → returns 0xC000010040
+
+    Iteration 2: Is unwrapped (0xC000010040) == ErrNotFound (0xC000010040)? YES!
+                 Same type (*errorString)
+                 Same address (0xC000010040 == 0xC000010040)
+                 → MATCH
+
+    errors.Is returns TRUE → case block executes
+    Prints: "404: get user 0: not found"
+
+
+  THE FULL CHAIN IN MEMORY:
+
+    handler's err          serviceGetUser's wrap       repoFindUser's sentinel
+    (0xC000010080)    →    (wrapError at 0xC000010080) → (errorString at 0xC000010040)
+         │                         │                               │
+         └─────────────────────────┴───────────────────────────────┘
+                              Human-readable context added at each layer
+                              Machine-readable identity preserved
+
+
+Call: handler(1) — success path
+
+  Step 1: repoFindUser(1) → returns &User{ID: 1, Name: "rahul"}, nil
+  Step 2: serviceGetUser → user is non-nil, err is nil → returns user, nil
+  Step 3: handler → err == nil → prints "200: {ID:1 Name:rahul}"
+
+
+KEY INSIGHTS:
+
+  1. Error message is human-readable:
+     "get user 0: not found" has context from service layer
+
+  2. Error is machine-parseable:
+     errors.Is(err, ErrNotFound) finds the sentinel through the chain
+
+  3. Each layer adds context WITHOUT breaking the chain:
+     %w preserves the link, so handler can still find ErrNotFound
+
+  4. Handler maps internal error to HTTP status code:
+     ErrNotFound → 404
+     Other errors → 500
 ```
 
 > **In plain English:** The repo says "not found." The service puts that note in an envelope labeled "get user 0." The handler opens the envelope, checks the note's serial number, and says "yep, that's a 404." The wrapping adds human context without destroying machine-readable identity.
