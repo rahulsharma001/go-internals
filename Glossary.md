@@ -35,6 +35,8 @@
 | mheap | M-Heap | The global heap manager — allocates large spans and manages page-level memory |
 | mspan | M-Span | A contiguous run of memory pages managed by the heap — the basic unit of Go's memory allocator |
 | hchan | Hash Channel | The runtime struct backing every channel — contains a circular buffer, send/recv queues, mutex |
+| qcount | (hchan field) | How many element slots currently hold live values (`0` … `dataqsiz`) |
+| dataqsiz | (hchan field) | Ring buffer capacity in element slots; `0` means unbuffered |
 
 ## Performance & Measurement Terms
 

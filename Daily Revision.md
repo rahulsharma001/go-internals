@@ -939,7 +939,44 @@ M:N: [G1 G2 G3 ... G1M] → multiplexed onto → [M1 M2 ... MN]
 
 ### [[T16 Buffered vs Unbuffered Channels]]
 
-> *Coming soon -- add block here after completing the topic.*
+**Blurt check** (try from memory, tap to reveal):
+
+> [!info]- 1. What does `make(chan Order)` set as capacity, and what does that mean on the heap?
+> Default capacity is **0** — unbuffered. The `hchan` has `dataqsiz = 0` and `buf = nil`; no ring buffer slots.
+
+> [!info]- 2. When does a send on buffered `ch` block?
+> After lock: if closed → panic; if buffer has space (`qcount < dataqsiz`) → written and returns; otherwise → park on `sendq` until receive frees a slot.
+
+> [!info]- 3. When does a send on unbuffered `ch` block?
+> If no receiver waiting to pair (`recvq` empty), sender parks on `sendq` until someone receives.
+
+> [!info]- 4. “Buffered is always faster” — true or false, and why?
+> **False** — buffers use memory and wakeups; unbuffered can be fewer copies for strict handoffs. Measure.
+
+> [!info]- 5. What is the semaphore pattern with `chan struct{}`?
+> `sem := make(chan struct{}, N)` — `sem <- struct{}{}` acquires (blocks when N goroutines hold), `defer func() { <-sem }()` releases. Leaked `defer` path → lost capacity.
+
+> [!info]- 6. What does `cap(ch)` return for a channel?
+> `dataqsiz` — max buffer slots, **not** current backlog (Go has no `len(ch)`).
+
+> [!info]- 7. Why should “make buffer huge so we never block” worry you?
+> Memory grows with `cap × sizeof(elem)`; slow consumers stay hidden until buffer fills; then producers stall hard.
+
+> [!info]- 8. Same `close` rules for both — what’s different for the reader’s experience?
+> Buffered may still return real values until drained; then zero + `ok=false`. Unbuffered already had no stored values.
+
+**Key visual:**
+```
+Unbuffered:  sender ──handshake──► receiver   (no shelf)
+Buffered:    sender ──► [/_/_] ──► receiver   (k slots, block when full/empty)
+```
+
+**Traps to remember:**
+- `make(chan T)` is **capacity 0**, not mystery default 1  
+- Bounded buffer ≠ unbounded queue  
+- Semaphore: **defer** releases on every exit path  
+
+**Weak? Drill deeper** → [[T16 Buffered vs Unbuffered Channels]]
 
 ---
 

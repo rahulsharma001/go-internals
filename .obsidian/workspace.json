@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Application Targets.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Application Targets"
+              "title": "Study Plan"
             }
           },
           {
@@ -293,10 +293,14 @@
   },
   "active": "0ab7e63382941e9b",
   "lastOpenFiles": [
+    "questions/T16 Buffered vs Unbuffered Channels - Interview Questions.md",
+    "exercises/T16 Buffered vs Unbuffered Channels - Exercises.md",
+    "simplified/T16 Buffered vs Unbuffered Channels - Simplified.md",
+    "T16 Buffered vs Unbuffered Channels.md",
+    "Application Targets.md",
     "INTERVIEW_PREP_STATUS.md",
     "Study Plan.md",
     "Glossary.md",
-    "Application Targets.md",
     "Gap Tracker.md",
     "Daily Revision.md",
     "T15 Channel Internals.md",
@@ -315,10 +319,6 @@
     "T01 Go Type System & Value Semantics.md",
     "prerequisites/P07 Functions, Closures & Variable Capture.md",
     "visuals/T01 Go Type System & Value Semantics - Visual Map.md",
-    "revision/T01 Go Type System & Value Semantics - Revision.md",
-    "revision/T08 Map Internals - Revision.md",
-    "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
-    "T10 Defer, Panic & Recover Internals.md",
     "prerequisites",
     "visuals",
     "revision",
