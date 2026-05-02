@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T15 Channel Internals.md",
+                "file": "Application Targets.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T15 Channel Internals"
+              "title": "Application Targets"
             }
           },
           {
@@ -293,10 +293,15 @@
   },
   "active": "0ab7e63382941e9b",
   "lastOpenFiles": [
-    "T14 GMP Scheduler.md",
-    "T15 Channel Internals.md",
-    "Daily Revision.md",
+    "INTERVIEW_PREP_STATUS.md",
     "Study Plan.md",
+    "Glossary.md",
+    "Application Targets.md",
+    "Gap Tracker.md",
+    "Daily Revision.md",
+    "T15 Channel Internals.md",
+    "Roadmap.md",
+    "T14 GMP Scheduler.md",
     "prerequisites/P05 Interfaces Basics.md",
     "T09 Error Handling Patterns.md",
     "T11 Interface Internals (iface & eface).md",
@@ -314,11 +319,6 @@
     "revision/T08 Map Internals - Revision.md",
     "prerequisites/P03 Mutex & Concurrency Safety Basics.md",
     "T10 Defer, Panic & Recover Internals.md",
-    "Roadmap.md",
-    "T03 Strings, Runes & UTF-8 Internals.md",
-    "revision/T02 Go Memory Allocation & Value Semantics - Revision.md",
-    "prerequisites/P01 Structs & Struct Memory Layout.md",
-    "T08 Map Internals.md",
     "prerequisites",
     "visuals",
     "revision",
