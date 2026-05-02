@@ -517,7 +517,7 @@ close(ch)
 **Trap #5:** Claiming `len(ch)` works.
 
 > [!success]- Answer
-> **Invalid** — use counters or drain inspection patterns.**
+> **Invalid** — use counters or drain inspection patterns.
 
 ---
 
@@ -593,7 +593,7 @@ close(ch)
 **Scenario 1:** Burst load goroutine storm on **unbuffered** request channel.
 
 > [!success]- Model Answer
-> **Bounded buffered queue + worker pool** or **`select`/`default`** with rejection — unbuffered fans into blocked goroutines tied to connections.**
+> **Bounded buffered queue + worker pool** or **`select`/`default`** with rejection — unbuffered fans into blocked goroutines tied to connections.
 
 ---
 
