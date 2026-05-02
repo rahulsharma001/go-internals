@@ -19,6 +19,7 @@
 | Asset | Role |
 |-------|------|
 | [[Study Plan]] | **Single source of truth** for waves, timelines, revision bands, application gates |
+| [[Application Targets]] | Phased employer **examples** (P0 calibration → P1 → P2 stretch); verify openings yourself |
 | [[Roadmap]] | Full dependency order + SKIP markers + weight table |
 | [[Daily Revision]] | Morning active recall; **paste weekly Focus/Maintenance** from Study Plan §6 |
 | Topic `Interview Practice` sections | Predict output, tricks, coding problems (primary reps) |

@@ -2,7 +2,7 @@
 
 > **Purpose:** Front-load the small set of topics that account for most senior Go interview signal, then apply while you finish the long tail. This file is the single source of truth for **what "done enough" means** and **what to revise each morning** in [[Daily Revision]].
 >
-> **Companion files:** [[Roadmap]] (full dependency order + SKIP markers) · [[Daily Revision]] (active recall) · [[INTERVIEW_PREP_STATUS]]
+> **Companion files:** [[Roadmap]] (full dependency order + SKIP markers) · [[Daily Revision]] (active recall) · [[INTERVIEW_PREP_STATUS]] · [[Application Targets]] (phased employer examples — verify jobs yourself)
 
 ---
 
