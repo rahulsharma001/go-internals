@@ -43,16 +43,16 @@ Under the hood, a channel is a pointer to an `hchan` struct on the heap. That st
 Think of a buffered channel as a **mailbox with N slots**. Goroutines are people trying to drop off letters (send) or pick up letters (receive).
 
 ```
-  Buffered channel (capacity 3):
-  
-  Sender goroutine                    Channel                    Receiver goroutine
-  ┌──────────────┐                    ┌─────────────┐            ┌──────────────┐
-  │ G1: ch <- x  │ ─────────────────→ │ [x][ ][ ]   │ ───────→   │ G2: y := <-ch│
-  └──────────────┘   (drop letter)    │ ↑ buffer    │  (pick up) └──────────────┘
-                                      │             │
-  If buffer is FULL:                 │ sendq: [G3] │  ← G3 waiting to send
-  sender blocks                      │ recvq: [ ]  │  ← no one waiting
-                                     └─────────────┘
+Buffered channel (capacity 3):
+
+Sender goroutine               Channel                Receiver goroutine
+┌──────────────┐               ┌─────────────┐        ┌──────────────┐
+│ G1: ch <- x  │ ────────────→ │ Buffer:     │ ─────→ │ G2: y := <-ch│
+└──────────────┘               │ [x][ ][ ]   │        └──────────────┘
+   (drop letter)               │             │           (pick up)
+                               │ sendq: [G3] │  ← blocked senders
+If buffer FULL:                │ recvq: [ ]  │  ← blocked receivers
+→ sender blocks                └─────────────┘
 ```
 
 **Unbuffered channel** (capacity 0) is a **direct handoff** — no mailbox, just two people meeting. If sender arrives first, they wait. If receiver arrives first, they wait. Only when both are ready does the exchange happen.
