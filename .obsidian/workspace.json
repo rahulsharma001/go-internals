@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T16 Buffered vs Unbuffered Channels.md",
+                "file": "Study Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T16 Buffered vs Unbuffered Channels"
+              "title": "Study Plan"
             }
           }
         ],
@@ -269,9 +269,9 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "T16 Buffered vs Unbuffered Channels.md",
     "T15 Channel Internals.md",
     "Study Plan.md",
-    "T16 Buffered vs Unbuffered Channels.md",
     "questions/T16 Buffered vs Unbuffered Channels - Interview Questions.md",
     "exercises/T16 Buffered vs Unbuffered Channels - Exercises.md",
     "simplified/T16 Buffered vs Unbuffered Channels - Simplified.md",
