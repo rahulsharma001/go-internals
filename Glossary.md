@@ -37,6 +37,10 @@
 | hchan | Hash Channel | The runtime struct backing every channel — contains a circular buffer, send/recv queues, mutex |
 | qcount | (hchan field) | How many element slots currently hold live values (`0` … `dataqsiz`) |
 | dataqsiz | (hchan field) | Ring buffer capacity in element slots; `0` means unbuffered |
+| scase | Select case (compiler/runtime) | One `select` arm’s descriptor: `hchan` pointer + `elem` pointer for send/receive scratch — built on stack for `selectgo` |
+| selectgo | (runtime function) | Implements `select` — permutes case order, `sellock`/`selunlock`, pass1 ready scan, pass2 `sudog` enqueue + `gopark`, pass3 cleanup |
+| pollorder | (per-select scratch) | Case indices in **randomized** order — pass 1 walks this; first ready case wins |
+| lockorder | (per-select scratch) | Case indices sorted by **channel address** — `sellock` acquires `hchan.lock` in this order to avoid lock inversions |
 
 ## Performance & Measurement Terms
 

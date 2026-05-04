@@ -57,7 +57,7 @@ This is the **most heavily tested** area in Go interviews (30-40% of questions).
 | 4.3 | [[Preemption (Cooperative & Asynchronous)]] | ⏭ SKIP | Know "Go 1.14 added async preemption via signals" — one sentence is enough |
 | 4.4 | [[T15 Channel Internals]] | ✅ | hchan struct, circular buffer, sudog queues, send/recv paths, direct copy optimization |
 | 4.5 | [[T16 Buffered vs Unbuffered Channels]] | ✅ | Semantics difference, performance tradeoffs, when to use which, capacity as semaphore |
-| 4.6 | [[T17 Select Statement Internals]] | ⬜ | Random case selection, blocking vs default, compiler optimizations, poll order |
+| 4.6 | [[T17 Select Statement Internals]] | ✅ | Random case selection, blocking vs default, compiler optimizations, poll order |
 | 4.7 | [[T18 Mutex & RWMutex Internals]] | ⬜ | State field, normal vs starvation mode, spin-lock fast path, reader/writer fairness |
 | 4.8 | [[sync Package Deep Dive]] | ⏭ SKIP | WaitGroup/Once covered in concurrency topics; sync.Map/Pool rarely asked in depth |
 | 4.9 | [[Atomic Operations]] | ⏭ SKIP | Know "use sync/atomic for lock-free counters" — details rarely asked |

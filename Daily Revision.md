@@ -982,7 +982,46 @@ Buffered:    sender ──► [/_/_] ──► receiver   (k slots, block when f
 
 ### [[T17 Select Statement Internals]]
 
-> *Coming soon -- add block here after completing the topic.*
+**Blurt check** (try from memory, tap to reveal):
+
+> [!info]- 1. What does `selectgo` return, and what does the `bool` mean?
+> Returns **winning case index** + **`recvOK`** for receive ops. Index **-1** means **`default`** branch when non-blocking.
+
+> [!info]- 2. Why randomize `pollorder` before checking readiness?
+> **Fairness** — source order is **not** a fixed priority; first **ready** case in the **shuffled** walk wins.
+
+> [!info]- 3. Why sort `lockorder` by `hchan` address?
+> **Global lock total order** — every goroutine grabs channel mutexes **low address first**, preventing lock-order cycles.
+
+> [!info]- 4. What three passes does `selectgo` conceptually do?
+> **Pass 1:** locked scan for immediate progress. **Pass 2:** enqueue `sudog` on each channel + `gopark` if blocking. **Pass 3:** after wakeup, dequeue losers.
+
+> [!info]- 5. What does `default` change at runtime?
+> **`block=false`** — if pass 1 finds nothing, **unlock and return** without parking (no `sudog` wait).
+
+> [!info]- 6. How does a **nil channel** case behave inside `select`?
+> Case is **omitted** from `pollorder` — never becomes ready; use **`nil` assignment** to disable a branch in loops.
+
+> [!info]- 7. Empty `select {}` — what happens?
+> **Blocks forever** — `runtime.block()` parks with no cases.
+
+> [!info]- 8. Performance trap when `select` has **many** cases?
+> **`O(n)`** sort + lock sweep each call — prefer **fan-in to one channel** or smaller selectors.
+
+**Key visual:**
+```
+pollorder  = shuffle(case indices)     ← fairness
+lockorder  = sort by &hchan ascending  ← deadlock avoidance
+pass1      walk pollorder → first ready wins   OR   default/-1
+pass2      sudog each channel + gopark (if block)
+```
+
+**Traps to remember:**
+- **Nil channel** silently drops the case — easy to spin with `default`  
+- **No implicit priority** — don’t trust source order as semantics  
+- **Huge `select`** — tail latency from lock/sort cost  
+
+**Weak? Drill deeper** → [[revision/T17 Select Statement Internals - Revision]]
 
 ---
 
