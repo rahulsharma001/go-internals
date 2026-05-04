@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Study Plan.md",
+                "file": "T17 Select Statement Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Study Plan"
+              "title": "T17 Select Statement Internals"
             }
           }
         ],
@@ -269,6 +269,7 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "Study Plan.md",
     "visuals/T17 Select Statement Internals - Visual Map.md",
     "revision/T17 Select Statement Internals - Revision.md",
     "questions/T17 Select Statement Internals - Interview Questions.md",
@@ -277,7 +278,6 @@
     "T17 Select Statement Internals.md",
     "T16 Buffered vs Unbuffered Channels.md",
     "T15 Channel Internals.md",
-    "Study Plan.md",
     "questions/T16 Buffered vs Unbuffered Channels - Interview Questions.md",
     "exercises/T16 Buffered vs Unbuffered Channels - Exercises.md",
     "simplified/T16 Buffered vs Unbuffered Channels - Simplified.md",
