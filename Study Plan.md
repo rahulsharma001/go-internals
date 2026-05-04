@@ -195,8 +195,8 @@ If you apply earlier than Gate 1, do it **deliberately** as data collection — 
 
 - [x] [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
 - [x] [[prerequisites/P08 OS Threads vs Green Threads]]
-- [ ] [[T13 Goroutine Internals]]
-- [ ] [[T14 GMP Scheduler]]
+- [x] [[T13 Goroutine Internals]]
+- [x] [[T14 GMP Scheduler]]
 - [x] [[T15 Channel Internals]]
 - [ ] [[T16 Buffered vs Unbuffered Channels]]
 - [ ] [[T17 Select Statement Internals]]

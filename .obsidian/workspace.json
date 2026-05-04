@@ -56,7 +56,7 @@
             }
           },
           {
-            "id": "0e6e5dd9b5a60122",
+            "id": "0ab7e63382941e9b",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -80,7 +80,7 @@
             }
           },
           {
-            "id": "0ab7e63382941e9b",
+            "id": "76eaf19df250f926",
             "type": "leaf",
             "state": {
               "type": "markdown",
@@ -101,30 +101,6 @@
               },
               "icon": "lucide-file",
               "title": "T16 Buffered vs Unbuffered Channels"
-            }
-          },
-          {
-            "id": "76eaf19df250f926",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "T15 Channel Internals.md",
-                "mode": "preview",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
-              "icon": "lucide-file",
-              "title": "T15 Channel Internals"
             }
           }
         ],
@@ -291,19 +267,19 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "0ab7e63382941e9b",
+  "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "T15 Channel Internals.md",
     "Study Plan.md",
+    "T16 Buffered vs Unbuffered Channels.md",
     "questions/T16 Buffered vs Unbuffered Channels - Interview Questions.md",
     "exercises/T16 Buffered vs Unbuffered Channels - Exercises.md",
     "simplified/T16 Buffered vs Unbuffered Channels - Simplified.md",
-    "T16 Buffered vs Unbuffered Channels.md",
     "Application Targets.md",
     "INTERVIEW_PREP_STATUS.md",
     "Glossary.md",
     "Gap Tracker.md",
     "Daily Revision.md",
-    "T15 Channel Internals.md",
     "Roadmap.md",
     "T14 GMP Scheduler.md",
     "prerequisites/P05 Interfaces Basics.md",
