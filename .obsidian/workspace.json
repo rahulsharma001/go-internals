@@ -269,6 +269,7 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "cursor-skill-go-interview-notes.md",
     "Study Plan.md",
     "Day 1 — Interview Preparation Plan.md",
     "Roadmap.md",
@@ -294,7 +295,6 @@
     "T11 Interface Internals (iface & eface).md",
     "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "questions/T15 Channel Internals - Interview Questions.md",
-    "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
     "prerequisites",
     "visuals",
     "revision",
