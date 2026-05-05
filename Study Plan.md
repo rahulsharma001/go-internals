@@ -91,25 +91,56 @@ Core T-notes (do **not** reorder blindly — follow [[Roadmap]] Phase 4):
 
 ---
 
+## 2.5 Parallel DSA track (run alongside Waves A–G)
+
+**Purpose:** Many loops still include a **timed problem-solving** round (sometimes language-agnostic, sometimes **solve in Go**). This track is **not** optional if you want consistent offer signal.
+
+| Rule | Detail |
+|------|--------|
+| **Daily time** | **45–60 min** on **separate** calendar block from vault deep work — ideally when you're fresh |
+| **Pattern progression** | Rotate weekly themes: **Week A** — arrays/hash, two pointers; **Week B** — intervals, sorting, heaps; **Week C** — trees/graphs BFS/DFS; **Week D** — DP easy/medium classics. Within the week, **one pattern at a time** (don't dabble across 5 patterns in one day) |
+| **Implementation** | **Solve in Go** unless the problem is math-heavy and Go is slowing you down — aim for **production-ish** code: named types, avoid global state, handle edge cases |
+| **Pressure** | At least **half** the sessions use a **timer** (25–35 min per medium target) |
+
+Log misses in [[Study Plan]] §9 Interview log — promote recurring weak patterns into next week's DSA theme.
+
+---
+
+## 2.6 Build-first rule
+
+**Definition:** A vault topic is **not "studied"** until you have **written working Go code** that exercises it — not until you've **read** the note.
+
+| Requirement | Example |
+|---------------|---------|
+| Every **net-new** wave topic must map to **one concrete artifact**: small program, `*_test.go`, or patch to a toy HTTP/gRPC service | Reading [[T17 Select Statement Internals]] → ship a binary that uses **`select` + `ctx.Done()`** + channel close rules |
+| **Interview Mode Layer** implementation task (per skill) is the **minimum bar** — expand only if time allows | Same |
+| Pass **`go test`** / **`go vet`** on your artifact where applicable | Same |
+
+Skim-reading internals without a build counts as **zero** for Gate advancement (§7).
+
+---
+
 ## 3. Calendar: aggressive track (≈2 weeks to "80% pack first pass")
 
-Use this when your goal is **start applying soon** and you can sustain **~2 h/day deep work** + **20–30 min/day** [[Daily Revision]].
+Use this when your goal is **start applying soon** and you can sustain **~2 h/day deep work** + **20–30 min/day** [[Daily Revision]] **+ 45–60 min/day DSA** (§2.5).
 
 | Day block | Focus | Outcome |
 |-----------|------|---------|
-| **Days 1–3** | Close Wave B + Wave C gaps (T09, T10, T11, T12; P05/P07 if rusty) | You can answer interface nil traps + error wrapping cold |
-| **Days 4–10** | Wave D (T13→T19) as the main job | Concurrency band covered end-to-end once |
-| **Days 11–14** | Wave E (P09, T24, T25) + start Wave F (pick **two** of T20–T23 first) | GC story + at least two coding-round patterns solid |
+| **Days 1–3** | Close Wave B + Wave C gaps (T09, T10, T11, T12; P05/P07 if rusty) **with Build-first artifacts** (§2.6) | Error wrapping + nil interface traps + **working code** |
+| **Days 4–10** | Wave D (T13→T19) as the main job — **prioritize behavior + Interview Mode tasks** over deep runtime trivia unless debugging needs it | Concurrency band + timed reps |
+| **Days 11–14** | Wave E + Wave F (pick **two** of T20–T23 first) | GC verbal + **two** coding-round patterns solid |
 
 **Parallel rule (applications):** Starting **Day 4–7** is reasonable **if** Wave A is already comfortable and you have **T15 + P03 + T18** at least read once (you can explain blocking, close rules, and mutex vs channel trade-offs). Use early applications as **calibration**, not as your only shot at dream companies.
 
-**Honest ceiling:** A *first pass* through the 80% pack in ~2 weeks is viable for strong engineers; *fluency* (mock-level smoothness) usually needs **repetition + mocks** across **another 2–3 weeks**. Treat Week 3–4 as **retrieval + mocks**, not as "learn new theory."
+**Honest ceiling:** A *first pass* through the 80% pack in ~2 weeks is viable for strong engineers; *fluency* (mock-level smoothness) usually needs **repetition + mocks** across **another 2–3 weeks**. Treat Week 3–4 as **retrieval + mocks**, not as "learn new theory mountains."
 
 ---
 
 ## 4. Calendar: balanced track (≈4 weeks to fluency on the 80% pack)
 
 Use this if you want **higher confidence per topic** or you are limited to **~45–60 min/day**.
+
+If using this track, treat **§2.5 DSA** as **≥30 min/day** minimum (even when vault minutes shrink); reduce **Section 4 internals reading**, not builds.
 
 | Week | Focus |
 |------|--------|
@@ -122,7 +153,7 @@ Use this if you want **higher confidence per topic** or you are limited to **~45
 
 ---
 
-## 5. Daily rhythm (must match the 80/20 spine)
+## 5. Daily rhythm (must match the 80/20 spine + §2.5–§2.6)
 
 ### Morning — [[Daily Revision]] (20–30 min)
 
@@ -133,18 +164,22 @@ Split topics into two bands (update the bands weekly — see §6):
 
 This is the same 80/20 idea as the roadmap: **most minutes on the few things that are hot in interviews right now**, not equal time on every historical topic.
 
-### Deep work block (45–120 min)
+### Deep work — Build-first block (60–90 min)
 
-Rotation:
+**Rule:** Implementation **before** deep internals reading when time is tight (§2.6).
 
-1. **One** net-new section from the current wave (concept-first, then code — your SKILL pattern).
-2. **Two** retrieval items from Section 6 of that note: **Predict the output** or **trick question** (not MCQ volume).
-3. **One** verbal question (Section 12 / "Interview Gold") answered out loud with a 60–90 s cap.
+1. **One** wave topic from §2 — skim Sections 1–3 + **Interview Mode Layer** only if you've never seen it.
+2. **Ship one artifact:** working Go code that proves the topic (CLI, tests, or tiny HTTP handler). Minimum = skill **Interview Mode** implementation task; stretch = Tier 3 build from Section 6.
+3. **Two** retrieval items from Section 6 of that note: **Predict the output** or **trick question** (not MCQ volume).
+4. **One** verbal answer (Interview Mode or Section 12 / Interview Gold) out loud with a **60–90 s** cap.
 
-### Evening (15–20 min)
+### DSA block (45–60 min) — parallel track
 
-- One **timed** explanation: pick "channel close rules", "context cancellation", or "nil interface" — rotate.
-- If you have energy: **one** small LeetCode medium in Go (implementation, not math trivia) **or** 30 min system-design whiteboard on a service you've shipped.
+See §2.5. **Do not** merge this into vault reading — it's a separate sitting.
+
+### Evening — overflow / optional (0–20 min)
+
+- Only if you missed timed pressure earlier: **one** timed explanation (rotate: channel close, `context`, nil interface) **or** finish a DSA problem under timer.
 
 ### Weekly (non-negotiable for interview readiness)
 
@@ -252,4 +287,4 @@ If you prefer a longer horizon, keep using [[Roadmap]] phases as the dependency 
 
 ---
 
-**Self-audit (internal):** This plan (a) names the 80% set explicitly, (b) orders waves by interview ROI × dependencies, (c) ties [[Daily Revision]] to Focus/Maintenance bands, (d) separates **first-pass** from **fluency**, and (e) gives application gates that do not require finishing the entire vault.
+**Self-audit (internal):** This plan (a) names the 80% set explicitly, (b) orders waves by interview ROI × dependencies, (c) ties [[Daily Revision]] to Focus/Maintenance bands, (d) separates **first-pass** from **fluency**, (e) gives application gates that do not require finishing the entire vault, (f) adds a **parallel DSA track** + **Build-first** rule so study ties to **timed coding** outcomes.
