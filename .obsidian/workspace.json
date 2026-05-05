@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Day 1 — Interview Preparation Plan.md",
+                "file": "Coding Problems/Worker Pool (fixed workers).md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Day 1 — Interview Preparation Plan"
+              "title": "Worker Pool (fixed workers)"
             }
           }
         ],
@@ -269,9 +269,11 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "Day 1 — Interview Preparation Plan.md",
+    "Coding Problems/Worker Pool (fixed workers).md",
+    "Coding Problems",
     "cursor-skill-go-interview-notes.md",
     "Study Plan.md",
-    "Day 1 — Interview Preparation Plan.md",
     "Roadmap.md",
     "T17 Select Statement Internals.md",
     "visuals/T17 Select Statement Internals - Visual Map.md",
@@ -294,7 +296,6 @@
     "T09 Error Handling Patterns.md",
     "T11 Interface Internals (iface & eface).md",
     "questions/Week 1 MCQ - Foundations (T07-T09).md",
-    "questions/T15 Channel Internals - Interview Questions.md",
     "prerequisites",
     "visuals",
     "revision",
