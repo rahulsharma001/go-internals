@@ -91,44 +91,60 @@ Core T-notes (do **not** reorder blindly — follow [[Roadmap]] Phase 4):
 
 ---
 
-## 2.5 Parallel DSA track (run alongside Waves A–G)
+## 2.5 DSA Track (Parallel, Daily)
 
-**Purpose:** Many loops still include a **timed problem-solving** round (sometimes language-agnostic, sometimes **solve in Go**). This track is **not** optional if you want consistent offer signal.
+> **DSA is the first filter in many loops — not optional** if you want consistent pass rates on coding rounds.
 
 | Rule | Detail |
 |------|--------|
-| **Daily time** | **45–60 min** on **separate** calendar block from vault deep work — ideally when you're fresh |
-| **Pattern progression** | Rotate weekly themes: **Week A** — arrays/hash, two pointers; **Week B** — intervals, sorting, heaps; **Week C** — trees/graphs BFS/DFS; **Week D** — DP easy/medium classics. Within the week, **one pattern at a time** (don't dabble across 5 patterns in one day) |
-| **Implementation** | **Solve in Go** unless the problem is math-heavy and Go is slowing you down — aim for **production-ish** code: named types, avoid global state, handle edge cases |
-| **Pressure** | At least **half** the sessions use a **timer** (25–35 min per medium target) |
+| **Daily time** | **45–60 min** dedicated block — use the **full 60 min** when following the **§5** schedule end-to-end |
+| **Pattern progression** | **Week 1:** Arrays, Hashing, Two Pointers · **Week 2:** Sliding Window, Stack, Heap · **Week 3:** Graphs (BFS / DFS) · *(extend with DP / advanced patterns only after Week 3 is stable)* |
+| **Each session** | **Max 2 problems** · **~30 min per problem** (timed) · **Re-code** the solution once without peeking (same session or next morning) |
+| **Language** | Default **Go**; production-ish style (clear names, edge cases, no globals) |
 
-Log misses in [[Study Plan]] §9 Interview log — promote recurring weak patterns into next week's DSA theme.
+Log misses in §9 Interview log — weak patterns feed **next week's DSA theme** and optionally [[Daily Revision]] Focus band.
 
 ---
 
-## 2.6 Build-first rule
+## 2.6 Execution layer (Go waves)
 
-**Definition:** A vault topic is **not "studied"** until you have **written working Go code** that exercises it — not until you've **read** the note.
+**Rule:** *If you are not coding, you are not preparing.*
 
-| Requirement | Example |
-|---------------|---------|
-| Every **net-new** wave topic must map to **one concrete artifact**: small program, `*_test.go`, or patch to a toy HTTP/gRPC service | Reading [[T17 Select Statement Internals]] → ship a binary that uses **`select` + `ctx.Done()`** + channel close rules |
-| **Interview Mode Layer** implementation task (per skill) is the **minimum bar** — expand only if time allows | Same |
-| Pass **`go test`** / **`go vet`** on your artifact where applicable | Same |
+A wave topic counts as **done** only when you have **both**:
 
-Skim-reading internals without a build counts as **zero** for Gate advancement (§7).
+1. **One implementation** — working artifact (`main`, `_test.go`, or tiny service patch).
+2. **One failure / debug scenario** — e.g. `go test -race`, intentional bug → fix, trace deadlock or leak, or “what breaks if…” verbal with code proof.
+
+| Wave | Implementation anchor | Failure / debug anchor |
+|------|-------------------------|-------------------------|
+| **D** (e.g. channels, `select`, mutex, `context`) | Worker pool; `select` + `ctx`; bounded producer/consumer | Race or leak under `-race`; hang with wrong close / missing `Done()` |
+| **F** (patterns) | Fan-out/fan-in; graceful shutdown skeleton | Goroutine leak in pprof; shutdown timeout exceeded |
+| **G** (HTTP / gRPC / DB / observability) | `http.Server` + `Shutdown`; DB query with `context`; basic metrics hook | Stolen conn / pool exhaustion story; handler panic without recover |
+
+Vault **Interview Mode** implementation task = minimum implementation bar; extend only if time allows. Skim-reading **without** the pair above = **no progress** toward gates (§7).
+
+---
+
+## 2.7 Internals discipline
+
+Deep **runtime** internals (scheduler structs, `hchan` layouts, etc.) are **optional** unless:
+
+- an interview **explicitly** goes there, or  
+- you need them to explain **observable behavior** or **debug** (races, GC stalls, scheduling surprises).
+
+Default depth: **behavior → tradeoffs → application**. Prefer traces only where they change how you **code or fix bugs**.
 
 ---
 
 ## 3. Calendar: aggressive track (≈2 weeks to "80% pack first pass")
 
-Use this when your goal is **start applying soon** and you can sustain **~2 h/day deep work** + **20–30 min/day** [[Daily Revision]] **+ 45–60 min/day DSA** (§2.5).
+Use this when your goal is **start applying soon** and you can sustain **§5** most days (≈**2.5–3 h** including DSA + Go execution layer).
 
 | Day block | Focus | Outcome |
 |-----------|------|---------|
-| **Days 1–3** | Close Wave B + Wave C gaps (T09, T10, T11, T12; P05/P07 if rusty) **with Build-first artifacts** (§2.6) | Error wrapping + nil interface traps + **working code** |
-| **Days 4–10** | Wave D (T13→T19) as the main job — **prioritize behavior + Interview Mode tasks** over deep runtime trivia unless debugging needs it | Concurrency band + timed reps |
-| **Days 11–14** | Wave E + Wave F (pick **two** of T20–T23 first) | GC verbal + **two** coding-round patterns solid |
+| **Days 1–3** | Close Wave B + Wave C gaps **with §2.6 artifacts** | Errors + interfaces + **code + debug reps** |
+| **Days 4–10** | Wave D — **implementation + failure scenarios first**; §2.7 keeps theory thin | Concurrency you can **build and fix** under time |
+| **Days 11–14** | Wave E (verbal + one GC debug story) + Wave F (**two** of T20–T23) | GC story + **two** live-coding patterns |
 
 **Parallel rule (applications):** Starting **Day 4–7** is reasonable **if** Wave A is already comfortable and you have **T15 + P03 + T18** at least read once (you can explain blocking, close rules, and mutex vs channel trade-offs). Use early applications as **calibration**, not as your only shot at dream companies.
 
@@ -153,37 +169,26 @@ If using this track, treat **§2.5 DSA** as **≥30 min/day** minimum (even when
 
 ---
 
-## 5. Daily rhythm (must match the 80/20 spine + §2.5–§2.6)
+## 5. Daily Execution Model (~2.5–3 hrs)
 
-### Morning — [[Daily Revision]] (20–30 min)
+Designed for **timed coding + execution**, not passive reading. Swap **Verbal** vs **System design** by day (see block 4).
 
-Split topics into two bands (update the bands weekly — see §6):
+| Block | Time | What |
+|-------|------|------|
+| **1. Morning** | **20–30 min** | [[Daily Revision]] — Focus band (full blurt) + Maintenance band (5-second / skim). Same split as §6. |
+| **2. Deep work** | **60–90 min** | **One** topic from your **current wave** (§2) — **implementation-first**: ship artifact + failure/debug from §2.6 before deep Section 4 reading. Two retrieval drills (predict output / trick) from that note if time remains. One **60–90 s** verbal from Interview Mode or Section 12. |
+| **3. DSA** | **60 min** | §2.5 — **2 problems**, **~30 min each**, timed; **re-code** before closing the session. |
+| **4. Verbal + System design** | **20–30 min** | **Alternate days:** e.g. Mon/Wed/Fri **verbal** tradeoffs (channels vs mutex, shutdown, errors); Tue/Thu/Sat **15–20 min SD sketch** (API + storage + failure). |
 
-1. **Focus band (this week):** Full blurt. No peeking until you have an answer shape.
-2. **Maintenance band (everything behind you):** **5-second answer** or skim-only for topics you rate 3/3 confidence.
+**Optional overflow (≤15 min):** missed timer pressure from earlier blocks — **not** extra theory.
 
-This is the same 80/20 idea as the roadmap: **most minutes on the few things that are hot in interviews right now**, not equal time on every historical topic.
+### Weekly requirements (non-negotiable)
 
-### Deep work — Build-first block (60–90 min)
-
-**Rule:** Implementation **before** deep internals reading when time is tight (§2.6).
-
-1. **One** wave topic from §2 — skim Sections 1–3 + **Interview Mode Layer** only if you've never seen it.
-2. **Ship one artifact:** working Go code that proves the topic (CLI, tests, or tiny HTTP handler). Minimum = skill **Interview Mode** implementation task; stretch = Tier 3 build from Section 6.
-3. **Two** retrieval items from Section 6 of that note: **Predict the output** or **trick question** (not MCQ volume).
-4. **One** verbal answer (Interview Mode or Section 12 / Interview Gold) out loud with a **60–90 s** cap.
-
-### DSA block (45–60 min) — parallel track
-
-See §2.5. **Do not** merge this into vault reading — it's a separate sitting.
-
-### Evening — overflow / optional (0–20 min)
-
-- Only if you missed timed pressure earlier: **one** timed explanation (rotate: channel close, `context`, nil interface) **or** finish a DSA problem under timer.
-
-### Weekly (non-negotiable for interview readiness)
-
-- **≥2 mock sessions** (behavioral + technical or pure technical). Notes-only prep does not simulate pressure.
+| Requirement | Notes |
+|-------------|--------|
+| **≥2 mock interviews** | Behavioral + technical and/or pure coding — notes ≠ readiness |
+| **1× cold build** | **No vault notes** — one **§2.6** implementation + failure scenario (or SD-sized toy) under timer; log gaps to §9 |
+| **Weak-area loop** | Mocks + §9 log + DSA misses → **next week's Focus band** (§6) and DSA Week **n** theme |
 
 ---
 
@@ -275,6 +280,7 @@ If you apply earlier than Gate 1, do it **deliberately** as data collection — 
 
 ## 10. What we deliberately stopped doing (quality bar)
 
+- **No default deep-dive on runtime internals** — follow §2.7 unless behavior/debug demands it.
 - **No high-volume MCQ blocks** as a primary study mode — use **predict-output + verbal gold + mocks**.
 - **No equal-time revision** — maintenance stays thin; focus stays thick.
 - **No pretending two weeks equals two months of fluency** — parallelize **applications + repetition**, not **applications + brand-new theory mountains**.
@@ -287,4 +293,4 @@ If you prefer a longer horizon, keep using [[Roadmap]] phases as the dependency 
 
 ---
 
-**Self-audit (internal):** This plan (a) names the 80% set explicitly, (b) orders waves by interview ROI × dependencies, (c) ties [[Daily Revision]] to Focus/Maintenance bands, (d) separates **first-pass** from **fluency**, (e) gives application gates that do not require finishing the entire vault, (f) adds a **parallel DSA track** + **Build-first** rule so study ties to **timed coding** outcomes.
+**Self-audit (internal):** This plan (a) names the 80% set explicitly, (b) orders waves by interview ROI × dependencies, (c) ties [[Daily Revision]] to Focus/Maintenance bands, (d) separates **first-pass** from **fluency**, (e) gives application gates that do not require finishing the entire vault, (f) makes **DSA + timed execution** non-optional, (g) enforces **§2.6** (code + debug) and **§5** daily structure, (h) keeps **§2.7** from over-investing in theory.

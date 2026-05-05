@@ -85,7 +85,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Study Plan.md",
+                "file": "Day 1 — Interview Preparation Plan.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Study Plan"
+              "title": "Day 1 — Interview Preparation Plan"
             }
           }
         ],
@@ -269,8 +269,10 @@
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
-    "T17 Select Statement Internals.md",
     "Study Plan.md",
+    "Day 1 — Interview Preparation Plan.md",
+    "Roadmap.md",
+    "T17 Select Statement Internals.md",
     "visuals/T17 Select Statement Internals - Visual Map.md",
     "revision/T17 Select Statement Internals - Revision.md",
     "questions/T17 Select Statement Internals - Interview Questions.md",
@@ -286,7 +288,6 @@
     "Glossary.md",
     "Gap Tracker.md",
     "Daily Revision.md",
-    "Roadmap.md",
     "T14 GMP Scheduler.md",
     "prerequisites/P05 Interfaces Basics.md",
     "T09 Error Handling Patterns.md",
@@ -294,7 +295,6 @@
     "questions/Week 1 MCQ - Foundations (T07-T09).md",
     "questions/T15 Channel Internals - Interview Questions.md",
     "prerequisites/P10 OS Threads, Processes, and Go Scheduling Basics.md",
-    "questions/Week 2 MCQ - Foundations (T10-T12).md",
     "prerequisites",
     "visuals",
     "revision",
