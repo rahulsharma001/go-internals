@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T04 Arrays & Slice Internals.md",
+                "file": "T11 Interface Internals (iface & eface).md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T04 Arrays & Slice Internals"
+              "title": "T11 Interface Internals (iface & eface)"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "T04 Arrays & Slice Internals.md",
+                "file": "T11 Interface Internals (iface & eface).md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for T04 Arrays & Slice Internals"
+              "title": "Backlinks for T11 Interface Internals (iface & eface)"
             }
           },
           {
@@ -292,6 +292,8 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "T09 Error Handling Patterns.md",
+    "T04 Arrays & Slice Internals.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
     "RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS.md",
     "Coding Problems/Worker Pool (fixed workers).md",
@@ -318,8 +320,6 @@
     "Gap Tracker.md",
     "Daily Revision.md",
     "T14 GMP Scheduler.md",
-    "prerequisites/P05 Interfaces Basics.md",
-    "T09 Error Handling Patterns.md",
     "prerequisites",
     "visuals",
     "revision",
