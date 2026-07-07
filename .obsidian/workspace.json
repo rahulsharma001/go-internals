@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS.md",
+                "file": "T04 Arrays & Slice Internals.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS"
+              "title": "T04 Arrays & Slice Internals"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS.md",
+                "file": "T04 Arrays & Slice Internals.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS"
+              "title": "Backlinks for T04 Arrays & Slice Internals"
             }
           },
           {
@@ -290,10 +290,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "50a884d25c94c4e3",
+  "active": "c54a305332109d86",
   "lastOpenFiles": [
-    "Coding Problems/Worker Pool (fixed workers).md",
+    "T03 Strings, Runes & UTF-8 Internals.md",
     "RAHUL SHARMA — BEHAVIORAL INTERVIEW COMPILATION MASTERCLASS.md",
+    "Coding Problems/Worker Pool (fixed workers).md",
     "Behavioural",
     "Day 1 — Interview Preparation Plan.md",
     "Coding Problems",
@@ -319,7 +320,6 @@
     "T14 GMP Scheduler.md",
     "prerequisites/P05 Interfaces Basics.md",
     "T09 Error Handling Patterns.md",
-    "T11 Interface Internals (iface & eface).md",
     "prerequisites",
     "visuals",
     "revision",
