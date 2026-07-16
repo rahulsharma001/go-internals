@@ -292,6 +292,7 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "01 Inbox/Unprocessed/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
     "00 Home/Indexes/Coding Drill Index.md",
     "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
     "02 Go/Coding Drills/Complete Small Executable Programs - Drill.md",
@@ -319,7 +320,6 @@
     "exercises/T17 Select Statement Internals - Exercises.md",
     "simplified/T17 Select Statement Internals - Simplified.md",
     "T16 Buffered vs Unbuffered Channels.md",
-    "T15 Channel Internals.md",
     "prerequisites",
     "visuals",
     "revision",
