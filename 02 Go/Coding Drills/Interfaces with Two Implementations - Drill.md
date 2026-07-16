@@ -78,3 +78,4 @@ func main() {
 
 Related: [[Go Interfaces]] · [[Interface Design in Go]]
 
+Index: [[Coding Drill Index]]

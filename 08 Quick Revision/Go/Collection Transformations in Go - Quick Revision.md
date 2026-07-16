@@ -40,3 +40,4 @@ Write stable dedupe, index-by-ID, group-by-key, and balanced partitioning. State
 
 Canonical: [[Collection Transformations in Go]] · Drills: [[Balanced Slice Groups - Drill]], [[Nested Maps and Slice Values - Drill]]
 
+Index: [[Quick Revision Index]]

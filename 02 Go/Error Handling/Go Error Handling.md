@@ -143,3 +143,6 @@ Build repository → service → boundary functions with a sentinel, a custom va
 - [[Go Error Handling - Quick Revision]]
 - [[Complete Small Executable Programs - Drill]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

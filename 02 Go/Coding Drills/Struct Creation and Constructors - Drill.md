@@ -84,3 +84,4 @@ func main() {
 
 Related: [[Go Structs and Constructors]] · [[Go Error Handling]]
 
+Index: [[Coding Drill Index]]

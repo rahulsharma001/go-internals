@@ -100,3 +100,6 @@ Write four assignments using a value/pointer concrete type and a value/pointer r
 - [[Correct Interface Invocation from Main - Drill]]
 - [[Go Method Sets - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

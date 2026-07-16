@@ -119,3 +119,6 @@ Take a five-method repository and write a one- or two-method interface for a sin
 - [[Correct Interface Invocation from Main - Drill]]
 - [[Interface Design in Go - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

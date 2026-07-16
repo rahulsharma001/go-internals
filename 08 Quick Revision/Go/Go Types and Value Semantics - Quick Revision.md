@@ -41,3 +41,4 @@ Predict what changes after copying a struct containing `int`, `[]string`, and `m
 
 Canonical: [[Go Types and Value Semantics]] · Drill: [[Complete Small Executable Programs - Drill]]
 
+Index: [[Quick Revision Index]]

@@ -46,3 +46,4 @@ Write copy, filter, delete, and reverse from a blank editor. Which mutate input?
 
 Canonical: [[Go Slices]] · Drills: [[Slice Creation and Modification - Drill]], [[Balanced Slice Groups - Drill]]
 
+Index: [[Quick Revision Index]]

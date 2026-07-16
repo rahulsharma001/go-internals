@@ -95,3 +95,6 @@ Implement one value method and one mutating pointer method. Predict behavior bef
 - [[Pointer and Value Receivers - Drill]]
 - [[Go Methods and Receivers - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

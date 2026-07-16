@@ -50,3 +50,4 @@ Build repo → service → edge flow with a sentinel and custom validation error
 
 Canonical: [[Go Error Handling]] · Drill: [[Complete Small Executable Programs - Drill]]
 
+Index: [[Quick Revision Index]]

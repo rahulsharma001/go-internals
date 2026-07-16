@@ -93,3 +93,6 @@ Without running code, predict what changes after copying a struct containing a n
 - [[Complete Go Programs]]
 - [[Go Types and Value Semantics - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

@@ -6,7 +6,7 @@ status: implementation-needed
 source_notes:
   - "[[99 Archive/Superseded Originals/prerequisites/P05 Interfaces Basics]]"
   - "[[99 Archive/Superseded Originals/root/T01 Go Type System & Value Semantics]]"
-  - "[[T11 Interface Internals (iface & eface)]]"
+  - "[[99 Archive/Superseded Originals/root/T11 Interface Internals (iface & eface)]]"
   - "[[99 Archive/Superseded Originals/root/T12 Interface Design Principles]]"
 ---
 
@@ -16,7 +16,7 @@ source_notes:
 
 An interface describes required behavior as a method set. A concrete type satisfies it implicitly by having those methods; there is no `implements` declaration. This lets consumers depend on a capability while `main()` chooses a concrete implementation.
 
-At the value level, think of an interface as carrying a concrete dynamic type and a concrete dynamic value. An interface is nil only when neither is present. Runtime representation details remain in [[T11 Interface Internals (iface & eface)]] and are not part of this usage-first canonical.
+At the value level, think of an interface as carrying a concrete dynamic type and a concrete dynamic value. An interface is nil only when neither is present. Runtime representation details remain in [[Go Interface Internals]] and are not part of this usage-first canonical.
 
 ## Minimum executable example
 
@@ -134,3 +134,6 @@ Define a one-method consumer interface, write two implementations, add compile-t
 - [[Correct Interface Invocation from Main - Drill]]
 - [[Go Interfaces - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

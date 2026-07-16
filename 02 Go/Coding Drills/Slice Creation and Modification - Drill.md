@@ -84,3 +84,4 @@ func main() {
 
 Related: [[Go Slices]] · [[Go Slices - Quick Revision]]
 
+Index: [[Coding Drill Index]]

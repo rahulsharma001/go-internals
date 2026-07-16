@@ -51,3 +51,4 @@ Build a validated struct constructor, call success and failure from `main`, then
 
 Canonical: [[Go Structs and Constructors]] · Drill: [[Struct Creation and Constructors - Drill]]
 
+Index: [[Quick Revision Index]]

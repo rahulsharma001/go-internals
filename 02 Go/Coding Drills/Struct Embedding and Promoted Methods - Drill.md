@@ -80,3 +80,4 @@ func main() {
 
 Related: [[Struct Embedding and Composition]] · [[Go Method Sets]]
 
+Index: [[Coding Drill Index]]

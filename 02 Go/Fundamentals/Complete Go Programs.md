@@ -88,3 +88,6 @@ Open a blank file and build a runnable program containing one struct, one constr
 - [[Correct Interface Invocation from Main - Drill]]
 - [[Complete Go Programs - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

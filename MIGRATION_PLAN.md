@@ -1,8 +1,27 @@
 # Engineering OS Migration Plan
 
 > Prepared: 2026-07-16  
-> Status: proposal only; **no migration has been executed**.  
-> Preconditions: preserve every source, use `99 Archive` for superseded originals, maintain a source ledger and aliases, and execute one controlled stage at a time.
+> Updated: 2026-07-16 after Stage 1 and full structural cleanup
+> Status: **structural cleanup executed**; source-backed Go migration and navigation complete, while unsupported knowledge areas remain intentionally unfilled.
+> Controls retained: preserve every source, use `99 Archive` for superseded originals, maintain source traceability, and do not claim readiness without evidence.
+
+## Execution update — full vault cleanup
+
+- [x] Stage 1 usage-first Go foundations, quick revisions, and ten blank-editor drills completed; see [[MIGRATION_REPORT_STAGE_1]].
+- [x] Complete numbered target directory structure created, including `01 Inbox` and project/interview/infrastructure placeholders.
+- [x] Root technical/study/behavioural noise relocated; visible root now contains repository instructions, README, audit/migration plans, inventories, and migration reports only.
+- [x] Legacy root directories migrated and removed; empty index shells and starter content preserved under `99 Archive/Legacy Structure`.
+- [x] Remaining substantive Go foundations, concurrency, runtime/memory, Gin, MongoDB, and worker-pool sources assigned canonical owners.
+- [x] Superseded technical packs preserved under `99 Archive/Superseded Originals` with canonical backlinks.
+- [x] Fundamentals-first Go learning path, MOCs, dashboard, current-week focus, quick-revision index, drill/mistake indexes, and Google roadmap created.
+- [x] Behavioural compilation relocated and marked as unverified personal evidence.
+- [x] Active-link validation completed for numbered directories; the final scan found no unresolved active wikilink targets.
+- [ ] DSA problem attempts, timed mocks, and mistake records require real practice evidence and were not fabricated.
+- [ ] Kafka, caching, Kubernetes, AWS, general database, reliability, security, networking, and observability canonicals require substantive traceable sources.
+- [ ] NCS, CEE, CoMarketer, and PulseCheck project notes require verified user-provided evidence.
+- [ ] Behavioural claims require line-by-line verification before canonical STAR/project reuse.
+
+Detailed results and remaining work: [[MIGRATION_REPORT_FULL_VAULT_CLEANUP]].
 
 ## Migration objective
 
@@ -587,6 +606,6 @@ Manual decisions: project source availability; verified metrics; dashboard query
 - [ ] Personal/project claims were confirmed by the user; unknowns remain unknown.
 - [ ] Only the approved stage changed.
 
-## Immediate next action after this audit
+## Immediate next action after structural cleanup
 
-Do not create the target folders yet. Review and approve the Stage 1 canonical ownership decisions—especially the separation of usage-first foundations from runtime internals—then create a Stage 1 file-by-file migration ledger before making any vault changes.
+Do not expand the folder structure or generate a broad content encyclopedia. Use [[Current Week]] to collect cold implementation, timed modification, mock, mistake, and re-test evidence. Let those observed gaps select the next source-backed DSA, system-design, infrastructure, behavioural, or project stage.

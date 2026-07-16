@@ -89,3 +89,4 @@ func main() {
 
 Related: [[Go Methods and Receivers]] · [[Go Method Sets]]
 
+Index: [[Coding Drill Index]]

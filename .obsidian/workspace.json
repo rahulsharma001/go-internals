@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "T11 Interface Internals (iface & eface).md",
+                "file": "02 Go/Collections/Go Maps.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "T11 Interface Internals (iface & eface)"
+              "title": "Go Maps"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "T11 Interface Internals (iface & eface).md",
+                "file": "02 Go/Collections/Go Maps.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for T11 Interface Internals (iface & eface)"
+              "title": "Backlinks for Go Maps"
             }
           },
           {
@@ -292,6 +292,9 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "Connections.md",
+    "Roadmap.md",
+    "T11 Interface Internals (iface & eface).md",
     "T09 Error Handling Patterns.md",
     "T04 Arrays & Slice Internals.md",
     "T03 Strings, Runes & UTF-8 Internals.md",
@@ -302,7 +305,6 @@
     "Coding Problems",
     "cursor-skill-go-interview-notes.md",
     "Study Plan.md",
-    "Roadmap.md",
     "T17 Select Statement Internals.md",
     "visuals/T17 Select Statement Internals - Visual Map.md",
     "revision/T17 Select Statement Internals - Revision.md",
@@ -318,8 +320,6 @@
     "INTERVIEW_PREP_STATUS.md",
     "Glossary.md",
     "Gap Tracker.md",
-    "Daily Revision.md",
-    "T14 GMP Scheduler.md",
     "prerequisites",
     "visuals",
     "revision",

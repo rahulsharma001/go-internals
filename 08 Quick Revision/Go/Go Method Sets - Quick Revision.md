@@ -46,3 +46,4 @@ For two methods—one value receiver and one pointer receiver—write interface 
 
 Canonical: [[Go Method Sets]] · Drill: [[Correct Interface Invocation from Main - Drill]]
 
+Index: [[Quick Revision Index]]

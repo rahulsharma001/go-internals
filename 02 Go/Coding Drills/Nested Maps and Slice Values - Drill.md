@@ -76,3 +76,4 @@ func main() {
 
 Related: [[Go Maps]] · [[Collection Transformations in Go]]
 
+Index: [[Coding Drill Index]]

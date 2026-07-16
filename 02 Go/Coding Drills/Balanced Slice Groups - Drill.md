@@ -104,3 +104,4 @@ func main() {
 
 Related: [[Go Slices]] · [[Collection Transformations in Go]]
 
+Index: [[Coding Drill Index]]

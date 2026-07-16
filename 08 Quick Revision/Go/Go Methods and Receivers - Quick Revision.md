@@ -44,3 +44,4 @@ Predict whether scalar-field update, slice-element update, and slice-append fiel
 
 Canonical: [[Go Methods and Receivers]] · Drill: [[Pointer and Value Receivers - Drill]]
 
+Index: [[Quick Revision Index]]

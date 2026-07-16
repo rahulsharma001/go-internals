@@ -73,3 +73,4 @@ func main() {
 
 Related: [[Go Maps]] · [[Go Maps - Quick Revision]]
 
+Index: [[Coding Drill Index]]

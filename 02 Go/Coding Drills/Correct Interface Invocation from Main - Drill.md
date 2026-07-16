@@ -77,3 +77,4 @@ func main() {
 
 Related: [[Go Method Sets]] · [[Go Interfaces]] · [[Complete Go Programs]]
 
+Index: [[Coding Drill Index]]

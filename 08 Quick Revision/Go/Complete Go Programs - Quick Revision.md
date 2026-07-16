@@ -46,3 +46,4 @@ Create a runnable file with a struct, constructor, method, interface, two implem
 
 Canonical: [[Complete Go Programs]] · Drill: [[Complete Small Executable Programs - Drill]]
 
+Index: [[Quick Revision Index]]

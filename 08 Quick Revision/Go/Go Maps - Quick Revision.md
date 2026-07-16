@@ -47,3 +47,4 @@ Implement frequency counting, grouping, a set, and stable output. Explain the ab
 
 Canonical: [[Go Maps]] · Drills: [[Map Frequency Counting - Drill]], [[Nested Maps and Slice Values - Drill]]
 
+Index: [[Quick Revision Index]]

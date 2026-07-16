@@ -49,3 +49,4 @@ Write two implementations, assertions, and `main` wiring. Convert one method to 
 
 Canonical: [[Go Interfaces]] · Drills: [[Interfaces with Two Implementations - Drill]], [[Correct Interface Invocation from Main - Drill]]
 
+Index: [[Quick Revision Index]]

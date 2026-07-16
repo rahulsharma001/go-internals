@@ -111,3 +111,6 @@ Embed a component with one method, invoke the promoted method, create a same-nam
 - [[Struct Embedding and Promoted Methods - Drill]]
 - [[Struct Embedding and Composition - Quick Revision]]
 
+Parent MOC: [[Go Map of Content]]
+
+Mistakes and re-tests: [[Mistake Index]]

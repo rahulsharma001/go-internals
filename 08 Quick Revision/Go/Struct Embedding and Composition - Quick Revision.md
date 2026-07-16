@@ -46,3 +46,4 @@ Create two embedded loggers with the same method, observe the ambiguous selector
 
 Canonical: [[Struct Embedding and Composition]] · Drill: [[Struct Embedding and Promoted Methods - Drill]]
 
+Index: [[Quick Revision Index]]

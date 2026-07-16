@@ -43,3 +43,4 @@ Given a ten-method repository, design the smallest interface for one handler. Wh
 
 Canonical: [[Interface Design in Go]] · Drill: [[Interfaces with Two Implementations - Drill]]
 
+Index: [[Quick Revision Index]]
