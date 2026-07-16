@@ -3,8 +3,6 @@ type: canonical
 domain: go
 topic: go-slices
 status: implementation-needed
-aliases:
-  - T04 Arrays & Slice Internals
 source_notes:
   - "[[99 Archive/Superseded Originals/root/T04 Arrays & Slice Internals]]"
   - "[[99 Archive/Superseded Originals/simplified/T04 Arrays & Slice Internals - Simplified]]"
@@ -103,6 +101,7 @@ From a blank editor, implement copy, filter, delete, deduplicate, and reverse. G
 ## Related notes
 
 - [[Collection Transformations in Go]]
+- [[Go Slice Internals]]
 - [[Slice Creation and Modification - Drill]]
 - [[Balanced Slice Groups - Drill]]
 - [[Go Slices - Quick Revision]]

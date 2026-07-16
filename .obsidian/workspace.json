@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
+                "file": "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Slice Creation and Modification - Drill"
+              "title": "Stage 1 Go Foundation Implementation Gate"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
+                "file": "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Slice Creation and Modification - Drill"
+              "title": "Backlinks for Stage 1 Go Foundation Implementation Gate"
             }
           },
           {
@@ -292,6 +292,12 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
+    "08 Quick Revision/Go/Go Internals Revision.md",
+    "02 Go/Runtime and Memory/Go Runtime Overview.md",
+    "02 Go/Runtime and Memory/Go Channel Internals.md",
+    "02 Go/Runtime and Memory/Go Slice Internals.md",
+    "02 Go/Fundamentals/Go Generics.md",
     "30_DAY_FAANG_SPRINT_CREATION_REPORT.md",
     "tools/30_day_sprint/__pycache__/updatecpython-310.pyc",
     "tools/30_day_sprint/__pycache__",
@@ -321,12 +327,6 @@
     "practice/30-day-sprint/week-02-dsa",
     "practice/30-day-sprint/week-01-go-recovery",
     "30_DAY_FAANG_SPRINT_AUDIT_PLAN.md",
-    "00 Home/Indexes/Coding Drill Index.md",
-    "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
-    "02 Go/Coding Drills/Complete Small Executable Programs - Drill.md",
-    "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
-    "00 Home/Current Focus/Current Week.md",
-    "02 Go/Collections/Go Maps.md",
-    "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md"
+    "00 Home/Indexes/Coding Drill Index.md"
   ]
 }

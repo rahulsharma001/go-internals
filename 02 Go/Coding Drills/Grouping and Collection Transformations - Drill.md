@@ -34,7 +34,7 @@ func groupActiveByTeam(users []User) map[string][]User
 
 ## Modification challenge
 
-Return teams in stable alphabetical order, deduplicate users by name within a team, then generalize the grouping helper with an appropriate type parameter only after the concrete version works.
+Return teams in stable alphabetical order and deduplicate users by name within a team. The existing type-parameter variation is preserved in [[Go Generics]], but it remains outside the active 30-day sprint and should be attempted only after the concrete version works and the topic is deliberately scheduled.
 
 ## Attempt record and re-test history
 
@@ -44,9 +44,8 @@ Return teams in stable alphabetical order, deduplicate users by name within a te
 
 | Re-test date | Variant | Result | Remaining mistake |
 |---|---|---|---|
-| | stable / dedupe / generic | | |
+| | stable / dedupe; generic deferred | | |
 
-Related: [[Collection Transformations in Go]] · [[Go Maps]] · [[Go Slices]]
+Related: [[Collection Transformations in Go]] · [[Go Maps]] · [[Go Slices]] · [[Go Generics]]
 
 Index: [[Coding Drill Index]]
-

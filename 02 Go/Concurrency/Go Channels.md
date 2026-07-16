@@ -4,7 +4,6 @@ domain: go
 topic: channels
 status: implementation-needed
 aliases:
-  - T15 Channel Internals
   - T16 Buffered vs Unbuffered Channels
 source_notes:
   - "[[99 Archive/Superseded Originals/root/T15 Channel Internals]]"
@@ -67,7 +66,7 @@ The producer owns the send-only view and closure. Capacity one absorbs at most o
 
 ## Under the hood
 
-The runtime coordinates waiting senders and receivers and, for buffered channels, a bounded queue. Runtime layout is version-sensitive; use the behavior contract as the design foundation. Channel operations create synchronization relationships described in [[Go Memory Model]].
+The runtime coordinates waiting senders and receivers and, for buffered channels, a bounded queue. Detailed runtime behavior belongs in [[Go Channel Internals]]. Runtime layout is version-sensitive; use the language contract as the design foundation. Channel operations create synchronization relationships described in [[Go Memory Model]].
 
 ## Production usage, success, and failure
 
@@ -99,6 +98,7 @@ Build a producer, two workers, and one results closer. Then make the consumer st
 - [[Goroutines and Lifecycle]]
 - [[Worker Pool]]
 - [[Go Memory Model]]
+- [[Go Channel Internals]]
 - [[Go Channels - Quick Revision]]
 
 Parent MOC: [[Go Map of Content]]

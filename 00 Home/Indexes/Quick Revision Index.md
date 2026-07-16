@@ -29,10 +29,10 @@ Each card is a five-minute companion. Use the canonical for learning and the dri
 - [[Synchronization - Quick Revision]] · [[Worker Pool - Quick Revision]]
 - [[Go Scheduler - Quick Revision]] · [[Go Memory Model - Quick Revision]]
 - [[Go Interface Internals - Quick Revision]]
+- [[Go Internals Revision]] — eight-topic runtime routing card
 
 ## Other domains
 
 System design, Kafka, caching, Kubernetes, databases, networking, and security cards should be added only as corresponding source-backed canonicals are developed. The vault currently has no substantive Kafka/Kubernetes canonicals to summarize.
 
 Return: [[Engineering Dashboard]]
-

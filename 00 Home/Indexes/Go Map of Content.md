@@ -13,6 +13,7 @@ Start: [[Go Learning Path]] · Focus: [[Current Week]] · Revision: [[Quick Revi
 - [[Go Types and Value Semantics]] · [[Complete Go Programs]]
 - [[Strings Bytes Runes and UTF-8]] · [[Pointers in Go]] · [[Functions and Closures]]
 - [[Go Slices]] · [[Go Maps]] · [[Collection Transformations in Go]]
+- [[Go Generics]] — core syntax only; advanced depth remains deferred
 
 ## Structs, methods, and interfaces
 
@@ -27,9 +28,11 @@ Start: [[Go Learning Path]] · Focus: [[Current Week]] · Revision: [[Quick Revi
 
 ## Runtime and memory
 
+- [[Go Runtime Overview]] · [[Go Internals Revision]]
 - [[Go Scheduler]] · [[Go Memory Model]]
 - [[Go Memory Allocation and Escape Analysis]] · [[Go Garbage Collector]]
-- [[Go Map Internals]] · [[Go Interface Internals]]
+- [[Go Slice Internals]] · [[Go Map Internals]]
+- [[Go Interface Internals]] · [[Go Channel Internals]]
 
 ## Networking, databases, testing, and drills
 
@@ -38,4 +41,3 @@ Start: [[Go Learning Path]] · Focus: [[Current Week]] · Revision: [[Quick Revi
 - [[Coding Drill Index]] · [[Mistake Index]] · [[Go Interview Question Index]]
 
 Legacy depth and source packs remain readable under `99 Archive/Superseded Originals`.
-

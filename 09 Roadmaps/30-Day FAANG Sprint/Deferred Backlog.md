@@ -10,8 +10,8 @@ These topics remain available in the vault but are outside the active 30-day que
 
 ## Go
 
-- Scheduler, garbage collector, allocation internals, interface representation, and map internals.
-- Advanced generics and generic framework design.
+- Runtime-depth study: scheduler, memory model, allocation/escape analysis, garbage collection, and slice, map, interface, and channel internals. Use [[Go Runtime Overview]] only for routing until a mock-proven gap justifies swapping an existing sprint task.
+- Core generic syntax remains available in [[Go Generics]]. Advanced constraints, generic container libraries, compiler details, and generic framework design remain deferred.
 - Uncommon standard-library packages and framework-specific depth.
 - Exhaustive design-pattern implementations, graceful-shutdown expansion, and large Go project ideas.
 
@@ -34,4 +34,3 @@ Existing sources remain linked through [[Go Map of Content]] and [[Go Learning P
 - Broad employer research without an active role.
 - Resume variants for unverified project claims.
 - Lifetime Senior/Staff curriculum expansion; resume after the sprint exit review.
-

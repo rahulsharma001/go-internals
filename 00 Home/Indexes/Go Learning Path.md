@@ -40,12 +40,15 @@ Exit evidence: ownership, cancellation, error propagation, boundedness, race rea
 
 ## Level 4 — Runtime internals
 
+- [[Go Runtime Overview]]
 - [[Go Scheduler]]
 - [[Go Memory Model]]
 - [[Go Memory Allocation and Escape Analysis]]
 - [[Go Garbage Collector]]
+- [[Go Slice Internals]]
 - [[Go Map Internals]]
 - [[Go Interface Internals]]
+- [[Go Channel Internals]]
 
 These notes support debugging and deeper interviews; they do not replace Levels 1–3.
 
@@ -54,4 +57,3 @@ These notes support debugging and deeper interviews; they do not replace Levels 
 Connect Go decisions to API contracts, observability, resilience, storage, distributed systems, performance profiles, and explicit trade-offs through [[System Design Map of Content]]. Source-backed coverage is currently limited.
 
 Navigation: [[Go Map of Content]] · [[Quick Revision Index]] · [[Google Engineering Roadmap]]
-
