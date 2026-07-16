@@ -295,9 +295,29 @@ def build_sections(root: Path, tasks: list[Task], run_date: date) -> dict[str, s
     if applications:
         by_status = Counter(task.status for task in applications)
         summary = ", ".join(f"`{status}` {count}" for status, count in sorted(by_status.items()))
-        upcoming = [task for task in applications if task.status not in {"interview-ready", "blocked"}][:5]
         app_lines = [f"**Pipeline tasks:** {summary}."]
-        app_lines.extend(f"- {task.when} ({task.company or 'pipeline'}) — {task.description}" for task in upcoming)
+        current = [
+            task
+            for task in applications
+            if task.when <= run_date and task.status not in {"interview-ready", "blocked"}
+        ][:3]
+        if current:
+            app_lines.extend(
+                f"- {task.when} ({task.company or 'pipeline'}) — {task.description}" for task in current
+            )
+        else:
+            upcoming = next(
+                (
+                    task
+                    for task in applications
+                    if task.when > run_date and task.status not in {"interview-ready", "blocked"}
+                ),
+                None,
+            )
+            if upcoming:
+                app_lines.append(
+                    f"- Next scheduled: {upcoming.when} ({upcoming.company or 'pipeline'}) — {upcoming.description}"
+                )
         applications_text = "\n".join(app_lines)
     else:
         applications_text = "No application task is recorded."
@@ -341,6 +361,11 @@ def main() -> int:
     tasks, errors = parse_tasks(root)
     if not dashboard.exists():
         errors.append(f"dashboard not found: {dashboard}")
+        original = ""
+        updated = ""
+    else:
+        original = dashboard.read_text(encoding="utf-8")
+        updated = replace_sections(original, build_sections(root, tasks, args.run_date), errors)
     if errors:
         print("Invalid sprint metadata:", file=sys.stderr)
         for error in errors:
@@ -351,13 +376,6 @@ def main() -> int:
         print(f"Valid: {len(tasks)} tasks across {len({task.when for task in tasks})} days; dashboard unchanged.")
         return 0
 
-    original = dashboard.read_text(encoding="utf-8")
-    updated = replace_sections(original, build_sections(root, tasks, args.run_date), errors)
-    if errors:
-        print("Dashboard update failed:", file=sys.stderr)
-        for error in errors:
-            print(f"- {error}", file=sys.stderr)
-        return 2
     if updated == original:
         print(f"Dashboard already current for {args.run_date}; {len(tasks)} tasks validated.")
         return 0

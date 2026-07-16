@@ -84,11 +84,7 @@ No mock score is recorded.
 
 <!-- AUTO:applications:start -->
 **Pipeline tasks:** `not-started` 12.
-- 2026-07-23 (referral-pipeline) — **W2A01 — Go map syntax review plus referral pipeline seed.** Rebuild set/frequency/grouping snippets in 20 minutes, then record five real referral/recruiter leads with next actions; do not maintain the spreadsheet.
-- 2026-07-25 (recruiter-outreach) — **W2A02 — Window/map syntax review plus recruiter outreach.** Recreate last-seen and count-window snippets, then send or prepare evidence-based outreach to the recorded leads.
-- 2026-07-28 (referral-follow-up) — **W2A03 — Queue/heap syntax review plus referral follow-up.** Rebuild the minimal Go heap and queue, then update next actions for every active lead.
-- 2026-07-30 (secondary-targets) — **W3A01 — Secondary-role shortlist.** Verify five current roles from real JDs, record fit gaps and next action in Obsidian, and exclude roles that would require unverified resume claims.
-- 2026-08-03 (secondary-targets) — **W3A02 — Apply to secondary targets.** Submit only role-appropriate, truthful applications; record company, role, source, stage, date, and next action in Obsidian.
+- Next scheduled: 2026-07-23 (referral-pipeline) — **W2A01 — Go map syntax review plus referral pipeline seed.** Rebuild set/frequency/grouping snippets in 20 minutes, then record five real referral/recruiter leads with next actions; do not maintain the spreadsheet.
 <!-- AUTO:applications:end -->
 
 ## Next five actions
