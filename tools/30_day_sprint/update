@@ -1,0 +1,378 @@
+#!/usr/bin/env python3
+"""Validate sprint task metadata and refresh computed dashboard sections."""
+
+from __future__ import annotations
+
+import argparse
+import os
+import re
+import sys
+import tempfile
+from collections import Counter, defaultdict
+from dataclasses import dataclass
+from datetime import date
+from pathlib import Path
+
+
+STATUSES = {
+    "not-started",
+    "attempting",
+    "needs-fix",
+    "re-test-due",
+    "interview-ready",
+    "blocked",
+    "deferred",
+}
+REVIEWS = {"none", "pending", "changes-requested", "approved"}
+PROP_RE = re.compile(r"\[([A-Za-z0-9_-]+)::\s*([^\]]*)\]")
+TASK_RE = re.compile(r"\[task_id::")
+CHECKBOX_RE = re.compile(r"^\s*-\s*\[[ xX]\]\s*")
+
+
+@dataclass(frozen=True)
+class Task:
+    task_id: str
+    when: date
+    week: int
+    area: str
+    status: str
+    primary: bool
+    new_concepts: int
+    review: str
+    retest: date | None
+    mistake: str
+    mock_score: float | None
+    company: str
+    evidence: str
+    description: str
+    source: Path
+    line: int
+
+
+def parse_args() -> argparse.Namespace:
+    default_root = Path(__file__).resolve().parents[2]
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=default_root)
+    parser.add_argument("--dashboard", type=Path)
+    parser.add_argument("--date", dest="run_date", type=date.fromisoformat, default=date.today())
+    parser.add_argument("--check", action="store_true", help="validate without updating the dashboard")
+    return parser.parse_args()
+
+
+def parse_optional_date(value: str, label: str, where: str, errors: list[str]) -> date | None:
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        errors.append(f"{where}: invalid {label} date {value!r}; expected YYYY-MM-DD")
+        return None
+
+
+def parse_tasks(root: Path) -> tuple[list[Task], list[str]]:
+    errors: list[str] = []
+    tasks: list[Task] = []
+    sources = [root / "09 Roadmaps/30-Day FAANG Sprint", root / "practice/30-day-sprint"]
+    paths = sorted(path for base in sources if base.exists() for path in base.rglob("*.md"))
+
+    required = {"task_id", "date", "week", "area", "status", "primary", "new_concepts", "review"}
+    for path in paths:
+        for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if not TASK_RE.search(line):
+                continue
+            props = {key: value.strip() for key, value in PROP_RE.findall(line)}
+            rel = path.relative_to(root)
+            where = f"{rel}:{line_no}"
+            missing = sorted(required - props.keys())
+            if missing:
+                errors.append(f"{where}: missing properties: {', '.join(missing)}")
+                continue
+
+            status = props["status"]
+            if status not in STATUSES:
+                errors.append(f"{where}: invalid status {status!r}")
+            review = props["review"]
+            if review not in REVIEWS:
+                errors.append(f"{where}: invalid review {review!r}")
+            if props["primary"] not in {"true", "false"}:
+                errors.append(f"{where}: primary must be true or false")
+                primary = False
+            else:
+                primary = props["primary"] == "true"
+
+            try:
+                when = date.fromisoformat(props["date"])
+            except ValueError:
+                errors.append(f"{where}: invalid task date {props['date']!r}")
+                continue
+            try:
+                week = int(props["week"])
+                if week not in range(1, 5):
+                    raise ValueError
+            except ValueError:
+                errors.append(f"{where}: week must be 1, 2, 3, or 4")
+                continue
+            try:
+                new_concepts = int(props["new_concepts"])
+                if new_concepts not in range(0, 3):
+                    raise ValueError
+            except ValueError:
+                errors.append(f"{where}: new_concepts must be 0, 1, or 2")
+                continue
+
+            mock_score = None
+            if props.get("mock_score", ""):
+                try:
+                    mock_score = float(props["mock_score"])
+                    if not 0 <= mock_score <= 100:
+                        raise ValueError
+                except ValueError:
+                    errors.append(f"{where}: mock_score must be between 0 and 100")
+                    mock_score = None
+
+            evidence = props.get("evidence", "")
+            if status == "interview-ready" and not evidence:
+                errors.append(f"{where}: interview-ready requires a non-empty evidence property")
+
+            description = CHECKBOX_RE.sub("", PROP_RE.sub("", line)).strip()
+            tasks.append(
+                Task(
+                    task_id=props["task_id"],
+                    when=when,
+                    week=week,
+                    area=props["area"],
+                    status=status,
+                    primary=primary,
+                    new_concepts=new_concepts,
+                    review=review,
+                    retest=parse_optional_date(props.get("retest", ""), "retest", where, errors),
+                    mistake=props.get("mistake", ""),
+                    mock_score=mock_score,
+                    company=props.get("company", ""),
+                    evidence=evidence,
+                    description=description,
+                    source=rel,
+                    line=line_no,
+                )
+            )
+
+    ids: dict[str, Task] = {}
+    daily_primary: Counter[date] = Counter()
+    daily_concepts: Counter[date] = Counter()
+    for task in tasks:
+        if task.task_id in ids:
+            errors.append(
+                f"{task.source}:{task.line}: duplicate task_id {task.task_id!r}; "
+                f"first seen at {ids[task.task_id].source}:{ids[task.task_id].line}"
+            )
+        ids[task.task_id] = task
+        if task.primary and task.status != "deferred":
+            daily_primary[task.when] += 1
+        if task.status != "deferred":
+            daily_concepts[task.when] += task.new_concepts
+
+    for when, count in sorted(daily_primary.items()):
+        if count > 4:
+            errors.append(f"{when}: {count} primary tasks; maximum is 4")
+    for when, count in sorted(daily_concepts.items()):
+        if count > 2:
+            errors.append(f"{when}: {count} new concepts; maximum is 2")
+    week_one_count = sum(task.week == 1 and task.status != "deferred" for task in tasks)
+    if week_one_count and not 25 <= week_one_count <= 30:
+        errors.append(f"Week 1 has {week_one_count} active tasks; expected 25-30")
+    return tasks, errors
+
+
+def frontmatter(path: Path) -> dict[str, str]:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return {}
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return {}
+    result: dict[str, str] = {}
+    for line in text[4:end].splitlines():
+        if ":" in line and not line.startswith((" ", "\t", "-")):
+            key, value = line.split(":", 1)
+            result[key.strip()] = value.strip().strip('"\'')
+    return result
+
+
+def repeated_mistakes(root: Path, tasks: list[Task]) -> list[tuple[str, int]]:
+    counts = Counter(task.mistake for task in tasks if task.mistake and task.status in {"needs-fix", "re-test-due"})
+    for base in (root / "02 Go/Mistakes", root / "03 DSA/Mistakes", root / "06 Interviews/Mistakes"):
+        if not base.exists():
+            continue
+        for path in base.rglob("*.md"):
+            meta = frontmatter(path)
+            if meta.get("type") != "mistake" or meta.get("status") in {"interview-ready", "resolved"}:
+                continue
+            try:
+                repeat_count = int(meta.get("repeat_count", "1"))
+            except ValueError:
+                continue
+            if repeat_count >= 2:
+                counts[meta.get("summary") or path.stem] = max(counts[meta.get("summary") or path.stem], repeat_count)
+    return sorted(((name, count) for name, count in counts.items() if count >= 2), key=lambda item: (-item[1], item[0]))
+
+
+def task_lines(tasks: list[Task], empty: str) -> str:
+    if not tasks:
+        return empty
+    return "\n".join(f"- {task.description} _(status: `{task.status}`)_" for task in tasks)
+
+
+def readiness(tasks: list[Task], area: str) -> str:
+    relevant = [task for task in tasks if task.area == area and task.status != "deferred"]
+    ready = sum(task.status == "interview-ready" for task in relevant)
+    percent = round(100 * ready / len(relevant)) if relevant else 0
+    suffix = " No interview-ready evidence is recorded yet." if ready == 0 else ""
+    return f"**{ready}/{len(relevant)} evidence gates ({percent}%).**{suffix}"
+
+
+def phase_text(run_date: date) -> str:
+    phases = [
+        (date(2026, 7, 16), date(2026, 7, 22), "Week 1 — Go implementation recovery", "[[Week 1 - Go Recovery|Go Recovery Sprint v2]]", "week-01-go-recovery"),
+        (date(2026, 7, 23), date(2026, 7, 29), "Week 2 — DSA in Go", "[[Week 2 - DSA in Go]]", "week-02-dsa"),
+        (date(2026, 7, 30), date(2026, 8, 5), "Week 3 — System design and project evidence", "[[Week 3 - System Design and Project Evidence]]", "week-03-system-design"),
+        (date(2026, 8, 6), date(2026, 8, 14), "Week 4 — Mocks, revision, and applications", "[[Week 4 - Mocks Revision and Applications]]", "week-04-mocks"),
+    ]
+    for start, end, name, link, directory in phases:
+        if start <= run_date <= end:
+            return f"**{name} ({start}–{end}).** Work from {link} and preserve evidence in `practice/30-day-sprint/{directory}`."
+    if run_date < phases[0][0]:
+        return "The sprint has not started. Prepare Day 1 only; do not pull future-week work forward."
+    return "The sprint window has ended. Use [[Sprint Exit Criteria]] before activating any extension."
+
+
+def build_sections(root: Path, tasks: list[Task], run_date: date) -> dict[str, str]:
+    today = sorted(
+        (t for t in tasks if t.when == run_date and t.primary and t.status != "deferred"),
+        key=lambda t: (str(t.source), t.line),
+    )
+    reviews = sorted((t for t in tasks if t.review in {"pending", "changes-requested"}), key=lambda t: (t.when, t.task_id))
+    retests = sorted(
+        (t for t in tasks if t.status == "re-test-due" or (t.retest and t.retest <= run_date and t.status not in {"interview-ready", "deferred"})),
+        key=lambda t: (t.retest or t.when, t.task_id),
+    )
+    repeats = repeated_mistakes(root, tasks)
+    scored = sorted((t for t in tasks if t.mock_score is not None), key=lambda t: (t.when, t.task_id), reverse=True)[:5]
+    applications = sorted(
+        (t for t in tasks if t.area == "applications" and t.status != "deferred"),
+        key=lambda t: (t.when, str(t.source), t.line),
+    )
+
+    candidates: list[Task] = []
+    candidates.extend(retests)
+    candidates.extend(t for t in tasks if t.status == "needs-fix")
+    candidates.extend(reviews)
+    candidates.extend(t for t in today if t.status not in {"interview-ready", "blocked"})
+    candidates.extend(
+        sorted(
+            (t for t in tasks if t.when > run_date and t.status == "not-started"),
+            key=lambda t: (t.when, str(t.source), t.line),
+        )
+    )
+    next_five: list[Task] = []
+    seen: set[str] = set()
+    for task in candidates:
+        if task.task_id not in seen:
+            seen.add(task.task_id)
+            next_five.append(task)
+        if len(next_five) == 5:
+            break
+
+    if repeats:
+        mistakes_text = "\n".join(f"- **{name}** — {count} unresolved occurrences" for name, count in repeats[:5])
+    else:
+        mistakes_text = "No repeated observed mistake is recorded. The reported baseline remains in **Current implementation blocker** until attempts produce evidence."
+
+    if scored:
+        mocks_text = "\n".join(f"- {t.when} — **{t.task_id}**: {t.mock_score:g}/100" for t in scored)
+    else:
+        mocks_text = "No mock score is recorded."
+
+    if applications:
+        by_status = Counter(task.status for task in applications)
+        summary = ", ".join(f"`{status}` {count}" for status, count in sorted(by_status.items()))
+        upcoming = [task for task in applications if task.status not in {"interview-ready", "blocked"}][:5]
+        app_lines = [f"**Pipeline tasks:** {summary}."]
+        app_lines.extend(f"- {task.when} ({task.company or 'pipeline'}) — {task.description}" for task in upcoming)
+        applications_text = "\n".join(app_lines)
+    else:
+        applications_text = "No application task is recorded."
+
+    return {
+        "phase": phase_text(run_date),
+        "today": task_lines(today, f"No primary task is scheduled for {run_date}. Do not pull optional work forward; use the re-test queue."),
+        "reviews": task_lines(reviews, "No task is awaiting review. Set `review:: pending` only after preserving a raw attempt."),
+        "retests": task_lines(retests, "No re-test is due today."),
+        "mistakes": mistakes_text,
+        "readiness-coding": readiness(tasks, "dsa"),
+        "readiness-go": readiness(tasks, "go"),
+        "readiness-system-design": readiness(tasks, "system-design"),
+        "readiness-behavioural": readiness(tasks, "behavioural"),
+        "mocks": mocks_text,
+        "applications": applications_text,
+        "next-actions": task_lines(next_five, "No next action could be computed; inspect invalid or blocked metadata."),
+    }
+
+
+def replace_sections(text: str, sections: dict[str, str], errors: list[str]) -> str:
+    updated = text
+    for key, body in sections.items():
+        pattern = re.compile(
+            rf"(<!-- AUTO:{re.escape(key)}:start -->\n).*?(\n<!-- AUTO:{re.escape(key)}:end -->)",
+            re.DOTALL,
+        )
+        updated, count = pattern.subn(lambda match: match.group(1) + body + match.group(2), updated)
+        if count != 1:
+            errors.append(f"dashboard: expected one AUTO marker pair for {key!r}, found {count}")
+    return updated
+
+
+def main() -> int:
+    args = parse_args()
+    root = args.root.resolve()
+    dashboard = args.dashboard or root / "00 Home/Dashboards/30-Day FAANG Preparation Dashboard.md"
+    if not dashboard.is_absolute():
+        dashboard = root / dashboard
+
+    tasks, errors = parse_tasks(root)
+    if not dashboard.exists():
+        errors.append(f"dashboard not found: {dashboard}")
+    if errors:
+        print("Invalid sprint metadata:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 2
+
+    if args.check:
+        print(f"Valid: {len(tasks)} tasks across {len({task.when for task in tasks})} days; dashboard unchanged.")
+        return 0
+
+    original = dashboard.read_text(encoding="utf-8")
+    updated = replace_sections(original, build_sections(root, tasks, args.run_date), errors)
+    if errors:
+        print("Dashboard update failed:", file=sys.stderr)
+        for error in errors:
+            print(f"- {error}", file=sys.stderr)
+        return 2
+    if updated == original:
+        print(f"Dashboard already current for {args.run_date}; {len(tasks)} tasks validated.")
+        return 0
+
+    fd, temp_name = tempfile.mkstemp(prefix=".30-day-dashboard-", dir=dashboard.parent, text=True)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        os.replace(temp_name, dashboard)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+    print(f"Dashboard updated for {args.run_date}; {len(tasks)} tasks validated.")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

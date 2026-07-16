@@ -57,7 +57,7 @@ Use only:
 Tracked task lines use Obsidian inline properties:
 
 ```text
-- [ ] Task [task_id:: G01] [date:: 2026-07-16] [week:: 1] [area:: go] [status:: not-started] [primary:: true] [new_concepts:: 1] [review:: none] [retest::] [mistake::]
+- [ ] Task `{task_id: G01, date: YYYY-MM-DD, week: 1, area: go, status: not-started, primary: true, new_concepts: 1, review: none}`
 ```
 
 The updater validates IDs, dates, weeks, areas, statuses, daily task limits, and daily new-concept limits. Update `status`, `review`, `retest`, `mistake`, and optional `mock_score` only from actual evidence; then run:
@@ -73,4 +73,3 @@ Put implementations under the matching `practice/30-day-sprint/week-*` directory
 ## Expansion guardrail
 
 Do not add a new active topic because it is interesting. A new subject enters only when a mock exposes a critical gap and an existing task can be deferred in exchange. Repeated failure causes re-testing before expansion.
-
