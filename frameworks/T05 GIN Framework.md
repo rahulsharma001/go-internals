@@ -12,8 +12,8 @@
 
 Complete these before starting this topic:
 
-- [[prerequisites/P01 Structs & Struct Memory Layout]] (struct tags, JSON binding)
-- [[prerequisites/P05 Interfaces Basics]] (http.Handler, HandlerFunc)
+- [[Go Structs and Constructors]] (struct tags, JSON binding)
+- [[Go Interfaces]] (http.Handler, HandlerFunc)
 - [[prerequisites/P07 Functions, Closures & Variable Capture]] (middleware factories)
 
 Also assumed: basic familiarity with HTTP (methods, paths, status codes, JSON bodies).

@@ -12,7 +12,7 @@
 
 Complete these before starting this topic:
 
-- [[prerequisites/P01 Structs & Struct Memory Layout]] (struct tags for BSON mapping)
+- [[Go Structs and Constructors]] (struct tags for BSON mapping)
 
 Also assumed: basic Go syntax, `context.Context` usage, and comfort with HTTP handlers.
 

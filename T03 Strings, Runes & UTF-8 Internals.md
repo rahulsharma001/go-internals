@@ -12,7 +12,7 @@
 
 Complete these before starting this topic:
 
-- [[prerequisites/P01 Structs & Struct Memory Layout]]
+- [[Go Structs and Constructors]]
 
 ---
 

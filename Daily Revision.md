@@ -24,7 +24,7 @@ These 6 topics were done before the study plan started. Revise daily.
 
 ---
 
-### [[T01 Go Type System & Value Semantics]]
+### [[Go Types and Value Semantics]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -67,7 +67,7 @@ Method set: T → value receivers only.  *T → value + pointer receivers.
 - Embedded type's method receiver is always the embedded type, not the outer
 - `type X int` (new type, can add methods) vs `type X = int` (alias, cannot)
 
-**Weak? Drill deeper** → [[revision/T01 Go Type System & Value Semantics - Revision]]
+**Weak? Drill deeper** → [[Go Types and Value Semantics - Quick Revision]]
 
 ---
 
@@ -167,7 +167,7 @@ Builder: buf [G][o][ ][i][s] → String() points at same buf (zero copy)
 
 ---
 
-### [[T04 Arrays & Slice Internals]]
+### [[Go Slices]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -213,7 +213,7 @@ Append beyond cap: NEW array, old eligible for GC, caller's header stale
 - Sub-slice `s2 := s1[2:5]` keeps entire backing array alive (use copy/Clone)
 - nil slice (`var s []int`) vs empty slice (`s := []int{}`): JSON marshals differently
 
-**Weak? Drill deeper** → [[revision/T04 Arrays & Slice Internals - Revision]]
+**Weak? Drill deeper** → [[Go Slices - Quick Revision]]
 
 ---
 
@@ -316,7 +316,7 @@ Prerequisites first, then main topics. See [[Study Plan]] for the full schedule.
 
 ---
 
-### [[prerequisites/P01 Structs & Struct Memory Layout]]
+### [[Go Structs and Constructors]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -353,11 +353,11 @@ Better: struct { Score int64; Age uint8 } = 16 bytes (same alignment, less waste
 - `bump(c Counter)` copies c -- the original is unchanged
 - Embedding is delegation, not inheritance -- the embedded type's receiver is still the inner type
 
-**Weak? Drill deeper** → [[prerequisites/P01 Structs & Struct Memory Layout]]
+**Weak? Drill deeper** → [[Go Structs and Constructors - Quick Revision]]
 
 ---
 
-### [[prerequisites/P02 Methods & Receivers]]
+### [[Go Methods and Receivers]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -393,7 +393,7 @@ Method set: T  → { value receiver methods }
 - Value of type T can't satisfy interface requiring pointer receiver method
 - Mixing value/pointer receivers on same type → inconsistent, confuses interface satisfaction
 
-**Weak? Drill deeper** → [[prerequisites/P02 Methods & Receivers]]
+**Weak? Drill deeper** → [[Go Methods and Receivers - Quick Revision]]
 
 ---
 
@@ -473,7 +473,7 @@ key "bob"   → hash(seed, "bob")   → 0x4A2B → same bucket! → chained afte
 
 ---
 
-### [[prerequisites/P05 Interfaces Basics]]
+### [[Go Interfaces]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -507,7 +507,7 @@ Interface = labeled envelope:
 - Type assertion without comma-ok panics if wrong type
 - Value T can't satisfy interface with pointer receiver methods
 
-**Weak? Drill deeper** → [[prerequisites/P05 Interfaces Basics]]
+**Weak? Drill deeper** → [[Go Interfaces - Quick Revision]]
 
 ---
 
@@ -602,7 +602,7 @@ stack: [ x = 42 ] at 0xA0
 
 ---
 
-### [[T08 Map Internals]]
+### [[Go Maps]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -644,11 +644,11 @@ hmap: count + B + hash0 + buckets ptr → [bucket0]...[bucket 2^B-1]
 - Write to nil map → panic (use make())
 - Map never shrinks after mass delete (re-create to reclaim memory)
 
-**Weak? Drill deeper** → [[revision/T08 Map Internals - Revision]]
+**Weak? Drill deeper** → [[Go Maps - Quick Revision]]
 
 ---
 
-### [[T09 Error Handling Patterns]]
+### [[Go Error Handling]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -689,7 +689,7 @@ errors.Is(err, ErrRequired) → walks chain → true at depth 2
 - `%v` formats but doesn't wrap -- `errors.Is` won't find the original
 - Typed nil `*MyError` returned as `error` → non-nil interface
 
-**Weak? Drill deeper** → [[revision/T09 Error Handling Patterns - Revision]]
+**Weak? Drill deeper** → [[Go Error Handling - Quick Revision]]
 
 ---
 
@@ -786,7 +786,7 @@ typed nil:      [ *MyErr | nil ]   ← NOT nil (type is set)
 
 ---
 
-### [[T12 Interface Design Principles]]
+### [[Interface Design in Go]]
 
 **Blurt check** (try from memory, tap to reveal):
 
@@ -830,7 +830,7 @@ RIGHT (consumer-defined slim interface):
 - Exporting interfaces prematurely locks your API surface
 - `any` (empty interface) everywhere = no type safety, defeats Go's type system
 
-**Weak? Drill deeper** → [[revision/T12 Interface Design Principles - Revision]]
+**Weak? Drill deeper** → [[Interface Design in Go - Quick Revision]]
 
 ---
 

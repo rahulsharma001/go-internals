@@ -1,6 +1,6 @@
 # P04 Hash Functions & Hashing Basics
 
-> **Prerequisite note** — complete this before starting [[T08 Map Internals]].
+> **Prerequisite note** — complete this before starting [[Go Maps]].
 > Estimated time: ~15 min
 
 ---

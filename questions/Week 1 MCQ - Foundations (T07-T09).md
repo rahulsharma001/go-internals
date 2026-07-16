@@ -1,6 +1,6 @@
 # Week 1 MCQ - Foundations (T07-T09)
 
-> Coverage: [[T07 Pointers & Pointer Semantics]], [[T08 Map Internals]], [[T09 Error Handling Patterns]]
+> Coverage: [[T07 Pointers & Pointer Semantics]], [[Go Maps]], [[Go Error Handling]]
 > Use as daily interview drill (10-15 min).
 > Try answering first, then expand each hidden answer.
 

@@ -12,9 +12,9 @@
 
 Complete these before starting this topic:
 
-- [[prerequisites/P01 Structs & Struct Memory Layout]]
-- [[prerequisites/P02 Methods & Receivers]]
-- [[prerequisites/P05 Interfaces Basics]]
+- [[Go Structs and Constructors]]
+- [[Go Method Sets]]
+- [[Go Interfaces]]
 
 ---
 

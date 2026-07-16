@@ -1,6 +1,6 @@
 # Week 2 MCQ - Foundations (T10-T12)
 
-> Coverage: [[T10 Defer, Panic & Recover Internals]], [[T11 Interface Internals (iface & eface)]], [[T12 Interface Design Principles]]
+> Coverage: [[T10 Defer, Panic & Recover Internals]], [[T11 Interface Internals (iface & eface)]], [[Interface Design in Go]]
 > Use as daily interview drill (10-15 min).
 > Try answering first, then expand each hidden answer.
 

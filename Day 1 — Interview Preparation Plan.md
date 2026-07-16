@@ -1,6 +1,6 @@
 # Day 1 — Interview preparation plan
 
-> **Wave focus:** B (Days 1–3) · **Deep-work topic:** [[T09 Error Handling Patterns]]  
+> **Wave focus:** B (Days 1–3) · **Deep-work topic:** [[Go Error Handling]]
 > **DSA week:** 1 (Arrays, Hashing, Two Pointers) · **Total:** ~2.75 h execution  
 > **Aligned with:** [[Study Plan]] §3 · §2.5 · §2.6 · §2.7
 
@@ -63,7 +63,7 @@ Compiles when **every field is comparable**. Does **not** compile if any field i
 
 ## 2. Go Deep Work (60–90 min)
 
-**Topic today:** [[T09 Error Handling Patterns]]
+**Topic today:** [[Go Error Handling]]
 
 > **Do NOT refer to vault notes while implementing. Close Obsidian or any pane with answers. Only open notes after a failed compile, failing test, or expired timer — then fix and retry.**
 

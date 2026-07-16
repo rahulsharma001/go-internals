@@ -31,24 +31,24 @@ These are the **high-ROI spine**. Order respects dependencies from [[Roadmap]]; 
 
 ### Wave A — Language core (already strong for you; keep in daily maintenance)
 
-- [[T01 Go Type System & Value Semantics]]
+- [[Go Types and Value Semantics]]
 - [[T02 Go Memory Allocation & Value Semantics]]
 - [[T07 Pointers & Pointer Semantics]]
 - [[T03 Strings, Runes & UTF-8 Internals]]
-- [[T04 Arrays & Slice Internals]]
-- [[T08 Map Internals]]
+- [[Go Slices]]
+- [[Go Maps]]
 
 ### Wave B — Errors, closures, defer/panic (high frequency, medium depth)
 
 - [[prerequisites/P07 Functions, Closures & Variable Capture]]
-- [[T09 Error Handling Patterns]]
+- [[Go Error Handling]]
 - [[T10 Defer, Panic & Recover Internals]]
 
 ### Wave C — Interfaces (the other big "Go senior" differentiator besides concurrency)
 
-- [[prerequisites/P05 Interfaces Basics]]
+- [[Go Interfaces]]
 - [[T11 Interface Internals (iface & eface)]]
-- [[T12 Interface Design Principles]]
+- [[Interface Design in Go]]
 
 ### Wave D — Concurrency primitives (the largest single band)
 
@@ -221,15 +221,15 @@ If you apply earlier than Gate 1, do it **deliberately** as data collection — 
 
 ### 8.1 Wave B — Errors & control flow
 
-- [ ] [[T09 Error Handling Patterns]]
+- [ ] [[Go Error Handling]]
 - [ ] [[T10 Defer, Panic & Recover Internals]]
 - [x] [[prerequisites/P07 Functions, Closures & Variable Capture]]
 
 ### 8.2 Wave C — Interfaces
 
-- [x] [[prerequisites/P05 Interfaces Basics]]
+- [ ] [[Go Interfaces]]
 - [ ] [[T11 Interface Internals (iface & eface)]]
-- [ ] [[T12 Interface Design Principles]]
+- [ ] [[Interface Design in Go]]
 
 ### 8.3 Wave D — Concurrency primitives
 

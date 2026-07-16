@@ -12,8 +12,8 @@
 
 Complete these before starting this topic:
 
-- [[prerequisites/P01 Structs & Struct Memory Layout]]
-- [[prerequisites/P02 Methods & Receivers]]
+- [[Go Structs and Constructors]]
+- [[Go Methods and Receivers]]
 - [[prerequisites/P03 Mutex & Concurrency Safety Basics]]
 
 ---

@@ -14,12 +14,12 @@ These are the building blocks. Every other topic assumes you know these cold.
 
 | # | Topic | Status | Why It Matters |
 |---|-------|--------|----------------|
-| 1.1 | [[T01 Go Type System & Value Semantics]] | ✅ | Pass-by-value, zero values, named types, type identity, assignability rules |
+| 1.1 | [[Go Types and Value Semantics]] | ✅ | Pass-by-value, zero values, named types, type identity, assignability rules |
 | 1.2 | [[T02 Go Memory Allocation & Value Semantics]] | ✅ | Stack vs heap, escape analysis, GC basics — the foundation for everything |
 | 1.3 | [[T07 Pointers & Pointer Semantics]] | ✅ | Pointer receivers vs value receivers, when to use which, nil pointer behavior |
 | 1.4 | [[T03 Strings, Runes & UTF-8 Internals]] | ✅ | String header (ptr + len), byte vs rune, range behavior, immutability, `len()` trap |
-| 1.5 | [[T04 Arrays & Slice Internals]] | ✅ | Slice header (ptr + len + cap), append mechanics, copy-on-grow, slice tricks, memory leaks |
-| 1.6 | [[T08 Map Internals]] | ✅ | hmap struct, buckets, overflow chains, load factor 6.5, hash seed, evacuation, iteration randomness |
+| 1.5 | [[Go Slices]] | ✅ | Slice creation, len/cap, append, aliasing, copying, transformations, and retention risks |
+| 1.6 | [[Go Maps]] | ✅ | Construction, lookup, comma-ok, counting/grouping, deterministic output, and common failures |
 | 1.7 | [[Struct Layout & Memory Alignment]] | ⏭ SKIP | Rarely asked; know "field ordering affects padding" is enough |
 
 ---
@@ -30,7 +30,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 |---|-------|--------|----------------|
 | 2.1 | [[prerequisites/P07 Functions, Closures & Variable Capture]] | ✅ | Covered as a prerequisite P-note (not a standalone T-note). First-class functions, closure capture by reference, loop variable trap, middleware factories |
 | 2.2 | [[T10 Defer, Panic & Recover Internals]] | ✅ | LIFO order, argument evaluation time, panic unwinding, recover() rules, goroutine isolation |
-| 2.3 | [[T09 Error Handling Patterns]] | ✅ | Error wrapping (%w), errors.Is/As, sentinel errors, custom error types, error as values philosophy |
+| 2.3 | [[Go Error Handling]] | ✅ | Error wrapping (%w), errors.Is/As, sentinel errors, custom error types, error as values philosophy |
 | 2.4 | [[Init Functions & Package Initialization]] | ⏭ SKIP | Rarely asked; know "init runs before main, avoid side effects" is enough |
 
 ---
@@ -41,7 +41,7 @@ These are the building blocks. Every other topic assumes you know these cold.
 |---|-------|--------|----------------|
 | 3.1 | [[T11 Interface Internals (iface & eface)]] | ✅ | iface struct (tab + data), eface struct (_type + data), itab caching, dynamic dispatch |
 | 3.2 | [[Type Assertions & Type Switches]] | ⏭ SKIP | Covered within Interface Internals (T11) |
-| 3.3 | [[T12 Interface Design Principles]] | ✅ | Small interfaces, implicit satisfaction, accept interfaces / return structs, interface pollution |
+| 3.3 | [[Interface Design in Go]] | ✅ | Small interfaces, implicit satisfaction, accept interfaces / return structs, interface pollution |
 | 3.4 | [[Empty Interface (any) & Boxing]] | ⏭ SKIP | Covered within Interface Internals (T11) |
 
 ---
