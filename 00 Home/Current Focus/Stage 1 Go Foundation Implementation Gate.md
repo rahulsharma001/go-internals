@@ -1,11 +1,15 @@
 ---
 type: implementation-gate
 domain: go
-status: implementation-needed
+status: inactive
 scope: stage-1
+superseded_by: "[[Week 1 - Go Recovery]]"
 ---
 
 # Stage 1 Go Foundation Implementation Gate
+
+> [!warning] Superseded evidence view
+> Its unrecorded baseline is preserved. Record new evidence only in [[Week 1 - Go Recovery|Go Recovery Sprint v2]] and the linked practice attempts.
 
 > This is an evidence dashboard, not a claim of personal failure or readiness. The migration found strong theory and solution material but no dated cold-attempt records for these implementation tasks.
 
@@ -48,4 +52,3 @@ Do not change a topic to `interview-ready` until every column is backed by a dat
 ## Mistake-record rule
 
 Create a note under a future interview-mistakes workflow only after an observed failure. Record the exact prompt/code, root-cause category, smallest correction drill, and re-test result. Do not convert generic “common mistakes” into claims about the user's performance.
-

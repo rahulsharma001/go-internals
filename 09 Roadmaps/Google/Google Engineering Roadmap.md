@@ -2,10 +2,13 @@
 type: roadmap
 domain: interview-preparation
 company: Google
-status: active
+status: inactive-during-30-day-sprint
 ---
 
 # Google Engineering Roadmap
+
+> [!note] Long-term reference
+> During 2026-07-16 through 2026-08-14, execution and readiness live only in [[30-Day FAANG Preparation Dashboard]]. This roadmap is preserved for post-sprint planning.
 
 Google does not require Go specifically. This roadmap separates language implementation fluency, general coding ability, system design, and behavioural/leadership evidence.
 
@@ -72,4 +75,3 @@ No verified source note exists for NCS, CEE, CoMarketer, or PulseCheck. Project 
 ## This week's constraints
 
 At most three outcomes: [[Current Week]]. Proof is runnable output, edge cases, timed modification, and re-test evidence.
-

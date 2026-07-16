@@ -1,10 +1,14 @@
 ---
 type: current-focus
 domain: engineering-os
-status: active
+status: inactive
+superseded_by: "[[Week 1 - Go Recovery]]"
 ---
 
 # Current Week
+
+> [!warning] Superseded recovery view
+> Use [[Week 1 - Go Recovery|Go Recovery Sprint v2]]. This pre-sprint view remains for traceability and is not a second active tracker.
 
 ## Outcome 1 — Collection fluency
 
@@ -27,4 +31,3 @@ status: active
 - Proof: successful failure path, cancellation path, race check, and no leaked goroutine in the reasoned design.
 
 Review: [[Engineering Dashboard]] · Revision: [[Quick Revision Index]] · Mistakes: [[Mistake Index]]
-

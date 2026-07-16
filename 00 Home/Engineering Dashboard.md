@@ -1,10 +1,14 @@
 ---
 type: dashboard
 domain: engineering-os
-status: active
+status: inactive
+superseded_by: "[[30-Day FAANG Preparation Dashboard]]"
 ---
 
 # Engineering Dashboard
+
+> [!warning] Inactive during the 30-day sprint
+> Use [[30-Day FAANG Preparation Dashboard]] as the only active dashboard. This note is preserved as the pre-sprint audit snapshot.
 
 ## Current priority
 
@@ -51,4 +55,3 @@ No verified NCS, CEE, CoMarketer, or PulseCheck source note was found. Do not tu
 ## Weekly objective
 
 See [[Current Week]]. Completion means a runnable cold attempt, a timed modification, and a recorded re-test—not a checked reading box.
-

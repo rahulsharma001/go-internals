@@ -1,12 +1,15 @@
 ---
 type: roadmap
 domain: interview-preparation
-status: active
+status: inactive-during-30-day-sprint
 aliases:
   - Study Plan
 ---
 
 # Engineering Study Plan
+
+> [!note] Superseded for the active month
+> Use [[30-Day Sprint Overview]] for the 2026-07-16 through 2026-08-14 operating plan. This long-term plan remains preserved.
 
 ## Operating rule
 
