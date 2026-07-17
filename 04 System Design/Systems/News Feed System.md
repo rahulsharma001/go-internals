@@ -68,7 +68,7 @@ last_verified: 2026-07-17
 > [!important] Interview assumptions
 > These values size a candidate design. They are not company or production facts.
 
-Average reads ≈5,800/s and 5× peak ≈29k/s; posts average ≈230/s and peak ≈1,200/s. Pure write fan-out with an average 500 followers creates about 10B inbox writes/day, and one 50M-follower author creates a catastrophic burst. Therefore use hybrid fan-out. Storing 500 feed references per active user at 32 B is about 1.6 KB? Actually 500×32 B = 16 KB/user, or 1.6 TB for 100M users before replication—manageable only with retention/active-user policy.
+Average reads ≈5,800/s and 5× peak ≈29k/s; posts average ≈230/s and peak ≈1,200/s. Pure write fan-out with an average 500 followers creates about 10B inbox writes/day, and one 50M-follower author creates a catastrophic burst. Therefore use hybrid fan-out. Storing 500 feed references per active user at 32 B is about 16 KB/user, or 1.6 TB for 100M users before replication—manageable only with retention and active-user policies.
 
 ## 7. Core invariants
 
@@ -394,4 +394,3 @@ Personal readiness remains `not-started` until evidence is recorded in [[System 
 
 - [Apache Kafka documentation](https://kafka.apache.org/documentation/) — partitioned fan-out transport.
 - [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — hot cache and invalidation considerations.
-

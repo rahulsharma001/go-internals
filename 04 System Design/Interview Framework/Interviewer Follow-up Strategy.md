@@ -43,5 +43,4 @@ Explain the invariant and evidence, not authority: “A queue improves buffering
 
 Restate changed constraint → locate branch/invariant → alternatives → minimal change → new trade-off/failure/signal → revised summary.
 
-Related: [[Adversarial practice|README - How to Learn System Design#Level 4 — Adversarial practice]] · [[System Design Evaluation Rubric]] · [[Common Interview Traps]].
-
+Related: [[README - How to Learn System Design#Level 4 — Adversarial practice|Adversarial practice]] · [[System Design Evaluation Rubric]] · [[Common Interview Traps]].
