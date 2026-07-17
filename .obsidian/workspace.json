@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02 Go/Concurrency/Goroutines and Lifecycle.md",
+                "file": "04 System Design/Systems/Uber System Design.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Goroutines and Lifecycle"
+              "title": "Uber System Design"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02 Go/Concurrency/Goroutines and Lifecycle.md",
+                "file": "04 System Design/Systems/Uber System Design.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Goroutines and Lifecycle"
+              "title": "Backlinks for Uber System Design"
             }
           },
           {
@@ -292,6 +292,7 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "02 Go/Concurrency/Goroutines and Lifecycle.md",
     "02 Go/Concurrency/Context Cancellation.md",
     "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
     "02 Go/Coding Drills/Complete Small Executable Programs - Drill.md",
@@ -317,7 +318,6 @@
     "05 Infrastructure/Observability/ELK and Kibana.md",
     "05 Infrastructure/Observability/Datadog and APM.md",
     "05 Infrastructure/Observability/Prometheus and Grafana.md",
-    "05 Infrastructure/Observability/Logs Metrics and Traces.md",
     "08 Quick Revision/Observability",
     "08 Quick Revision/Terraform",
     "08 Quick Revision/Docker",
