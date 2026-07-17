@@ -129,6 +129,7 @@ Implement frequency counting, grouping, a set, a nested map, and a map whose val
 - [[Map Frequency Counting - Drill]]
 - [[Nested Maps and Slice Values - Drill]]
 - [[Go Maps - Quick Revision]]
+- [[Map Syntax Failure]]
 
 Parent MOC: [[Go Map of Content]]
 

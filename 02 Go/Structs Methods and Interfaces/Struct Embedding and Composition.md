@@ -110,6 +110,7 @@ Embed a component with one method, invoke the promoted method, create a same-nam
 - [[Go Interfaces]]
 - [[Struct Embedding and Promoted Methods - Drill]]
 - [[Struct Embedding and Composition - Quick Revision]]
+- [[Embedding Correct but Construction or Invocation Wrong]]
 
 Parent MOC: [[Go Map of Content]]
 

@@ -6,7 +6,19 @@ status: active
 
 # Mistake Index
 
-No personal mistake record currently exists. Generic “common mistakes” in canonical notes are teaching content, not evidence that the user made those mistakes.
+## Confirmed implementation/interview gaps
+
+- [[Slice Syntax Failure]]
+- [[Failed to Partition a Slice into Four Balanced Parts]]
+- [[Map Syntax Failure]]
+- [[Interface Implementation Correct but Main Invocation Wrong]]
+- [[Embedding Correct but Construction or Invocation Wrong]]
+- [[Theory Stronger than Blank-Editor Implementation]]
+- [[Java DSA Practice Conflicts with Go Interviews]]
+
+These records are supported by the user and conversation `6a5778fc…`. Their pending re-tests are not success evidence.
+
+## Capture rule
 
 Create a mistake note only after an observed failure. Record:
 
@@ -19,5 +31,4 @@ Create a mistake note only after an observed failure. Record:
 
 Locations: `02 Go/Mistakes`, `03 DSA/Mistakes`, and `06 Interviews/Mistakes`.
 
-Current evidence gap: [[Stage 1 Go Foundation Implementation Gate]] · Drills: [[Coding Drill Index]]
-
+Current evidence gate: [[Stage 1 Go Foundation Implementation Gate]] · Drills: [[Coding Drill Index]] · Queue: [[Active Re-test Queue]]

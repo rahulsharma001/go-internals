@@ -133,6 +133,7 @@ Define a one-method consumer interface, write two implementations, add compile-t
 - [[Interfaces with Two Implementations - Drill]]
 - [[Correct Interface Invocation from Main - Drill]]
 - [[Go Interfaces - Quick Revision]]
+- [[Interface Implementation Correct but Main Invocation Wrong]]
 
 Parent MOC: [[Go Map of Content]]
 

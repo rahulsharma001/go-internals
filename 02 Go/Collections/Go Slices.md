@@ -105,6 +105,8 @@ From a blank editor, implement copy, filter, delete, deduplicate, and reverse. G
 - [[Slice Creation and Modification - Drill]]
 - [[Balanced Slice Groups - Drill]]
 - [[Go Slices - Quick Revision]]
+- [[Slice Syntax Failure]]
+- [[Failed to Partition a Slice into Four Balanced Parts]]
 
 Parent MOC: [[Go Map of Content]]
 

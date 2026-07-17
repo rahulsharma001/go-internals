@@ -6,6 +6,9 @@ status: source-needed
 
 # DSA Map of Content
 
+- [[NeetCode 150 in Go]]
+- [[Go DSA Template]]
+
 The existing vault contains DSA plans but no substantive pattern canonicals, problem attempts, timed mocks, or mistake records. Empty folders are intentional; no passive solution encyclopedia was fabricated during cleanup.
 
 ## Learning lifecycle
@@ -19,4 +22,3 @@ Pattern mental model → blank Go template → timed problem → explain complex
 - Attempts belong in `03 DSA/Problems`; timed sessions in `03 DSA/Timed Mocks`; observed failures in `03 DSA/Mistakes`.
 
 Recommended first sourced stage: arrays/hash maps, two pointers, sliding window, stack, binary search, trees/graphs, heap, then dynamic programming based on actual misses.
-
