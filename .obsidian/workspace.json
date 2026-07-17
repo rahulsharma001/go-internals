@@ -292,6 +292,15 @@
   },
   "active": "4ca854d182283b79",
   "lastOpenFiles": [
+    "05 Infrastructure/Kubernetes/Minikube Practical Labs.md",
+    "05 Infrastructure/Kubernetes/Kubernetes Production Failures.md",
+    "05 Infrastructure/Kubernetes/Client to Pod Request Flow.md",
+    "08 Quick Revision/Observability",
+    "08 Quick Revision/Terraform",
+    "08 Quick Revision/Docker",
+    "08 Quick Revision/Linux",
+    "08 Quick Revision/AWS",
+    "05 Infrastructure/Quick Revision",
     "MIGRATION_REPORT_04_SYSTEM_DESIGN.md",
     "08 Quick Revision/System Design/System Design Trade-off Vocabulary and Interview Traps.md",
     "08 Quick Revision/System Design/System Design Scaling Reliability and Security Checklists.md",
@@ -315,18 +324,9 @@
     "04 System Design/Systems/URL Shortener.md",
     "04 System Design/Systems/Monitoring System.md",
     "04 System Design/Systems/WebSocket Chat or Realtime System.md",
-    "04 System Design/Systems/Notification System.md",
-    "04 System Design/Systems/YouTube System Design.md",
-    "04 System Design/Systems/Uber System Design.md",
     "01 Inbox/ChatGPT Export/Extracted",
     "01 Inbox/ChatGPT Export/Extracted/XXarUl3V",
     "01 Inbox/ChatGPT Export/Extracted/XXs8fvWg",
-    "tools/security/scan-secrets.sh",
-    "tools/security",
-    "tools/30_day_sprint/__pycache__/updatecpython-310.pyc",
-    "tools/30_day_sprint/__pycache__",
-    "tools/30_day_sprint/update",
-    "99 Archive/External Trackers/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
-    "tools/30_day_sprint"
+    "tools/security/scan-secrets.sh"
   ]
 }
