@@ -39,6 +39,11 @@ Each card is a five-minute companion. Use the canonical for learning and the dri
 - [[System Design Scaling Reliability and Security Checklists]]
 - [[System Design Trade-off Vocabulary and Interview Traps]]
 
-Other infrastructure domains should be revised only after their corresponding canonicals are developed.
+## Infrastructure
+
+- [[Kubernetes Interview Revision]] · [[AWS Interview Revision]]
+- [[Networking Interview Revision]] · [[Linux Interview Revision]]
+- [[Docker Interview Revision]] · [[Terraform Interview Revision]]
+- [[Observability Interview Revision]]
 
 Return: [[Engineering Dashboard]]

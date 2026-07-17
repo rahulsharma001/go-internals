@@ -1,14 +1,28 @@
 ---
 type: moc
 domain: infrastructure
-status: source-needed
+status: active
 ---
 
 # Infrastructure Map of Content
 
-The former cloud/devops/security/testing indexes were empty shells and are archived. The target folders for Kubernetes, AWS, Docker, Linux, networking, Terraform, and observability now exist, but no technical notes were invented from behavioural claims.
+Start with [[Infrastructure Dashboard]]. The core operational chain is:
 
-Add one canonical at a time from traceable material, connect it to a troubleshooting drill and quick revision, and choose one owner when a concept overlaps [[System Design Map of Content]].
+[[Client to Pod Request Flow]]
+→ [[Kubernetes Production Failures]]
+→ [[Network Troubleshooting]]
+→ [[Linux Production Debugging]]
+→ [[Incident Investigation]].
+
+## Interview and production paths
+
+- Kubernetes/EKS: [[Kubernetes Mental Model]] · [[Kubernetes Architecture]] · [[EKS Architecture]] · [[Minikube Practical Labs]]
+- AWS architectures: [[AWS Architecture Selection Guide]] · [[AWS Reliability and Multi AZ]] · [[AWS Cost and Scaling Trade-offs]]
+- Containers/Linux: [[Containers and Images]] · [[Docker Production Failures]] · [[CPU Memory and IO Troubleshooting]]
+- Networking: [[TCP Connection Lifecycle]] · [[DNS]] · [[TLS and mTLS]] · [[Connection Pooling]] · [[OSPF Fundamentals]] · [[IPsec and VTI]] · [[SNMP and Traps]]
+- Infrastructure as code: [[Terraform Mental Model]] · [[State and Remote Backends]] · [[Terraform Production Practices]]
+- Observability: [[OpenTelemetry]] · [[Prometheus and Grafana]] · [[Alert Design]] · [[Incident Investigation]]
+
+System-design owners are linked rather than copied where a concept overlaps [[System Design Map of Content]]. Quick recall: [[Quick Revision Index]].
 
 Roadmap: [[Google Engineering Roadmap]]
-
