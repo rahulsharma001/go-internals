@@ -25,11 +25,17 @@ Notification provider call has 2 s attempt timeout inside 5 s delivery budget, a
 
 ## 5. Detailed success flow
 
-First/second attempt succeeds before deadline; response records attempt. Jitter spreads retries; metrics distinguish original/retry and latency.
+01. First/second attempt succeeds before deadline
+11. response records attempt.
+21. Jitter spreads retries
+31. metrics distinguish original/retry and latency.
 
 ## 6. Detailed failure flow
 
-Dependency overload causes timeouts. Retry budget exhausts/circuit opens; callers fail fast or queue/pending. Unsafe/unknown mutations query by idempotency reference before another call.
+01. Dependency overload causes timeouts.
+11. Retry budget exhausts/circuit opens
+21. callers fail fast or queue/pending.
+31. Unsafe/unknown mutations query by idempotency reference before another call.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Total deadline → attempt timeout → classify transient/safe → bounded expon
 
 ## 17. Verified further reading
 
-- [AWS Builders’ Library: timeouts, retries, and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) — authoritative operational treatment.\n- [AWS Well-Architected: limit retries](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html) — official retry controls.
+- [AWS Builders’ Library: timeouts, retries, and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) — authoritative operational treatment.
+- [AWS Well-Architected: limit retries](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_limit_retries.html) — official retry controls.
 

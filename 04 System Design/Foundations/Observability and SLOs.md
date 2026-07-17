@@ -25,11 +25,16 @@ Order SLI is durable acceptance success and latency, not API host uptime. Dashbo
 
 ## 5. Detailed success flow
 
-Trace follows client→service→DB/outbox→consumer; metrics show SLO and dependency saturation; logs identify state transition/version. Alert contains scope, impact, links, owner, and safe action.
+01. Trace follows client→service→DB/outbox→consumer
+11. metrics show SLO and dependency saturation
+21. logs identify state transition/version.
+31. Alert contains scope, impact, links, owner, and safe action.
 
 ## 6. Detailed failure flow
 
-Consumer silently stops but API stays green. Oldest-event age and end-to-end completion SLI breach, page the owner, and reconciliation confirms recovery. CPU alone would miss it.
+01. Consumer silently stops but API stays green.
+11. Oldest-event age and end-to-end completion SLI breach, page the owner, and reconciliation confirms recovery.
+21. CPU alone would miss it.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ SLI=user outcome, SLO=target, error budget=decision signal. Metrics+logs+traces,
 
 ## 17. Verified further reading
 
-- [OpenTelemetry observability primer](https://opentelemetry.io/docs/concepts/observability-primer/) — official signals and instrumentation concepts.\n- [Google Cloud: observability for reliability](https://cloud.google.com/architecture/framework/reliability/slo-and-alerts) — official SLI/SLO and alerting guidance.
+- [OpenTelemetry observability primer](https://opentelemetry.io/docs/concepts/observability-primer/) — official signals and instrumentation concepts.
+- [Google Cloud: observability for reliability](https://cloud.google.com/architecture/framework/reliability/slo-and-alerts) — official SLI/SLO and alerting guidance.
 

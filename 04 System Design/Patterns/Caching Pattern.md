@@ -25,11 +25,17 @@ URL redirect cache key `alias:v3` maps to `{target,status,expiresAt,version}` fo
 
 ## 5. Detailed success flow
 
-Request hits fresh entry; on miss one loader reads truth, populates with TTL+jitter, and returns. Metrics record hit/miss, load latency, and age.
+01. Request hits fresh entry
+11. on miss one loader reads truth, populates with TTL+jitter, and returns.
+21. Metrics record hit/miss, load latency, and age.
 
 ## 6. Detailed failure flow
 
-Cache times out. Caller uses a short cache deadline and bounded source fallback; admission protects source. If truth is unavailable, product policy decides stale serve or fail. Cache recovery warms gradually.
+01. Cache times out.
+11. Caller uses a short cache deadline and bounded source fallback
+21. admission protects source.
+31. If truth is unavailable, product policy decides stale serve or fail.
+41. Cache recovery warms gradually.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Name object/key/value/source/freshness/invalidation/miss/failure. Truth first, v
 
 ## 17. Verified further reading
 
-- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — invalidation, disconnect, and candidate guidance.\n- [Redis caching use cases](https://redis.io/docs/latest/develop/use-cases/) — official cache-aside and prefetch examples.
+- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — invalidation, disconnect, and candidate guidance.
+- [Redis caching use cases](https://redis.io/docs/latest/develop/use-cases/) — official cache-aside and prefetch examples.
 

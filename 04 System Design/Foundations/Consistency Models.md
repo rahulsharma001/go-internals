@@ -25,11 +25,15 @@ Seat confirmation uses a serializable/conditional transaction on `(event,seat)`;
 
 ## 5. Detailed success flow
 
-A booking compare-and-set changes `AVAILABLE→HELD` once. Replicas and search catch up later. API responses expose authoritative confirmation versus derived availability.
+01. A booking compare-and-set changes `AVAILABLE→HELD` once.
+11. Replicas and search catch up later.
+21. API responses expose authoritative confirmation versus derived availability.
 
 ## 6. Detailed failure flow
 
-A stale search read shows an available seat already held. Final hold rechecks truth and returns conflict. If two regions accept writes without an owner/conflict rule, both may confirm—an invariant violation, not mere staleness.
+01. A stale search read shows an available seat already held.
+11. Final hold rechecks truth and returns conflict.
+21. If two regions accept writes without an owner/conflict rule, both may confirm—an invariant violation, not mere staleness.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +77,6 @@ Name the observation promise, scope, and anomaly. Strict at the invariant bounda
 
 ## 17. Verified further reading
 
-- [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) — official isolation levels and anomalies.\n- [PostgreSQL SET TRANSACTION](https://www.postgresql.org/docs/current/sql-set-transaction.html) — concrete configuration and behavior.
+- [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) — official isolation levels and anomalies.
+- [PostgreSQL SET TRANSACTION](https://www.postgresql.org/docs/current/sql-set-transaction.html) — concrete configuration and behavior.
 

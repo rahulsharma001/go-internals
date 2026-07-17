@@ -25,11 +25,17 @@ Distributed cache uses rendezvous hash to choose primary+replica. Node addition 
 
 ## 5. Detailed success flow
 
-Client has current membership, selects healthy owner, reads/writes cache; on rebalance movement is bounded and hit ratio recovers progressively.
+01. Client receives membership epoch and hashes the tenant-qualified key to a virtual shard.
+11. Rendezvous/ring routing selects a healthy primary plus distinct replicas and sends the operation with the epoch.
+21. When a node is added, only reassigned virtual shards warm on the new owner while old owners continue serving.
+31. After readiness validation, routing switches and hit ratio recovers progressively rather than suffering a full-cluster remap.
 
 ## 6. Detailed failure flow
 
-Node dies; client selects next replica and source fallback. Stale client reaches removed node and gets redirect/miss. One hot key still overloads owner, so replicate/coalesce separately.
+01. Node dies
+11. client selects next replica and source fallback.
+21. Stale client reaches removed node and gets redirect/miss.
+31. One hot key still overloads owner, so replicate/coalesce separately.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,5 @@ Stable owner set + versioned membership + weights/replicas + safe handoff. Cache
 
 ## 17. Verified further reading
 
-- [Redis Cluster specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/) — official ownership/redirection/failover example.\n- [Kubernetes EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/) — official dynamic endpoint membership.
-
+- [Redis Cluster specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/) — official ownership/redirection/failover example.
+- [Kubernetes EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/) — official dynamic endpoint membership.

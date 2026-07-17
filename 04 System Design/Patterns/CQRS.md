@@ -25,11 +25,17 @@ Order writes use normalized PostgreSQL. Customer order-history projection stores
 
 ## 5. Detailed success flow
 
-Command commits version 4; event updates each projection only if newer; query returns fast denormalized result; rebuild can replace an index generation atomically.
+01. Command commits version 4
+11. event updates each projection only if newer
+21. query returns fast denormalized result
+31. rebuild can replace an index generation atomically.
 
 ## 6. Detailed failure flow
 
-Projection consumer stalls. Lag metric marks data delayed; critical read falls back to truth or shows freshness. Replay from checkpoint/snapshot rebuilds without corrupting command state.
+01. Projection consumer stalls.
+11. Lag metric marks data delayed
+21. critical read falls back to truth or shows freshness.
+31. Replay from checkpoint/snapshot rebuilds without corrupting command state.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,5 @@ Command truth/invariants → outbox/event → versioned idempotent projections �
 
 ## 17. Verified further reading
 
-- [Microsoft CQRS pattern](https://learn.microsoft.com/azure/architecture/patterns/cqrs) — vendor architecture guidance.\n- [Debezium documentation](https://debezium.io/documentation/reference/stable/) — official change-stream mechanics for projections.
-
+- [Microsoft CQRS pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/cqrs) — vendor architecture guidance.
+- [Debezium documentation](https://debezium.io/documentation/reference/stable/) — official change-stream mechanics for projections.

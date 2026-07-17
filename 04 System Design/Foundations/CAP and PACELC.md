@@ -25,11 +25,16 @@ During a region partition, payment intent writes remain with the home-region epo
 
 ## 5. Detailed success flow
 
-The system detects lost authority/quorum, applies the chosen behavior, records versions/epochs, and recovers through catch-up and reconciliation without violating the stated invariant.
+01. The client sends an operation to the current authority and includes the observed version or epoch.
+11. The authority confirms it still has quorum before accepting an invariant-changing write.
+21. During a partition, the unavailable side rejects or limits the operation according to the stated policy while safe reads may continue.
+31. After connectivity returns, replicas catch up and reconciliation verifies that no accepted state violated the invariant.
 
 ## 6. Detailed failure flow
 
-A naïve active-active design lets both sides allocate the same seat. DNS failover restores traffic but not correctness. Recovery finds conflicting confirmations requiring manual repair.
+01. A naïve active-active design lets both sides allocate the same seat.
+11. DNS failover restores traffic but not correctness.
+21. Recovery finds conflicting confirmations requiring manual repair.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,5 @@ CAP: during partition, per operation choose availability or consistency. PACELC:
 
 ## 17. Verified further reading
 
-- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official guidance on designing for failures and regions.\n- [PostgreSQL concurrency control](https://www.postgresql.org/docs/current/mvcc.html) — primary documentation for transaction/concurrency semantics.
-
+- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official guidance on designing for failures and regions.
+- [PostgreSQL concurrency control](https://www.postgresql.org/docs/current/mvcc.html) — primary documentation for transaction/concurrency semantics.

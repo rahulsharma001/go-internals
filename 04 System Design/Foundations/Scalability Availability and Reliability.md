@@ -25,11 +25,15 @@ For checkout, stateless API instances scale behind a load balancer, but order ac
 
 ## 5. Detailed success flow
 
-A request reaches a healthy API instance, passes admission control, commits to replicated order storage, and returns an order ID. Optional events are buffered. Autoscaling responds before saturation and the SLO counts the durable result.
+01. A request reaches a healthy API instance, passes admission control, commits to replicated order storage, and returns an order ID.
+11. Optional events are buffered.
+21. Autoscaling responds before saturation and the SLO counts the durable result.
 
 ## 6. Detailed failure flow
 
-During database loss of quorum, the API must not acknowledge an order it cannot durably commit. It fails or returns unavailable, while read-only status may use a safe replica. Recovery restores quorum, reconciles uncertain requests by idempotency key, and measures error-budget burn.
+01. During database loss of quorum, the API must not acknowledge an order it cannot durably commit.
+11. It fails or returns unavailable, while read-only status may use a safe replica.
+21. Recovery restores quorum, reconciles uncertain requests by idempotency key, and measures error-budget burn.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +77,6 @@ Capacity ≠ availability ≠ reliability. Name workload and SLI, find first lim
 
 ## 17. Verified further reading
 
-- [Google Cloud: detect failures with observability](https://cloud.google.com/architecture/framework/reliability/slo-and-alerts) — connects reliability to metrics, logs, traces, and actionable alerts.\n- [Google SRE Book](https://sre.google/sre-book/table-of-contents/) — primary public material on SLOs, overload, and reliable operations.
+- [Google Cloud: detect failures with observability](https://cloud.google.com/architecture/framework/reliability/slo-and-alerts) — connects reliability to metrics, logs, traces, and actionable alerts.
+- [Google SRE Book](https://sre.google/sre-book/table-of-contents/) — primary public material on SLOs, overload, and reliable operations.
 

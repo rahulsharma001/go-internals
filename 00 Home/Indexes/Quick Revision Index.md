@@ -33,11 +33,11 @@ Each card is a five-minute companion. Use the canonical for learning and the dri
 
 ## System design
 
-- [[System Design 15-Minute Revision]]
-- [[System Design Interview Framework - Quick Revision]]
-- [[Pattern Selection Guide]] · [[Database Selection Guide]]
-- [[System Design Scaling Reliability and Security Checklists]]
-- [[System Design Trade-off Vocabulary and Interview Traps]]
+- [[15-Minute Interview Launchpad]] · [[45-Minute Timeline Cheatsheet]]
+- [[Requirements Checklist]] · [[Capacity Estimation Cheatsheet]] · [[API and Data Model Checklist]]
+- [[HLD Drawing Checklist]] · [[Database Selection Guide]] · [[Cache and Messaging Selection Guide]]
+- [[Reliability Checklist]] · [[Security Checklist]] · [[System Pattern Selection Guide]]
+- [[Trade-off Vocabulary]] · [[Common Interview Traps]]
 
 ## Infrastructure
 

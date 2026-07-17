@@ -25,11 +25,17 @@ Video metadata and processing state use relational/strong records; source/rendit
 
 ## 5. Detailed success flow
 
-Write commits to one authoritative owner. Outbox/CDC updates derived search/cache/analytics with versions. Queries route to the store designed for their access pattern; derived data can rebuild.
+01. Write commits to one authoritative owner.
+11. Outbox/CDC updates derived search/cache/analytics with versions.
+21. Queries route to the store designed for their access pattern
+31. derived data can rebuild.
 
 ## 6. Detailed failure flow
 
-Derived search is unavailable. Authoritative create/update still works; search degrades explicitly. Rebuild consumes versioned changes/snapshot without becoming a second writer.
+01. Derived search is unavailable.
+11. Authoritative create/update still works
+21. search degrades explicitly.
+31. Rebuild consumes versioned changes/snapshot without becoming a second writer.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Invariant → access path → authoritative owner → PK/partition/index → rat
 
 ## 17. Verified further reading
 
-- [PostgreSQL concurrency control](https://www.postgresql.org/docs/current/mvcc.html) — official transactional behavior.\n- [Amazon S3 user guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/) — official object storage consistency and concepts.
+- [PostgreSQL concurrency control](https://www.postgresql.org/docs/current/mvcc.html) — official transactional behavior.
+- [Amazon S3 user guide](https://docs.aws.amazon.com/AmazonS3/latest/userguide/) — official object storage consistency and concepts.
 

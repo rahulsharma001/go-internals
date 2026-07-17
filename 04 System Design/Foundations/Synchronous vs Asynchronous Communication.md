@@ -25,11 +25,17 @@ Sync HTTP/RPC carries deadline/cancellation and returns success/error. Async com
 
 ## 5. Detailed success flow
 
-Sync path has bounded dependencies and commits the acceptance point. Async handoff survives process failure; idempotent consumers advance a state machine; the user sees accurate status.
+01. Sync path has bounded dependencies and commits the acceptance point.
+11. Async handoff survives process failure
+21. idempotent consumers advance a state machine
+31. the user sees accurate status.
 
 ## 6. Detailed failure flow
 
-Broker publish succeeds but response is lost; idempotency returns the same request. Consumer backlog grows; admission limits new optional work, critical priority is isolated, status shows delayed rather than false success.
+01. Broker publish succeeds but response is lost
+11. idempotency returns the same request.
+21. Consumer backlog grows
+31. admission limits new optional work, critical priority is isolated, status shows delayed rather than false success.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Sync waits and couples; async hands off and exposes state. Define durable accept
 
 ## 17. Verified further reading
 
-- [RFC 9110 HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110) — authoritative HTTP method/status semantics.\n- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official durable database-to-event handoff.
+- [RFC 9110 HTTP semantics](https://www.rfc-editor.org/rfc/rfc9110) — authoritative HTTP method/status semantics.
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official durable database-to-event handoff.
 

@@ -25,11 +25,17 @@ At 2,000 requests/s and 200 ms average in-flight time, concurrency is roughly 40
 
 ## 5. Detailed success flow
 
-Admission accepts work within capacity; queues remain bounded; each dependency consumes a known deadline slice; the response meets tail target; optional work completes asynchronously.
+01. Admission accepts work within capacity
+11. queues remain bounded
+21. each dependency consumes a known deadline slice
+31. the response meets tail target
+41. optional work completes asynchronously.
 
 ## 6. Detailed failure flow
 
-As utilization approaches saturation, queue time and tail latency climb. Retries add load and cause collapse. Admission control rejects/degrades early, cancels expired work, sheds optional traffic, and alarms on saturation and error-budget burn.
+01. As utilization approaches saturation, queue time and tail latency climb.
+11. Retries add load and cause collapse.
+21. Admission control rejects/degrades early, cancels expired work, sheds optional traffic, and alarms on saturation and error-budget burn.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Latency=time, throughput=rate, concurrency=in flight, capacity=safe ceiling. Bud
 
 ## 17. Verified further reading
 
-- [AWS Builders’ Library: timeouts, retries, and backoff](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) — explains latency-driven timeout and retry design.\n- [OpenTelemetry signals](https://opentelemetry.io/docs/concepts/signals/) — official definitions for metrics and traces used to measure latency.
+- [AWS Builders’ Library: timeouts, retries, and backoff](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/) — explains latency-driven timeout and retry design.
+- [OpenTelemetry signals](https://opentelemetry.io/docs/concepts/signals/) — official definitions for metrics and traces used to measure latency.
 

@@ -25,11 +25,15 @@ Notification urgent transactional messages use reserved workers/provider quota s
 
 ## 5. Detailed success flow
 
-Each class uses its pool; spare capacity may be shared within policy; critical SLO holds under ordinary burst.
+01. Each class uses its pool
+11. spare capacity may be shared within policy
+21. critical SLO holds under ordinary burst.
 
 ## 6. Detailed failure flow
 
-Provider/tenant hangs and fills its pool. Its requests time out/reject while other pools continue. Circuit opens and backlog/admission prevents memory growth.
+01. Provider/tenant hangs and fills its pool.
+11. Its requests time out/reject while other pools continue.
+21. Circuit opens and backlog/admission prevents memory growth.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +77,5 @@ Find shared finite pool → isolate by failure/cost/priority → bound each → 
 
 ## 17. Verified further reading
 
-- [Microsoft bulkhead pattern](https://learn.microsoft.com/azure/architecture/patterns/bulkhead) — vendor architecture guidance.\n- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official failure-domain and overload guidance.
-
+- [Microsoft bulkhead pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/bulkhead) — vendor architecture guidance.
+- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official failure-domain and overload guidance.

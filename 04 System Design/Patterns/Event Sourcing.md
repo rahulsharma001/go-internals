@@ -25,11 +25,18 @@ Account stream: `PaymentIntentCreated`, `Authorized`, `Captured`, `RefundRequest
 
 ## 5. Detailed success flow
 
-Load snapshot+new events, validate command, append version N atomically, update/publish projections idempotently, return new version.
+01. Command handler loads the latest snapshot and all later events for the aggregate.
+11. It rebuilds current state, validates the command against invariants, and proposes the next event.
+21. Event store atomically appends at expected aggregate version N and rejects a concurrent mismatch.
+31. Projectors consume the new event idempotently and update versioned read models
+41. publisher exposes it to other owners.
+51. API returns the new version or a conflict that the caller can safely resolve.
 
 ## 6. Detailed failure flow
 
-Two writers append expected version 7; one wins, other gets conflict and reloads/rejects. Broken projection rebuilds from immutable stream to new generation.
+01. Two writers append expected version 7
+11. one wins, other gets conflict and reloads/rejects.
+21. Broken projection rebuilds from immutable stream to new generation.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,5 @@ Immutable domain events as truth; expected-version append; fold/snapshot; projec
 
 ## 17. Verified further reading
 
-- [Microsoft event sourcing pattern](https://learn.microsoft.com/azure/architecture/patterns/event-sourcing) — vendor architecture guidance.\n- [Apache Kafka log compaction](https://kafka.apache.org/documentation/#compaction) — official retention mechanics and limitations.
-
+- [Microsoft event sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing) — vendor architecture guidance.
+- [Apache Kafka log compaction](https://kafka.apache.org/documentation/#compaction) — official retention mechanics and limitations.

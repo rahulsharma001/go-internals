@@ -112,12 +112,12 @@ Record: date, system, exact quote/diagram error, rubric dimension, consequence, 
 
 A system is `interview-ready` only when all are true:
 
-- one untimed reconstruction and one 45-minute mock are preserved;
-- requirements, estimation, API/data, HLD, deep dive, reliability, trade-offs, and communication each score at least 3/4 on the rubric;
+- one untimed reconstruction and at least two recent 45-minute mocks scoring 80 or higher are preserved;
+- requirements, estimation, API/data, HLD, deep dive, reliability, trade-offs, and communication each reach at least 70% of that category's maximum on [[System Design Mock Rubric]];
 - the critical invariant and ownership boundaries are explicit;
 - three failure flows have detection, retry/deduplication, recovery, user impact, and signals;
 - one adversarial follow-up succeeds;
-- a later seven- or fourteen-day reconstruction succeeds without the canonical note;
+- the 1-, 3-, 7-, and 14-day re-tests are recorded, with the later reconstruction completed without the canonical note;
 - no unresolved repeated high-severity mistake remains.
 
 Note completeness is curriculum coverage, not personal readiness.
@@ -130,4 +130,3 @@ Note completeness is curriculum coverage, not personal readiness.
 4. Score with [[System Design Mock Rubric]].
 5. Record in [[System Design Practice Tracker]].
 6. Schedule only observed corrections in [[Common Mistakes and Re-test Queue]].
-

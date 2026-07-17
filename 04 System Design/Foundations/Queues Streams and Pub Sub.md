@@ -25,11 +25,16 @@ Order outbox events enter a Kafka topic keyed by order ID; each consumer group h
 
 ## 5. Detailed success flow
 
-After business commit, producer publishes; broker replicates; consumer owns a partition/job, performs an idempotent transaction, then advances offset/ack. Lag and age remain within SLO.
+01. After business commit, producer publishes
+11. broker replicates
+21. consumer owns a partition/job, performs an idempotent transaction, then advances offset/ack.
+31. Lag and age remain within SLO.
 
 ## 6. Detailed failure flow
 
-Consumer commits side effect then crashes before ack. Redelivery finds inbox/event ID and returns stored result. Poison work retries only transient faults, then quarantines with replay tooling and operator-visible state.
+01. Consumer commits side effect then crashes before ack.
+11. Redelivery finds inbox/event ID and returns stored result.
+21. Poison work retries only transient faults, then quarantines with replay tooling and operator-visible state.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ Producer → durable broker → key/partition → consumer → local idempotent 
 
 ## 17. Verified further reading
 
-- [Apache Kafka documentation](https://kafka.apache.org/documentation/) — official partitions, consumers, delivery, and operations.\n- [Redis use cases](https://redis.io/docs/latest/develop/use-cases/) — official examples distinguishing job queues, pub/sub, and streams.
+- [Apache Kafka documentation](https://kafka.apache.org/documentation/) — official partitions, consumers, delivery, and operations.
+- [Redis use cases](https://redis.io/docs/latest/develop/use-cases/) — official examples distinguishing job queues, pub/sub, and streams.
 

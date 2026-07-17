@@ -25,11 +25,18 @@ Payment intents have a home region. Metadata replicates async; failover promotes
 
 ## 5. Detailed success flow
 
-Edge routes to home/nearest read; write commits under current epoch; replication advances; health/SLO triggers controlled failover; new authority fences old; recovery reconciles and later fails back deliberately.
+01. Edge routes to home/nearest read
+11. write commits under current epoch
+21. replication advances
+31. health/SLO triggers controlled failover
+41. new authority fences old
+51. recovery reconciles and later fails back deliberately.
 
 ## 6. Detailed failure flow
 
-DNS points to region B while A still writes. Without quorum/epoch, both accept same seat/payment. Correct design stops/fences A, promotes B only with known recovery point, surfaces pending, then reconciles.
+01. DNS points to region B while A still writes.
+11. Without quorum/epoch, both accept same seat/payment.
+21. Correct design stops/fences A, promotes B only with known recovery point, surfaces pending, then reconciles.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,6 @@ Reason: latency/outage/residency. Choose topology, home/owner, replication/ack, 
 
 ## 17. Verified further reading
 
-- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official failure-domain and reliability guidance.\n- [AWS disaster recovery guidance](https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html) — official RPO/RTO and strategy overview.
+- [Google Cloud reliability framework](https://cloud.google.com/architecture/framework/reliability) — official failure-domain and reliability guidance.
+- [AWS disaster recovery guidance](https://docs.aws.amazon.com/whitepapers/latest/disaster-recovery-workloads-on-aws/disaster-recovery-options-in-the-cloud.html) — official RPO/RTO and strategy overview.
 

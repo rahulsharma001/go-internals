@@ -25,11 +25,15 @@ Job-scheduler shard leader term 19 assigns runs. Region partition elects term 20
 
 ## 5. Detailed success flow
 
-One leader with quorum acts, checkpoints, renews. Followers do not mutate. Planned handoff drains and transfers term/state.
+01. One leader with quorum acts, checkpoints, renews.
+11. Followers do not mutate.
+21. Planned handoff drains and transfers term/state.
 
 ## 6. Detailed failure flow
 
-Old leader pauses and resumes after new election. Fencing rejects term 19. If quorum unavailable, no leader is elected and control pauses instead of split brain.
+01. Old leader pauses and resumes after new election.
+11. Fencing rejects term 19.
+21. If quorum unavailable, no leader is elected and control pauses instead of split brain.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +77,6 @@ Consensus/lease elects term; leader renews; all effects carry term and are fence
 
 ## 17. Verified further reading
 
-- [Kubernetes leases](https://kubernetes.io/docs/concepts/architecture/leases/) — official leader-election coordination primitive.\n- [etcd FAQ and learning](https://etcd.io/docs/) — official Raft/consensus documentation.
+- [Kubernetes leases](https://kubernetes.io/docs/concepts/architecture/leases/) — official leader-election coordination primitive.
+- [etcd FAQ and learning](https://etcd.io/docs/) — official Raft/consensus documentation.
 

@@ -25,11 +25,16 @@ Viral video manifest uses immutable `video/42/generation/7/manifest`. Metadata p
 
 ## 5. Detailed success flow
 
-Truth commits version 8, invalidation publishes, caches evict/update; misses coalesce and populate version 8. Old immutable objects remain safe until lifecycle cleanup.
+01. Truth commits version 8, invalidation publishes, caches evict/update
+11. misses coalesce and populate version 8.
+21. Old immutable objects remain safe until lifecycle cleanup.
 
 ## 6. Detailed failure flow
 
-Invalidation event is lost. TTL/version read bounds staleness. When many entries expire, jitter and per-key coalescing prevent an origin wave; overload sheds optional reads.
+01. Invalidation event is lost.
+11. TTL/version read bounds staleness.
+21. When many entries expire, jitter and per-key coalescing prevent an origin wave
+31. overload sheds optional reads.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ Truth version → invalidate/versioned key → TTL+jitter safety net → one loa
 
 ## 17. Verified further reading
 
-- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official invalidation race/disconnect behavior.\n- [Amazon CloudFront expiration](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html) — official TTL/stale cache behavior.
+- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official invalidation race/disconnect behavior.
+- [Amazon CloudFront expiration](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html) — official TTL/stale cache behavior.
 

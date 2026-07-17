@@ -25,11 +25,20 @@ A 2 GB video uploads in 16 MB parts. Failed parts retry independently; completio
 
 ## 5. Detailed success flow
 
-Authorized client uploads parts to object storage; service records part manifest/version; checksum validates; metadata commit makes version visible; CDN serves immutable object; lifecycle retains according to policy.
+01. Authorized client uploads parts to object storage
+11. service records part manifest/version
+21. checksum validates
+31. metadata commit makes version visible
+41. CDN serves immutable object
+51. lifecycle retains according to policy.
 
 ## 6. Detailed failure flow
 
-Client uploads bytes but metadata commit fails. Object remains unreferenced; reconciliation/expiry deletes it. If completion response is lost, stable upload ID returns existing completion. Corrupt checksum rejects publish.
+01. Client uploads bytes but metadata commit fails.
+11. Object remains unreferenced
+21. reconciliation/expiry deletes it.
+31. If completion response is lost, stable upload ID returns existing completion.
+41. Corrupt checksum rejects publish.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +82,6 @@ Bytes in object store, metadata/ACL/version elsewhere. Direct multipart signed u
 
 ## 17. Verified further reading
 
-- [Amazon S3 multipart upload](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html) — official resumable multipart mechanics.\n- [Amazon S3 object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html) — official checksum behavior.
+- [Amazon S3 multipart upload](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html) — official resumable multipart mechanics.
+- [Amazon S3 object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html) — official checksum behavior.
 

@@ -25,11 +25,18 @@ Order: create pending → authorize payment → reserve inventory → confirm. I
 
 ## 5. Detailed success flow
 
-Saga commits current step+outbox, participant deduplicates command and commits result+outbox, coordinator advances expected version, final confirmed event publishes.
+01. Coordinator commits saga state and an outbox command for the next participant.
+11. Participant deduplicates the command, applies its local transaction, and commits a result event in the same local boundary.
+21. Coordinator consumes the result through an inbox and conditionally advances the expected saga version.
+31. Each following step repeats with explicit timeout and compensation metadata.
+41. When all required steps complete, the coordinator marks the saga confirmed and emits the terminal event.
 
 ## 6. Detailed failure flow
 
-Participant times out after commit. Coordinator retries same command/reconciles result. Permanent failure transitions to compensation. Compensation failure persists and escalates with operator tooling.
+01. Participant times out after commit.
+11. Coordinator retries same command/reconciles result.
+21. Permanent failure transitions to compensation.
+31. Compensation failure persists and escalates with operator tooling.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,5 @@ Persist saga+step+version; local transaction+outbox; idempotent participants/inb
 
 ## 17. Verified further reading
 
-- [Microsoft saga pattern](https://learn.microsoft.com/azure/architecture/reference-architectures/saga/saga) — vendor architecture guidance on orchestration/choreography.\n- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official local-transaction event handoff.
-
+- [Microsoft saga pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/saga) — vendor architecture guidance on orchestration/choreography.
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official local-transaction event handoff.

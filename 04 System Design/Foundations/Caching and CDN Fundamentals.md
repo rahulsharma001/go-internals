@@ -25,11 +25,17 @@ Video segments use immutable content-addressed/versioned URLs and long CDN TTLs.
 
 ## 5. Detailed success flow
 
-Request hits a fresh edge entry and avoids origin. On miss, one request fetches truth while others wait; response populates bounded cache with jittered TTL. Metrics record hit, origin latency, and staleness.
+01. Request hits a fresh edge entry and avoids origin.
+11. On miss, one request fetches truth while others wait
+21. response populates bounded cache with jittered TTL.
+31. Metrics record hit, origin latency, and staleness.
 
 ## 6. Detailed failure flow
 
-A viral key expires everywhere, causing a stampede. Request coalescing, soft TTL/background refresh, jitter, and origin admission protect the store. If cache is down, fallback is bounded; optional reads may serve stale or fail rather than overwhelm truth.
+01. A viral key expires everywhere, causing a stampede.
+11. Request coalescing, soft TTL/background refresh, jitter, and origin admission protect the store.
+21. If cache is down, fallback is bounded
+31. optional reads may serve stale or fail rather than overwhelm truth.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Cache only useful reusable data. Define key/value/source/TTL/invalidation/miss/e
 
 ## 17. Verified further reading
 
-- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official invalidation, disconnect, and cache-candidate guidance.\n- [Amazon CloudFront caching](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html) — official TTL and expiration behavior.
+- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official invalidation, disconnect, and cache-candidate guidance.
+- [Amazon CloudFront caching](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Expiration.html) — official TTL and expiration behavior.
 

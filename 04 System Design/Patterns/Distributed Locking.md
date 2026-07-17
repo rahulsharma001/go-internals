@@ -25,11 +25,18 @@ Scheduler grants worker token 43 for a shard. Lease expires and worker B gets 44
 
 ## 5. Detailed success flow
 
-One owner gets token, checks time budget, performs bounded work, resource records token, releases/renews safely.
+01. Contender acquires a time-bounded lease and receives a monotonically increasing fencing token.
+11. Before work, it verifies enough lease budget remains and sends the token with every protected-resource mutation.
+21. The resource records the highest accepted token and rejects any older writer, then the owner completes bounded work.
+31. Renewal is conditional on the same lease identity
+41. release removes only that owner's lease.
 
 ## 6. Detailed failure flow
 
-Owner pauses beyond expiry. New owner proceeds with higher token. Old owner cannot corrupt state because resource fences it. Without fencing, both execute despite “correct” lease store.
+01. Owner pauses beyond expiry.
+11. New owner proceeds with higher token.
+21. Old owner cannot corrupt state because resource fences it.
+31. Without fencing, both execute despite “correct” lease store.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,5 @@ First avoid lock. If needed: conditional lease + owner + expiry + monotonic fenc
 
 ## 17. Verified further reading
 
-- [Redis distributed locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/) — official algorithm and safety discussion.\n- [Kubernetes leases](https://kubernetes.io/docs/concepts/architecture/leases/) — official lease usage for coordination.
-
+- [Redis distributed locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/) — official algorithm and safety discussion.
+- [Kubernetes leases](https://kubernetes.io/docs/concepts/architecture/leases/) — official lease usage for coordination.

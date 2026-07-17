@@ -25,11 +25,18 @@ An API gateway sends `/payments` to payment instances using least outstanding. R
 
 ## 5. Detailed success flow
 
-DNS/anycast reaches a regional load balancer; TLS terminates; request is routed to a ready backend; deadlines and trace context pass end to end; response returns without hidden retry amplification.
+01. DNS/anycast reaches a regional load balancer
+11. TLS terminates
+21. request is routed to a ready backend
+31. deadlines and trace context pass end to end
+41. response returns without hidden retry amplification.
 
 ## 6. Detailed failure flow
 
-A backend is alive but slow. Passive outlier detection and latency/concurrency limits eject it; active checks verify recovery. If all backends saturate, admission control rejects instead of queueing indefinitely.
+01. A backend is alive but slow.
+11. Passive outlier detection and latency/concurrency limits eject it
+21. active checks verify recovery.
+31. If all backends saturate, admission control rejects instead of queueing indefinitely.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,6 @@ Stable endpoint → eligible set → policy → readiness/outlier/drain → over
 
 ## 17. Verified further reading
 
-- [Kubernetes Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/) — official routing abstractions.\n- [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/) — stable endpoints and service types.
+- [Kubernetes Services, Load Balancing, and Networking](https://kubernetes.io/docs/concepts/services-networking/) — official routing abstractions.
+- [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/) — stable endpoints and service types.
 

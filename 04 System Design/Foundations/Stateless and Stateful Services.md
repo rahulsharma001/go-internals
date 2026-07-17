@@ -25,11 +25,16 @@ A chat gateway owns live sockets and bounded send buffers. The message store and
 
 ## 5. Detailed success flow
 
-Load balancing sends an API request to any instance; it reads authoritative state and performs a versioned/idempotent update. A stateful worker holds a partition lease and checkpoints progress.
+01. Load balancing sends an API request to any instance
+11. it reads authoritative state and performs a versioned/idempotent update.
+21. A stateful worker holds a partition lease and checkpoints progress.
 
 ## 6. Detailed failure flow
 
-A stateful worker is duplicated after pause; the old worker resumes. A fencing epoch on writes rejects the stale owner. Without it, both mutate state despite a lease.
+01. A stateful worker is duplicated after pause
+11. the old worker resumes.
+21. A fencing epoch on writes rejects the stale owner.
+31. Without it, both mutate state despite a lease.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ Any instance for stateless; identity matters for stateful. Name durable owner, s
 
 ## 17. Verified further reading
 
-- [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/) — stable routing to changing stateless endpoints.\n- [Kubernetes StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) — official stable identity/storage behavior.
+- [Kubernetes Service](https://kubernetes.io/docs/concepts/services-networking/service/) — stable routing to changing stateless endpoints.
+- [Kubernetes StatefulSet](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/) — official stable identity/storage behavior.
 

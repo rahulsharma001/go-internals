@@ -25,11 +25,18 @@ File download checks user/device membership against metadata, returns a short-li
 
 ## 5. Detailed success flow
 
-Authenticated principal requests allowed object; owner evaluates policy; scoped credential grants least privilege; sensitive fields remain minimized; audit/metrics record decision.
+01. Authenticated principal requests allowed object
+11. owner evaluates policy
+21. scoped credential grants least privilege
+31. sensitive fields remain minimized
+41. audit/metrics record decision.
 
 ## 6. Detailed failure flow
 
-Stolen token scrapes locations/files. Audience/expiry checks, object authorization, rate/concurrency limits, anomaly detection, revocation/short lifetime, and incident audit bound exposure.
+01. Gateway detects an unusual request rate from a token and verifies audience, issuer, expiry, and credential type.
+11. Resource-owning service still performs object-level authorization, so possession of a token is not universal access.
+21. Per-principal rate/concurrency limits and anomaly rules block the scrape while short credential lifetime or revocation stops future use.
+31. Incident workflow identifies accessed objects from audit records, rotates affected secrets, notifies according to policy, and measures residual exposure.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,5 @@ Asset/actor/trust → authN → resource authZ → minimize/encrypt → secret/k
 
 ## 17. Verified further reading
 
-- [OAuth 2.0 Security Best Current Practice, RFC 9700](https://www.rfc-editor.org/rfc/rfc9700) — current standards security guidance.\n- [OWASP API Security Top 10](https://owasp.org/API-Security/) — reputable API-specific threat checklist.
-
+- [OAuth 2.0 Security Best Current Practice, RFC 9700](https://www.rfc-editor.org/rfc/rfc9700) — current standards security guidance.
+- [OWASP API Security Top 10](https://owasp.org/API-Security/) — reputable API-specific threat checklist.

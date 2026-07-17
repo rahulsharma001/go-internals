@@ -25,11 +25,16 @@ Pricing enrichment fails. Checkout circuit opens for optional price recommendati
 
 ## 5. Detailed success flow
 
-Healthy calls flow; isolated failures remain below threshold. Recovery probes gradually restore traffic and slow-start prevents flood.
+01. Healthy calls flow
+11. isolated failures remain below threshold.
+21. Recovery probes gradually restore traffic and slow-start prevents flood.
 
 ## 6. Detailed failure flow
 
-Dependency is down. Circuit opens and preserves upstream capacity. If all instances synchronize probes, jitter/limited global rate prevents a thundering herd. Alert on user impact and open duration.
+01. Dependency is down.
+11. Circuit opens and preserves upstream capacity.
+21. If all instances synchronize probes, jitter/limited global rate prevents a thundering herd.
+31. Alert on user impact and open duration.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,5 @@ Timeout first. Closed measures; open fails fast; half-open bounded probes. Scope
 
 ## 17. Verified further reading
 
-- [Microsoft circuit breaker pattern](https://learn.microsoft.com/azure/architecture/patterns/circuit-breaker) — vendor architecture guidance and state transitions.\n- [AWS reliability guidance](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure.html) — official dependency-failure mitigation.
-
+- [Microsoft circuit breaker pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/circuit-breaker) — vendor architecture guidance and state transitions.
+- [AWS fail-fast guidance](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_fail_fast.html) — official guidance for rejecting work when a dependency cannot serve it.

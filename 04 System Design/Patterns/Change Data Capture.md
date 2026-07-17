@@ -25,11 +25,17 @@ Debezium reads only `outbox` table, turns each insert into an event keyed by agg
 
 ## 5. Detailed success flow
 
-Transaction commits; log record becomes visible; connector publishes in order for source partition; consumer applies version and checkpoints; lag remains bounded.
+01. Transaction commits
+11. log record becomes visible
+21. connector publishes in order for source partition
+31. consumer applies version and checkpoints
+41. lag remains bounded.
 
 ## 6. Detailed failure flow
 
-Connector offline beyond WAL/binlog retention loses position. Alert before exhaustion; retain logs, restore connector, resnapshot/backfill, then resume and reconcile versions.
+01. Connector offline beyond WAL/binlog retention loses position.
+11. Alert before exhaustion
+21. retain logs, restore connector, resnapshot/backfill, then resume and reconcile versions.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Snapshot → log position → committed changes → schema/key/partition → ide
 
 ## 17. Verified further reading
 
-- [Debezium documentation](https://debezium.io/documentation/reference/stable/) — official connectors, snapshots, offsets, and schemas.\n- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — domain-event specialization.
+- [Debezium documentation](https://debezium.io/documentation/reference/stable/) — official connectors, snapshots, offsets, and schemas.
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — domain-event specialization.
 

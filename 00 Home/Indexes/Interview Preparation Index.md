@@ -14,7 +14,7 @@ status: active
 
 ## System design
 
-- [[System Design Interview Framework]] · [[System Design Map of Content]]
+- [[45-Minute System Design Playbook]] · [[System Design Map of Content]]
 
 ## Behavioural and leadership
 
@@ -28,4 +28,3 @@ status: active
 - Mock interview and interview-experience folders exist but contain no recorded sessions.
 
 Project folders remain empty until evidence for NCS, CEE, CoMarketer, or PulseCheck is supplied and validated.
-

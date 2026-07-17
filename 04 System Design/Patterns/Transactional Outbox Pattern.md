@@ -25,11 +25,17 @@ Order transaction inserts `orders(o-42)` and `outbox(e-77,aggregate=o-42,type=Or
 
 ## 5. Detailed success flow
 
-DB commit makes state/event intent durable; relay publishes; consumer deduplicates and applies; outbox retention cleans only after safe horizon.
+01. DB commit makes state/event intent durable
+11. relay publishes
+21. consumer deduplicates and applies
+31. outbox retention cleans only after safe horizon.
 
 ## 6. Detailed failure flow
 
-Relay publishes then crashes before marking. It republishes; consumer inbox uniqueness ignores duplicate. If relay stalls, oldest unpublished age alerts and catch-up resumes.
+01. Relay publishes then crashes before marking.
+11. It republishes
+21. consumer inbox uniqueness ignores duplicate.
+31. If relay stalls, oldest unpublished age alerts and catch-up resumes.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Business+outbox same transaction. Relay committed rows at least once keyed by ag
 
 ## 17. Verified further reading
 
-- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official schema and routing behavior.\n- [PostgreSQL SKIP LOCKED](https://www.postgresql.org/docs/current/sql-select.html) — official primitive often used by polling relays.
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official schema and routing behavior.
+- [PostgreSQL SKIP LOCKED](https://www.postgresql.org/docs/current/sql-select.html) — official primitive often used by polling relays.
 

@@ -25,11 +25,17 @@ Chat gateway drops typing/presence first, then closes a slow socket and relies o
 
 ## 5. Detailed success flow
 
-Arrival ≤ service or short bursts fit bounded buffer; producers adapt; queue age meets SLO; critical work uses reserved capacity.
+01. Arrival ≤ service or short bursts fit bounded buffer
+11. producers adapt
+21. queue age meets SLO
+31. critical work uses reserved capacity.
 
 ## 6. Detailed failure flow
 
-Downstream slows. Oldest age rises; admission rejects new bulk work, consumers do not retry storm, optional data sheds, and critical state remains recoverable. Recovery drains with a controlled rate.
+01. Downstream slows.
+11. Oldest age rises
+21. admission rejects new bulk work, consumers do not retry storm, optional data sheds, and critical state remains recoverable.
+31. Recovery drains with a controlled rate.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Bound everything. Measure arrival/service/oldest age. Slow/reject before scarce 
 
 ## 17. Verified further reading
 
-- [AWS Well-Architected: fail fast and limit queues](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_fail_fast.html) — official overload containment.\n- [Google SRE Book: handling overload](https://sre.google/sre-book/handling-overload/) — public primary guidance.
+- [AWS Well-Architected: fail fast and limit queues](https://docs.aws.amazon.com/wellarchitected/latest/framework/rel_mitigate_interaction_failure_fail_fast.html) — official overload containment.
+- [Google SRE Book: handling overload](https://sre.google/sre-book/handling-overload/) — public primary guidance.
 

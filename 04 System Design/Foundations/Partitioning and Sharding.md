@@ -25,11 +25,17 @@ Chat messages partition by `conversation_id` so per-conversation ordering stays 
 
 ## 5. Detailed success flow
 
-Router computes/looks up the shard, sends the operation to its current owner, owner enforces key-local state, and replicas protect it. Rebalance copies state, catches up a change log, switches routing version, then removes old data.
+01. Router derives the logical shard from the operation's ownership key and reads its current routing epoch.
+11. The current owner performs the key-local read or invariant-changing write and replicates according to policy.
+21. During movement, a new owner copies a snapshot and catches up the shard change log without accepting stale-epoch writes.
+31. Routing switches atomically by version
+41. only after validation and a grace period is old state removed.
 
 ## 6. Detailed failure flow
 
-A hot celebrity key overloads one shard while fleet average is low. Add hot-read replicas, request coalescing, key sub-shards with aggregation, or product limits; adding ordinary shards alone does not split that key.
+01. A hot celebrity key overloads one shard while fleet average is low.
+11. Add hot-read replicas, request coalescing, key sub-shards with aggregation, or product limits
+21. adding ordinary shards alone does not split that key.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,5 @@ Unit/key → routing → local invariant → skew → replica → rebalance with
 
 ## 17. Verified further reading
 
-- [DynamoDB condition expressions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html) — official per-item conditional update mechanics.\n- [Apache Kafka design](https://kafka.apache.org/documentation/#design) — official partitioned-log concepts.
-
+- [DynamoDB condition expressions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html) — official per-item conditional update mechanics.
+- [Apache Kafka design](https://kafka.apache.org/documentation/#design) — official partitioned-log concepts.

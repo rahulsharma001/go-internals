@@ -25,11 +25,15 @@ Client supplies key scoped to principal/operation. Service atomically inserts ke
 
 ## 5. Detailed success flow
 
-First command reserves key and creates intent. Retry sees same hash and returns intent/status. Only state machine can create one charge attempt per logical step.
+01. First command reserves key and creates intent.
+11. Retry sees same hash and returns intent/status.
+21. Only state machine can create one charge attempt per logical step.
 
 ## 6. Detailed failure flow
 
-Service commits charge but response is lost. Retry returns/reconciles existing result instead of charging. If key exists with different amount, return conflict and alert suspicious reuse.
+01. Service commits charge but response is lost.
+11. Retry returns/reconciles existing result instead of charging.
+21. If key exists with different amount, return conflict and alert suspicious reuse.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +77,6 @@ Stable scoped key, normalized hash, atomic reservation+business state, stored pe
 
 ## 17. Verified further reading
 
-- [AWS Builders’ Library: idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/) — official production reasoning for retry-safe mutations.\n- [DynamoDB condition expressions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html) — official conditional-put primitives.
+- [AWS Builders’ Library: idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/) — official production reasoning for retry-safe mutations.
+- [DynamoDB condition expressions](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Expressions.OperatorsAndFunctions.html) — official conditional-put primitives.
 

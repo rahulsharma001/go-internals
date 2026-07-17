@@ -25,11 +25,17 @@ A cache cluster adds one node. Only a share of keys move; misses refill from sou
 
 ## 5. Detailed success flow
 
-Client/router uses membership version, selects owner(s), sends request, and owner verifies epoch. Rebalance copies keys, validates, switches ownership, and retires old replicas.
+01. Client/router reads membership version and hashes the qualified key to a virtual shard.
+11. It selects the current primary and failure-domain-aware replicas, then sends the request with that epoch.
+21. During rebalance, the new owner copies still-valid keys and catches up changes while the old owner continues serving.
+31. Control plane switches the shard only after validation, and the old replicas drain after the grace period.
 
 ## 6. Detailed failure flow
 
-Clients use stale rings and send writes to old owners. Old owner must redirect/reject by epoch; otherwise divergent writes occur. Node flapping causes churn, so membership changes are damped.
+01. Clients use stale rings and send writes to old owners.
+11. Old owner must redirect/reject by epoch
+21. otherwise divergent writes occur.
+31. Node flapping causes churn, so membership changes are damped.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,5 @@ Hash key to stable owner set; minimal movement on membership change. Add virtual
 
 ## 17. Verified further reading
 
-- [Redis Cluster specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/) — official slot ownership, redirection, and failover behavior.\n- [Kubernetes EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/) — official dynamic endpoint membership context.
-
+- [Redis Cluster specification](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/) — official slot ownership, redirection, and failover behavior.
+- [Kubernetes EndpointSlice](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/) — official dynamic endpoint membership context.

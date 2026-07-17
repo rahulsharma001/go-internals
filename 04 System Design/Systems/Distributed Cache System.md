@@ -410,9 +410,8 @@ Personal readiness remains `not-started` until evidence is recorded in [[System 
 
 **Verified external references (checked 2026-07-17):**
 
-- [Redis caching patterns](https://redis.io/docs/latest/develop/use/patterns/) — established cache interaction patterns.
+- [Redis coding patterns](https://redis.io/docs/latest/develop/clients/patterns/) — established cache and data-structure interaction patterns.
 - [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — tracking and invalidation concepts.
 - [Memcached protocol](https://github.com/memcached/memcached/wiki/Protocols) — concrete cache wire operations.
 - [AWS Builders Library: Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/) — overload protection.
 - [OpenTelemetry observability primer](https://opentelemetry.io/docs/concepts/observability-primer/) — signals and telemetry model.
-

@@ -25,11 +25,17 @@ News feed pushes ordinary posts to active followers’ inboxes; celebrity posts 
 
 ## 5. Detailed success flow
 
-Post commits+outbox; fan-out tasks partition follower ranges; inbox insert unique `(user,post)`; feed read cursor-merges and caches first page.
+01. Post commits+outbox
+11. fan-out tasks partition follower ranges
+21. inbox insert unique `(user,post)`
+31. feed read cursor-merges and caches first page.
 
 ## 6. Detailed failure flow
 
-Fan-out backlog delays posts; feed exposes bounded stale and pull fallback for missing recent source. Duplicate tasks are idempotent. Celebrity surge does not create millions of writes.
+01. Fan-out backlog delays posts
+11. feed exposes bounded stale and pull fallback for missing recent source.
+21. Duplicate tasks are idempotent.
+31. Celebrity surge does not create millions of writes.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Push=write amplification/fast read; pull=cheap write/read fan-out. Hybrid normal
 
 ## 17. Verified further reading
 
-- [Apache Kafka documentation](https://kafka.apache.org/documentation/) — partitioned fan-out transport.\n- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official hot/read cache considerations.
+- [Apache Kafka documentation](https://kafka.apache.org/documentation/) — partitioned fan-out transport.
+- [Redis client-side caching](https://redis.io/docs/latest/develop/reference/client-side-caching/) — official hot/read cache considerations.
 

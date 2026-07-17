@@ -25,11 +25,16 @@ Order writes commit on a leader plus synchronous standby before acknowledgement;
 
 ## 5. Detailed success flow
 
-Leader assigns log order, quorum/synchronous policy commits, followers apply, client receives success. Reads choose leader/current replica according to freshness. Failover elects/fences a new leader.
+01. Leader assigns log order, quorum/synchronous policy commits, followers apply, client receives success.
+11. Reads choose leader/current replica according to freshness.
+21. Failover elects/fences a new leader.
 
 ## 6. Detailed failure flow
 
-Old leader is isolated and continues accepting writes after failover. Epoch/fencing rejects stale leadership. On recovery it discards/catches up divergent state; asynchronous failover may lose acknowledged writes unless policy prevented that.
+01. Old leader is isolated and continues accepting writes after failover.
+11. Epoch/fencing rejects stale leadership.
+21. On recovery it discards/catches up divergent state
+31. asynchronous failover may lose acknowledged writes unless policy prevented that.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ Writer → ack rule → read rule → lag → failover election/fence → catch-
 
 ## 17. Verified further reading
 
-- [PostgreSQL high availability and replication](https://www.postgresql.org/docs/current/high-availability.html) — official replication/failover concepts.\n- [Amazon S3 consistency model](https://docs.aws.amazon.com/AmazonS3/latest/userguide/) — official object-store consistency and durability context.
+- [PostgreSQL high availability and replication](https://www.postgresql.org/docs/current/high-availability.html) — official replication/failover concepts.
+- [Amazon S3 consistency model](https://docs.aws.amazon.com/AmazonS3/latest/userguide/) — official object-store consistency and durability context.
 

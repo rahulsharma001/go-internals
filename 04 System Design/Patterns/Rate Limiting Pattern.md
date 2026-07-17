@@ -25,11 +25,17 @@ API gateway token bucket per tenant+route allows 100/s with burst 200, plus glob
 
 ## 5. Detailed success flow
 
-Request atomically consumes token under correct key; accepted proceeds; headers expose policy; metrics track allowed/rejected and saturation.
+01. Request atomically consumes token under correct key
+11. accepted proceeds
+21. headers expose policy
+31. metrics track allowed/rejected and saturation.
 
 ## 6. Detailed failure flow
 
-Limiter store is unavailable. Security/cost-sensitive mutation fails closed or uses conservative local quota; public read may fail open with global admission. Local caches reconcile carefully to avoid unlimited overshoot.
+01. Limiter store is unavailable.
+11. Security/cost-sensitive mutation fails closed or uses conservative local quota
+21. public read may fail open with global admission.
+31. Local caches reconcile carefully to avoid unlimited overshoot.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +79,6 @@ Resource + identity + scope → token/window algorithm → atomic state → hier
 
 ## 17. Verified further reading
 
-- [Redis rate limiting use case](https://redis.io/docs/latest/develop/use-cases/) — official token-bucket example catalog.\n- [RFC 6585, 429 Too Many Requests](https://www.rfc-editor.org/rfc/rfc6585) — authoritative HTTP status semantics.
+- [Redis rate limiting use case](https://redis.io/docs/latest/develop/use-cases/) — official token-bucket example catalog.
+- [RFC 6585, 429 Too Many Requests](https://www.rfc-editor.org/rfc/rfc6585) — authoritative HTTP status semantics.
 

@@ -92,7 +92,7 @@ Model orders with items and customer references for two query patterns. Propose 
 
 ## Related notes
 
-- [[System Design Interview Framework]]
+- [[45-Minute System Design Playbook]]
 - [[Context Cancellation]]
 - [[Go Error Handling]]
 - [[MongoDB with Go - Quick Revision]]

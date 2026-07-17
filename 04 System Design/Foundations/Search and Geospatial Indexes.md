@@ -25,11 +25,18 @@ Ride matching maps pickup to an H3/S2/geohash-like cell, expands neighbouring ri
 
 ## 5. Detailed success flow
 
-Source commits item/version, change pipeline updates index, query returns candidates, service filters authorization/current state, ranks, paginates, and reports index freshness.
+01. Source owner commits item version and an outbox/change record before acknowledging the mutation.
+11. Indexer consumes the versioned change, updates postings or spatial cells idempotently, and publishes a complete index generation or refresh.
+21. Query service selects candidate terms/cells, fans out only to required shards, and merges bounded candidates.
+31. Owning service rechecks authorization and current mutable state, ranks exact matches or distance, returns cursor pagination, and exposes freshness where it matters.
 
 ## 6. Detailed failure flow
 
-Index lags deletion or availability. Sensitive reads recheck truth; stale hit is suppressed. Rebuild from snapshot+change log; query can degrade to limited exact lookup rather than let index become truth.
+01. Index lags deletion or availability.
+11. Sensitive reads recheck truth
+21. stale hit is suppressed.
+31. Rebuild from snapshot+change log
+41. query can degrade to limited exact lookup rather than let index become truth.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +80,5 @@ Derived index maps query→candidates; source remains truth. Version/tombstone, 
 
 ## 17. Verified further reading
 
-- [OpenSearch documentation](https://docs.opensearch.org/latest/) — official indexing/search concepts.\n- [PostgreSQL text search](https://www.postgresql.org/docs/current/textsearch.html) — official smaller-scale full-text alternative.
-
+- [OpenSearch documentation](https://docs.opensearch.org/latest/) — official indexing/search concepts.
+- [PostgreSQL text search](https://www.postgresql.org/docs/current/textsearch.html) — official smaller-scale full-text alternative.

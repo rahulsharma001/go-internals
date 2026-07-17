@@ -25,11 +25,16 @@ Inventory consumes `ReserveInventory command c-9`; transaction inserts `inventor
 
 ## 5. Detailed success flow
 
-New event applies once locally; ack follows commit. Redelivery finds inbox row and produces no second decrement.
+01. New event applies once locally
+11. ack follows commit.
+21. Redelivery finds inbox row and produces no second decrement.
 
 ## 6. Detailed failure flow
 
-Crash after commit before ack. Broker redelivers; inbox uniqueness absorbs it. If inbox expired before late replay, duplicate may reapply—retention/reconciliation must cover horizon.
+01. Crash after commit before ack.
+11. Broker redelivers
+21. inbox uniqueness absorbs it.
+31. If inbox expired before late replay, duplicate may reapply—retention/reconciliation must cover horizon.
 
 ## 7. Scaling behaviour
 
@@ -73,5 +78,6 @@ Stable event ID → consumer-scoped inbox + business effect + outbox same transa
 
 ## 17. Verified further reading
 
-- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official producer-side complement.\n- [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) — official atomic transaction semantics.
+- [Debezium Outbox Event Router](https://debezium.io/documentation/reference/stable/transformations/outbox-event-router.html) — official producer-side complement.
+- [PostgreSQL transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html) — official atomic transaction semantics.
 

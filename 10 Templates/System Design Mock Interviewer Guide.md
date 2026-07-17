@@ -4,7 +4,7 @@ domain: system-design
 ---
 # System Design Mock Interviewer Guide
 
-Give only the system’s [[Blank-page practice prompt]] to the candidate. Answer reasonable scope questions; do not reveal the canonical diagram.
+Choose a system from [[System Coverage Matrix]] and give the candidate only its section 27, “Blank-page practice prompt.” Answer reasonable scope questions; do not reveal the canonical diagram.
 
 1. Minutes 0–7: check prioritisation, assumptions, invariant, and scale.
 2. Minutes 12–22: require one end-to-end critical flow and clear state ownership.
@@ -15,4 +15,3 @@ Give only the system’s [[Blank-page practice prompt]] to the candidate. Answer
 Interrupt vague claims with: “Which key?”, “Who owns that state?”, “What does success mean?”, “What happens after a timeout?”, “What is the first bottleneck?”, or “What do we give up?”
 
 Score with [[System Design Mock Rubric]]. Feedback must cite an observed statement/diagram, not infer a generic personal weakness.
-
