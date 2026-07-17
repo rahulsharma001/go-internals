@@ -1,0 +1,9 @@
+{
+  "byte_idempotent_outputs": 219,
+  "extracts_validated": 213,
+  "importer_errors": 0,
+  "shards_processed": 5,
+  "source_files_unchanged": 7,
+  "status": "passed",
+  "unique_conversations_indexed": 487
+}

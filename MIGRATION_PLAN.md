@@ -1,9 +1,30 @@
 # Engineering OS Migration Plan
 
-> Prepared: 2026-07-16  
-> Updated: 2026-07-16 after Stage 1 and full structural cleanup
-> Status: **structural cleanup executed**; source-backed Go migration and navigation complete, while unsupported knowledge areas remain intentionally unfilled.
+> Prepared: 2026-07-16
+> Updated: 2026-07-17 after ChatGPT audit and deterministic source extraction
+> Status: **structural cleanup and source extraction executed**; permanent ChatGPT knowledge migration remains intentionally deferred.
 > Controls retained: preserve every source, use `99 Archive` for superseded originals, maintain source traceability, and do not claim readiness without evidence.
+
+## ChatGPT extraction update — 2026-07-17
+
+- [x] Validated all seven expected export files as JSON without changing the source directory.
+- [x] Processed `conversations-000.json` through `conversations-004.json` as one history: 487 primary records and 487 unique conversation IDs.
+- [x] Checked 13 shared records; all overlap primary history and produced no duplicates.
+- [x] Reconstructed selected parent-linked branches and preserved alternative branch suffixes for 78 forked conversations.
+- [x] Classified message content (not titles alone) and created 213 Inbox extracts for technical, potential, or mixed records.
+- [x] Kept 213 excluded conversations out of Markdown source notes and queued 61 ambiguous records for manual review.
+- [x] Generated deterministic machine indexes, schema/manifest reports, and a category migration plan.
+- [ ] Review the Inbox by category and false-positive disposition before any permanent promotion.
+- [ ] Verify confidential/project content and all personal claims before reuse.
+- [ ] Execute future permanent migration one category at a time under [[CHATGPT_MIGRATION_PLAN]].
+
+The export changes the source assessment: NCS and CEE have concrete project
+candidate conversations; PulseCheck has at least one substantive candidate;
+CoMarketer is still supported mainly by incidental/name mentions. The confirmed
+implementation failures are explicitly present in conversation
+`6a5778fc-3758-83ee-9998-cba2bb1b0577`. These findings supersede earlier
+statements that no project-specific source existed, but they do not verify the
+claims or authorize promotion into project canonicals.
 
 ## Execution update — full vault cleanup
 

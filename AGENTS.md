@@ -52,6 +52,11 @@ Learn
 
 A topic is not complete merely because a note exists.
 
+For implementation topics, active evidence must include a prompt-first
+blank-editor drill, a complete executable invocation, an attempt record, and a
+scheduled re-test. Record actual mistakes and their corrections; never infer a
+personal mistake merely from generic teaching material.
+
 ## Current implementation priorities
 
 Prioritize these before advanced internals:
@@ -88,6 +93,11 @@ They should contain where relevant:
 - related notes
 
 Quick-revision notes must be readable in under five minutes.
+
+Every Go example intended to teach implementation must be executable and show
+the complete `main()` invocation (or a complete test when that is the natural
+entry point). Prefer improving the existing canonical, revision, or drill note
+over creating another explanation of the same concept.
 
 ## System-design standard
 

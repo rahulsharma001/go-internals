@@ -1,10 +1,85 @@
 # Engineering OS Vault Inventory
 
-> Audit date: 2026-07-16  
-> Scope: content-level audit of every Markdown note and every relevant folder in the vault.  
-> Mode: audit only. No existing note was edited, moved, renamed, merged, split, deleted, or archived.
+> Current audit: 2026-07-17
+> Baseline captured before ChatGPT extraction; generated Inbox extracts are counted separately.
+> Mode: audit, extraction, and planning only. No permanent note was moved, merged, archived, or promoted from ChatGPT history.
 
-## Executive finding
+## Current post-cleanup vault snapshot
+
+The structural cleanup described later in this file has already happened. At
+the clean-tree safety gate, before this import created any files, the vault had:
+
+- **237 Markdown files**: 123 active/outside `99 Archive` and 114 archived.
+- Approximately **64,787 active words** and **228,781 archived words**.
+- **0 byte-identical Markdown duplicate groups**.
+- **49 active Go notes**, **27 active quick-revision notes**, and **13 prompt-first Go coding drills**.
+- **0 personal mistake records** in the Go, DSA, or interview mistake folders.
+- **79 fenced Go examples** across active notes; 43 active notes contain both a Go fence and a `func main` invocation.
+- 151 unchecked task boxes across nine active planning/drill files and 15 notes marked `not-attempted`.
+
+### Retrieval and link state
+
+- The numbered active hierarchy, MOCs, drill index, quick-revision index, and
+  foundation-first Go learning path are present and coherent.
+- The scan found no proven missing active technical-note target. One report link
+  targets an existing `.xlsx` file, which a Markdown-only resolver reports as
+  unresolved. Two other reported misses are the historical literal
+  `[[create a link]]` text quoted inside this inventory.
+- Six path-style links in the dated Kissht gap tracker resolve only to archived
+  legacy `_index.md` files and are ambiguous by basename. They are suspicious
+  historical navigation, not active canonical ownership.
+- Archive-only unresolved links remain preserved historical placeholders and
+  are not evidence that those topics exist.
+
+### Current coverage
+
+| Area | Current active coverage | Audit conclusion |
+|---|---|---|
+| Go foundations/collections | Canonicals, quick revisions, and drills exist for slices, maps, structs, constructors, methods, method sets, interfaces, embedding, complete programs, and errors. | Content surfaces exist; readiness is blocked on dated blank-editor attempts and re-tests. |
+| Go concurrency/runtime | Usage-first goroutine/channel/context/select/mutex/worker-pool notes and advanced runtime notes exist. | Stronger content depth than demonstrated implementation evidence; keep behind foundation gate. |
+| Go networking/testing | Gin exists; standard-library HTTP/testing/database access remain thin or absent. | Source-backed expansion only after foundation evidence. |
+| DSA | Folder scaffold and MOC only; no pattern canonical, problem attempt, timed mock, revision, or mistake note. | Highest execution gap. Historical Java study material must become fresh Go attempts, not copied solutions. |
+| System design | Interview framework plus MongoDB-with-Go are active; most pattern/system folders are empty. | The ChatGPT export supplies candidate sources, but no permanent migration occurred in this run. |
+| Infrastructure | Folder scaffold/MOC only; no active Kubernetes/AWS/Linux/networking/Terraform canonical. | Export candidates now exist and require category-by-category verification. |
+| Interview evidence | Roadmaps and an unverified behavioural compilation exist. | No verified interview-experience or mistake corpus; claims/metrics must be checked. |
+| Projects | Four blocked evidence-intake shells exist for NCS, CEE, CoMarketer, and PulseCheck. | Export provides substantive candidates for NCS/CEE/PulseCheck; CoMarketer remains weak/mention-only. No claim was promoted. |
+
+### Oversized, incomplete, and duplicate-risk notes
+
+- Active technical canonicals are generally concise. The largest active content
+  note is the 3,558-word behavioural compilation, whose claims are explicitly
+  unverified; the largest other active files are plans, inventories, and reports.
+- The 45 archived notes above 1,800 words preserve the former oversized study
+  pack. They should remain sources, not regain canonical status.
+- Semantic duplication is now concentrated in the archive and in separation of
+  canonical/revision/drill surfaces. Future ChatGPT migration must improve the
+  existing owner rather than recreate older parallel textbooks.
+- The two source-needed MOCs, four blocked project shells, 15 not-attempted
+  notes, and empty DSA/mistake evidence folders are intentional incomplete
+  states—not readiness evidence.
+
+### ChatGPT extraction added by this run
+
+- 487 unique conversations were indexed from all five shards.
+- 213 technical, potentially technical, or mixed source extracts were written
+  under `01 Inbox/ChatGPT Export/Extracted/`.
+- 213 conversations were excluded without Markdown source notes; 61 require
+  manual review; disposition details live in [[CHATGPT_IMPORT_MANIFEST]] and
+  [[CHATGPT_IMPORT_REVIEW_QUEUE]].
+
+---
+
+## Historical baseline retained from the 2026-07-16 pre-migration audit
+
+The remainder of this document is retained for source traceability. Its folder
+tree and “current” findings describe the vault before Stage 1 and the full
+structural cleanup; use the snapshot above for the present state.
+
+> Historical audit date: 2026-07-16
+> Scope: content-level audit of every Markdown note and every relevant folder in the pre-migration vault.
+> Mode: audit only. No existing note was edited, moved, renamed, merged, split, deleted, or archived during that audit.
+
+## Historical executive finding
 
 The vault is currently a **large Go-internals study pack**, not yet a complete Engineering Operating System. It contains strong explanations and many interview assets, but retrieval and implementation are undermined by repetition and scale:
 
