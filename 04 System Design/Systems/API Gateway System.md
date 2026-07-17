@@ -224,8 +224,11 @@ flowchart LR
   subgraph Region[One regional data plane]
     RLB[Regional Load Balancer]
     GW[Stateless Gateway Fleet]
-    Local[(Local Config Auth-Key and Token Caches)]
+    ConfigCache[(Validated Config Snapshots)]
+    KeyCache[(Expiry-Bounded Auth-Key Cache)]
+    CertCache[(TLS Certificate and Key Cache)]
     RL[Regional Rate-Limit Service]
+    Quota[(Partitioned Regional Quota State)]
     Discover[Local Service Discovery]
     Backend[Owning Backend Services]
   end
@@ -237,6 +240,11 @@ flowchart LR
     Stream[[Signed Snapshot Stream]]
   end
 
+  subgraph Trust[External trust authorities]
+    Keys[Identity Key Publisher]
+    Certs[Certificate Manager]
+  end
+
   subgraph Signals[Operational signals]
     Telemetry[[Metrics Logs and Traces Pipeline]]
     Audit[(Security Audit Log)]
@@ -246,9 +254,12 @@ flowchart LR
   GTR --> WAF
   WAF --> RLB
   RLB --> GW
-  GW --> Local
-  GW -->|only when local lease cannot decide| RL
-  GW --> Discover
+  GW --> ConfigCache
+  GW --> KeyCache
+  GW --> CertCache
+  GW -->|lease refill or strict check| RL
+  RL --> Quota
+  Discover -.->|local endpoint updates| GW
   GW -->|request plus reduced deadline| Backend
   GW -.-> Telemetry
   GW -.-> Audit
@@ -256,7 +267,9 @@ flowchart LR
   Admin -->|proposed change| CP
   CP --> ConfigDB
   CP -->|validated immutable version| Stream
-  Stream -.-> Local
+  Stream -.-> ConfigCache
+  Keys -.->|asynchronous refresh| KeyCache
+  Certs -.->|secure rotation| CertCache
 ```
 
 ### ASCII fallback
@@ -267,13 +280,17 @@ Clients
   -> DDoS protection / WAF
   -> Regional load balancer
   -> Stateless gateway fleet
-       -> local config and auth-key cache
-       -> local token lease or regional rate-limit service
+       -> validated local config snapshot
+       -> expiry-bounded auth-key cache
+       -> rotated TLS certificate and key cache
+       -> local token lease or regional rate-limit service -> partitioned quota state
        -> local discovery -> owning backend service
        -> asynchronous metrics, logs, traces, and audit events
 
 Admin / CI -> validation and rollout control plane -> versioned config store
                                               \-> signed snapshots -> gateway caches
+Identity key publisher --async refresh--> gateway auth-key cache
+Certificate manager --secure rotation--> gateway TLS certificate and key cache
 ```
 
 Solid arrows are synchronous request or state-access paths. Dashed arrows are asynchronous distribution or telemetry paths. The versioned configuration store is authoritative; gateway caches and snapshot streams are derived and can be rebuilt.
@@ -283,8 +300,10 @@ Solid arrows are synchronous request or state-access paths. Dashed arrows are as
 - The **global traffic director** sends a client to a healthy nearby region. It does not blindly fail traffic into a region that lacks spare capacity.
 - The **regional load balancer** distributes connections across gateway instances and removes unhealthy instances from rotation.
 - The **gateway fleet** evaluates request policy. Instances are stateless with respect to business data, so capacity can be added horizontally.
-- The **local cache** keeps the hot path independent of the control plane and identity provider. Its content is versioned, integrity-checked, and expiry-bounded rather than silently trusted forever.
-- The **rate-limit service** coordinates budgets that cannot be decided by one instance alone. Local leases keep most requests from paying a network round trip.
+- The **configuration cache** keeps the hot path independent of the control plane. It stores complete, validated snapshots and retains recent good versions for rollback.
+- The **authentication-key cache** keeps token verification independent of a synchronous identity-provider call. Keys retain issuer and expiry rules, refresh asynchronously, and are never trusted indefinitely.
+- The **TLS certificate cache** lets the gateway terminate connections without fetching keys during a handshake. Certificate rotation uses a dedicated secure distribution path and keeps the previous valid certificate during a safe overlap window.
+- The **rate-limit service and partitioned quota state** coordinate budgets that cannot be decided by one instance alone. Local leases keep most requests from paying a network round trip. If a policy is truly global, a higher-level allocator grants bounded regional shares outside the common request path.
 - **Service discovery** supplies a local view of healthy backend endpoints. The gateway load-balances within the chosen cluster; it does not query a central registry across regions for each request.
 - The **control plane** turns human or automated intent into safe data-plane configuration. Validation, canary rollout, acknowledgement, and rollback reduce the blast radius of a bad change.
 - The **telemetry pipeline** is asynchronous because an unavailable logging system must not stop healthy customer requests. Buffers remain bounded so telemetry failure cannot exhaust gateway memory.
