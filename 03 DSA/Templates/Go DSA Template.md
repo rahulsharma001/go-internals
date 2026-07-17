@@ -35,6 +35,14 @@ func main() {
 
 Run with `go run main.go`; for a test-first problem use a complete table test and `go test ./...`. Before coding, state the invariant. After coding, dry-run one normal and one edge case, give time/space complexity, then modify a constraint under the timer.
 
+Before revealing any reference note, copy this checklist into the raw attempt:
+
+- Restate input, output, and constraints.
+- Give the brute-force idea and complexity.
+- Name the pattern and invariant.
+- Run normal, empty/minimum, duplicate, and missing-answer cases when applicable.
+- Explain complexity and perform one live modification.
+
 Attempt record: date · minutes · result · hints · syntax/pattern/edge/complexity/communication failure · modification result · next review.
 
-Related: [[NeetCode 150 in Go]], [[Java DSA Practice Conflicts with Go Interviews]].
+Related: [[DSA Dashboard]], [[NeetCode 150 in Go]], [[Go DSA Containers]], [[Java DSA Practice Conflicts with Go Interviews]].

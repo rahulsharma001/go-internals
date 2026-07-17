@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02 Go/Concurrency/Go Channels.md",
+                "file": "02 Go/Design Patterns/Worker Pool.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Go Channels"
+              "title": "Worker Pool"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02 Go/Concurrency/Go Channels.md",
+                "file": "02 Go/Design Patterns/Worker Pool.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Go Channels"
+              "title": "Backlinks for Worker Pool"
             }
           },
           {
@@ -292,41 +292,41 @@
   },
   "active": "4ca854d182283b79",
   "lastOpenFiles": [
-    "SECURITY_WORKFLOW.md",
+    "03 DSA/Mistakes/DSA Mistake Log.md",
+    "03 DSA/Timed Mocks/45-Minute DSA Mock.md",
+    "03 DSA/Timed Mocks/Timed Practice Tracker.md",
+    "03 DSA/Revision/Go DSA Syntax - 5 Minute Revision.md",
+    "03 DSA/Revision/DSA Pattern Recognition - 5 Minute Revision.md",
+    "03 DSA/Templates/Go DSA Containers.md",
+    "03 DSA/DSA Dashboard.md",
+    "04 System Design/Interview Framework/System Design Interview Framework.md",
+    "03 DSA/NeetCode 150 in Go.md",
+    "FAANG_VAULT_FINAL_AUDIT.md",
+    "MIGRATION_REPORT_CATEGORY_8_ROADMAP_READINESS.md",
+    "MIGRATION_REPORT_CATEGORY_7_INTERVIEWS_PROJECTS.md",
+    "MIGRATION_REPORT_CATEGORY_6_INFRASTRUCTURE_SECURITY.md",
+    "MIGRATION_REPORT_CATEGORY_5_BACKEND_DATA_RELIABILITY.md",
+    "MIGRATION_REPORT_CATEGORY_4_SYSTEM_DESIGN.md",
+    "04 System Design/Databases/MongoDB with Go.md",
+    "03 DSA/Templates/Go DSA Template.md",
+    "02 Go/Fundamentals/Go Generics.md",
+    "02 Go/Fundamentals/Functions and Closures.md",
+    "02 Go/Fundamentals/Complete Go Programs.md",
+    "09 Roadmaps/30-Day FAANG Sprint/Week 1 - Go Recovery.md",
+    "01 Inbox/External Knowledge Gaps.md",
+    "08 Quick Revision/Interview-Day Revision Plan.md",
+    "06 Interviews/Mock Interviews/Mock Interview Plan.md",
+    "09 Roadmaps/Google/Interview Readiness Scorecard.md",
+    "09 Roadmaps/Google/FAANG Coverage Matrix.md",
+    "01 Inbox/ChatGPT Export/Extracted",
+    "01 Inbox/ChatGPT Export/Extracted/XXarUl3V",
+    "01 Inbox/ChatGPT Export/Extracted/XXs8fvWg",
     "tools/security/scan-secrets.sh",
     "tools/security",
-    "SECURITY_SECRET_REMEDIATION_REPORT.md",
-    "00 Home/Indexes/System Design Map of Content.md",
-    "04 System Design/Interview Framework/System Design Interview Framework.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 3 - System Design and Project Evidence.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 2 - DSA in Go.md",
-    "09 Roadmaps/30-Day FAANG Sprint/30-Day Sprint Overview.md",
-    "08 Quick Revision/System Design/System Design Interview Framework - Quick Revision.md",
-    "02 Go/Collections/Go Slices.md",
-    "02 Go/Collections/Go Maps.md",
-    "02 Go/Collections/Collection Transformations in Go.md",
-    "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
-    "08 Quick Revision/Go/Collection Transformations in Go - Quick Revision.md",
-    "00 Home/Engineering Dashboard.md",
-    "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
-    "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
-    "08 Quick Revision/Go/Go Internals Revision.md",
-    "02 Go/Runtime and Memory/Go Runtime Overview.md",
-    "02 Go/Runtime and Memory/Go Channel Internals.md",
-    "02 Go/Runtime and Memory/Go Slice Internals.md",
-    "02 Go/Fundamentals/Go Generics.md",
-    "30_DAY_FAANG_SPRINT_CREATION_REPORT.md",
     "tools/30_day_sprint/__pycache__/updatecpython-310.pyc",
     "tools/30_day_sprint/__pycache__",
     "tools/30_day_sprint/update",
-    "practice/30-day-sprint/week-04-mocks/README.md",
-    "practice/30-day-sprint/week-03-system-design/README.md",
-    "practice/30-day-sprint/week-02-dsa/README.md",
-    "practice/30-day-sprint/week-01-go-recovery/README.md",
     "99 Archive/External Trackers/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
-    "tools/30_day_sprint",
-    "tools",
-    "practice/30-day-sprint/week-04-mocks",
-    "practice/30-day-sprint/week-03-system-design"
+    "tools/30_day_sprint"
   ]
 }
