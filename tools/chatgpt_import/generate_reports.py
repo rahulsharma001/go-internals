@@ -60,7 +60,7 @@ For classification only, every unique displayable message node is inspected in s
 
 ## Content handling
 
-- `text` and textual parts of `multimodal_text` are preserved verbatim, including fenced code and Mermaid/ASCII diagrams.
+- `text` and textual parts of `multimodal_text` preserve fenced code and Mermaid/ASCII diagrams, but high-confidence credentials are replaced with explicit redaction placeholders before any extract is written.
 - Image/file pointers become attachment-metadata markers; attachment bytes are not copied.
 - `conversation_asset_file_names.json` supplies names only.
 - `thoughts` and `reasoning_recap` are schema-counted but intentionally not emitted as conversational source content.
@@ -75,7 +75,7 @@ For classification only, every unique displayable message node is inspected in s
 - The schema is undocumented and may change in future exports.
 - Alternative branches can repeat context; the suffix representation minimizes repetition while retaining branch content.
 - Attachment metadata does not prove the referenced asset exists or is safe to import.
-- Message content can contain stale answers, secrets, personal data, or confidential project code; extracts are unreviewed evidence, not canonicals.
+- Message content can contain stale answers, personal data, or confidential project code; high-confidence credentials are redacted, but extracts remain unreviewed evidence rather than canonicals.
 """
 
 
@@ -130,7 +130,7 @@ All 13 shared IDs already exist in the primary history, so no shared record prod
 - `01 Inbox/ChatGPT Export/classification_index.json`: one machine record for every primary conversation, including excluded/manual records.
 - `01 Inbox/ChatGPT Export/import_manifest.json`: machine manifest, schema statistics, counts, and errors.
 
-Generated extracts are deterministic and can be regenerated. They preserve original IDs, titles, dates, source shards, selected branch order, alternative branches, code blocks, and attachment pointers.
+Generated extracts are deterministic and can be regenerated. They preserve original IDs, titles, dates, source shards, selected branch order, alternative branches, code blocks, and attachment pointers while replacing high-confidence credentials with deterministic redaction placeholders.
 
 ## Errors
 

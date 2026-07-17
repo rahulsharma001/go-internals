@@ -14,7 +14,7 @@ Run:
 tools/security/scan-secrets.sh --staged
 ```
 
-The scanner checks staged text without printing complete values. It blocks high-confidence AWS, GitHub, API, Slack, private-key, password/secret assignment, credentialed database URL, and signed bearer/JWT patterns. Clearly labelled redaction placeholders and standard fake examples are ignored.
+The scanner checks staged text without printing complete values. It blocks high-confidence AWS, GitHub, API, Slack, private-key, password/secret assignment, credentialed database URL, and signed bearer/JWT patterns. Clearly labelled redaction placeholders and standard fake examples are ignored. The importer unit-test module and bundled Obsidian plugin programs are explicit fixture/vendor allowlists; plugin data/configuration files remain scanned.
 
 For a broader local audit, including ignored local inputs, run:
 

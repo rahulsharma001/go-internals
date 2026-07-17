@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 from classifier import classify
-from import_chatgpt import conversation_paths, render_extract, safe_name
+from import_chatgpt import conversation_paths, render_extract, safe_name, sanitize_export_text
 
 
 class ImporterTests(unittest.TestCase):
@@ -38,6 +38,25 @@ class ImporterTests(unittest.TestCase):
 
     def test_safe_filename_is_stable(self) -> None:
         self.assertEqual(safe_name("Go: Slices/Maps?", "2026-01-02T00:00:00Z", "abcdef123"), "2026-01-02 - Go- Slices-Maps - abcdef12.md")
+
+    def test_source_extracts_redact_credentials(self) -> None:
+        source = (
+            "AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE "
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n"
+            "Password: eightchars\n"
+            "postgresql://user:actual-password@db.example.invalid/app"
+        )
+        sanitized = sanitize_export_text(source)
+        self.assertIn("[REDACTED_AWS_ACCESS_KEY_ID]", sanitized)
+        self.assertIn("[REDACTED_AWS_SECRET_ACCESS_KEY]", sanitized)
+        self.assertIn("Password: [REDACTED_CREDENTIAL]", sanitized)
+        self.assertIn("postgresql://[REDACTED_CREDENTIALS]@db.example.invalid/app", sanitized)
+        self.assertNotIn("eightchars", sanitized)
+        self.assertNotIn("actual-password", sanitized)
+
+    def test_source_redaction_preserves_placeholders_and_variables(self) -> None:
+        source = "AWS_SECRET_ACCESS_KEY=mockSecret\n$password = Helper::make($password);"
+        self.assertEqual(sanitize_export_text(source), source)
 
 
 if __name__ == "__main__":

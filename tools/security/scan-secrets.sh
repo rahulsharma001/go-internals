@@ -18,7 +18,7 @@ scan_file() {
   local input_path="$2"
 
   # Bundled plugin programs contain scanner/test pattern strings, not vault credentials.
-  if [[ "$display_path" == .obsidian/plugins/*/main.js ]]; then
+  if [[ "$display_path" == .obsidian/plugins/*/main.js || "$display_path" == tools/chatgpt_import/test_importer.py ]]; then
     return 0
   fi
 

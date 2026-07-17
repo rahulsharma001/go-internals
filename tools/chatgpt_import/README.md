@@ -6,7 +6,9 @@ for classification, follows `current_node` parent links for the primary branch,
 and preserves alternative branch suffixes separately.
 
 It reads attachment names as metadata only. It does not copy attachments and
-does not write anywhere inside the export directory.
+does not write anywhere inside the export directory. Before writing a local
+extract, it replaces high-confidence credentials and credentialed connection
+strings with deterministic redaction placeholders.
 
 ```bash
 python3 tools/chatgpt_import/import_chatgpt.py \

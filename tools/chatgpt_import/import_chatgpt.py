@@ -21,6 +21,81 @@ EXPECTED = [*(f"conversations-{i:03d}.json" for i in range(5)), "conversation_as
 EXTRACT_DISPOSITIONS = {"engineering-relevant", "potentially engineering-relevant", "mixed-content"}
 DISPLAYABLE_CONTENT_TYPES = {"text", "multimodal_text"}
 
+AWS_ACCESS_KEY_ID = re.compile(r"\b(?:AKIA|ASIA|AIDA|AROA|AIPA|ANPA|ANVA|AGPA)[A-Z0-9]{16}\b")
+AWS_SECRET_ASSIGNMENT = re.compile(r"(?i)(\baws_secret_access_key\b\s*[:=]\s*)([\"']?)([^\s\"'`,;}{]{8,})([\"']?)")
+QUOTED_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?i)(\b(?:password|passwd|pwd|client_secret|oauth_client_secret|jwt_secret|signing_secret|api_key|access_token|refresh_token)\b\s*[:=]\s*)([\"'])(.*?)(\2)"
+)
+UNQUOTED_CREDENTIAL_ASSIGNMENT = re.compile(
+    r"(?i)(\b(?:password|passwd|pwd|client_secret|oauth_client_secret|jwt_secret|signing_secret|api_key|access_token|refresh_token)\b\s*[:=]\s*)([^\s\"'`,;}{]{8,})"
+)
+
+
+def approved_demonstration_value(value: str) -> bool:
+    return bool(
+        re.search(r"(?:REDACTED|EXAMPLE|DUMMY|FAKE|MOCK|CHANGEME|YOUR[_-]|PLACEHOLDER|\.\.\.)", value, re.I)
+        or re.fullmatch(r"<[^>]+>", value)
+        or value.startswith("$")
+        or "(" in value
+        or ")" in value
+    )
+
+
+def sanitize_export_text(text: str) -> str:
+    """Redact high-confidence credentials while retaining technical context."""
+
+    text = re.sub(
+        r"-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----.*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----",
+        "[REDACTED_PRIVATE_KEY]",
+        text,
+        flags=re.S,
+    )
+    text = re.sub(r"\b(?:github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,})\b", "[REDACTED_GITHUB_TOKEN]", text)
+    text = re.sub(r"\bsk-[A-Za-z0-9_-]{20,}\b", "[REDACTED_API_TOKEN]", text)
+    text = re.sub(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b", "[REDACTED_SLACK_TOKEN]", text)
+    text = re.sub(
+        r"\bBearer\s+[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b",
+        "Bearer [REDACTED_JWT]",
+        text,
+        flags=re.I,
+    )
+    text = re.sub(
+        r"\b(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^/\s:@]+:[^/\s@]+@",
+        lambda match: f"{match.group(1)}://[REDACTED_CREDENTIALS]@",
+        text,
+        flags=re.I,
+    )
+
+    sanitized_lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if AWS_ACCESS_KEY_ID.search(line):
+            line = re.sub(r"(?<![A-Za-z0-9/+])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+])", "[REDACTED_AWS_SECRET_ACCESS_KEY]", line)
+            line = AWS_ACCESS_KEY_ID.sub("[REDACTED_AWS_ACCESS_KEY_ID]", line)
+
+        def redact_aws_secret(match: re.Match[str]) -> str:
+            value = match.group(3)
+            if approved_demonstration_value(value):
+                return match.group(0)
+            return f"{match.group(1)}[REDACTED_AWS_SECRET_ACCESS_KEY]"
+
+        def redact_quoted(match: re.Match[str]) -> str:
+            value = match.group(3)
+            if approved_demonstration_value(value):
+                return match.group(0)
+            return f"{match.group(1)}{match.group(2)}[REDACTED_CREDENTIAL]{match.group(4)}"
+
+        def redact_unquoted(match: re.Match[str]) -> str:
+            value = match.group(2)
+            if approved_demonstration_value(value):
+                return match.group(0)
+            return f"{match.group(1)}[REDACTED_CREDENTIAL]"
+
+        line = AWS_SECRET_ASSIGNMENT.sub(redact_aws_secret, line)
+        line = QUOTED_CREDENTIAL_ASSIGNMENT.sub(redact_quoted, line)
+        line = UNQUOTED_CREDENTIAL_ASSIGNMENT.sub(redact_unquoted, line)
+        sanitized_lines.append(line)
+    return "".join(sanitized_lines)
+
 
 def json_load(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
@@ -147,7 +222,7 @@ def render_message(node_id: str, node: dict[str, Any], assets: dict[str, Any]) -
     message = node.get("message")
     if not isinstance(message, dict):
         return ""
-    body = message_text(message, assets)
+    body = sanitize_export_text(message_text(message, assets))
     if not body:
         return ""
     author = message.get("author") if isinstance(message.get("author"), dict) else {}

@@ -80,7 +80,7 @@ All 13 shared IDs already exist in the primary history, so no shared record prod
 - `01 Inbox/ChatGPT Export/classification_index.json`: one machine record for every primary conversation, including excluded/manual records.
 - `01 Inbox/ChatGPT Export/import_manifest.json`: machine manifest, schema statistics, counts, and errors.
 
-Generated extracts are deterministic and can be regenerated. They preserve original IDs, titles, dates, source shards, selected branch order, alternative branches, code blocks, and attachment pointers.
+Generated extracts are deterministic and can be regenerated. They preserve original IDs, titles, dates, source shards, selected branch order, alternative branches, code blocks, and attachment pointers while replacing high-confidence credentials with deterministic redaction placeholders.
 
 ## Errors
 
