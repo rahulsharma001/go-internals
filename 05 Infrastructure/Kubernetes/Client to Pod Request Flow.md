@@ -28,13 +28,13 @@ An implementation can skip or merge hops. With an ALB Ingress using IP targets, 
 | Control plane | Stores desired state and reconciles actual state | API server, etcd, scheduler, controllers, AWS Load Balancer Controller | No |
 | Node/application data plane | Moves bytes to a selected healthy backend | ALB/NLB, VPC routing, CNI, kube-proxy/eBPF, Pod network, Go process | Yes |
 
-`kubectl apply` sends an authenticated and authorized API request to the API server. Admission validates/mutates it; the API server persists the object in etcd. Controllers notice desired/actual differences. The Deployment controller creates a ReplicaSet; the scheduler binds pending Pods to suitable nodes; the kubelet asks the CRI-compatible runtime to pull the image and start containers; the CNI plugin attaches Pod networking. These actions prepare the data plane but are not synchronous steps in a user request.
+`kubectl apply` sends an authenticated and authorized API request to the API server. Admission validates/mutates it; the API server persists the object in etcd. Controllers notice desired/actual differences. The Deployment controller creates a ReplicaSet; the scheduler binds pending Pods to suitable nodes; the kubelet asks the CRI-compatible container runtime to pull the image and start containers; the CNI plugin attaches Pod networking. These actions prepare the data plane but are not synchronous steps in a user request.
 
 ## External request: hop-by-hop
 
 1. **DNS.** The client resolver checks caches, then a recursive resolver obtains the Route 53 record. TTL controls how quickly a changed load-balancer name or failover record is observed. Diagnose with `dig +trace api.example.com` and compare answers from several resolvers.
 2. **AWS edge/load balancer.** A security group and listener admit the connection. TLS may terminate here or pass through. An ALB evaluates host/path rules and target-group health; an NLB forwards the TCP/UDP flow. WAF, CloudFront, or API Gateway may precede this hop when required.
-3. **Ingress and controller.** Ingress is desired L7 routing configuration, not a proxy process by itself. The AWS Load Balancer Controller watches Ingress/Service resources and configures AWS ALB/NLB resources. NGINX/Envoy ingress instead runs proxy Pods behind a load balancer.
+3. **Ingress and Ingress controller.** Ingress is desired L7 routing configuration, not a proxy process by itself. An Ingress controller implements that configuration. The AWS Load Balancer Controller watches Ingress/Service resources and configures AWS ALB/NLB resources. NGINX/Envoy ingress instead runs proxy Pods behind a load balancer.
 4. **Service.** A Service gives a stable virtual IP and port. Its selector normally identifies Pods. The EndpointSlice controller publishes matching backend IPs plus readiness/serving/terminating conditions.
 5. **Endpoint choice.** kube-proxy programs node rules (implementation depends on cluster mode) or an eBPF CNI implements Service translation. The packet is DNATed/routed to one eligible Pod IP. In EKS VPC CNI mode, Pod IPs are drawn from VPC-addressable ranges; alternative CNIs differ.
 6. **Pod and container.** The CNI path delivers to the Pod network namespace. The container must listen on the address and `targetPort` expected by the Service. `containerPort` is metadata; it does not make an application listen.
@@ -133,7 +133,7 @@ Desired state travels through API server → etcd → controllers/scheduler → 
 
 ## Related notes
 
-[[Kubernetes Architecture]] · [[Service to Service Communication]] · [[Services and Service Discovery]] · [[Ingress and AWS Load Balancers]] · [[Kubernetes Networking CNI and kube-proxy]] · [[Probes and Application Health]] · [[Rolling Deployments and Rollbacks]] · [[Kubernetes Production Failures]] · [[EKS Architecture]] · [[Context Cancellation]] · [[Logs Metrics and Traces]]
+[[Kubernetes Architecture]] · [[Service to Service Communication]] · [[Services and Service Discovery]] · [[Ingress and AWS Load Balancers]] · [[Kubernetes Networking CNI and kube-proxy]] · [[Probes and Application Health]] · [[Rolling Deployments and Rollbacks]] · [[Kubernetes Production Failures]] · [[EKS Architecture]] · [[Context Cancellation]] · [[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]]
 
 ## Source metadata
 

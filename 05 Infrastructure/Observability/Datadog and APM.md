@@ -29,7 +29,7 @@ When prefer managed APM over assembling Prometheus/ELK/Tempo? Recall owner, data
 
 ## Related notes
 
-[[OpenTelemetry]] · [[Logs Metrics and Traces]]
+[[OpenTelemetry]] · [[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]]
 
 ## Source metadata
 

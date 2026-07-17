@@ -29,7 +29,7 @@ How does double-encoded JSON hurt queries? Recall owner, data path, failure evid
 
 ## Related notes
 
-[[Kibana Structured Logging]] · [[Logs Metrics and Traces]]
+Source conversation: *Kibana Structured Logging* (2025-02-25, 67bd8e4b-4c10-8013-a4fb-761c32d6ce15) · [[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]]
 
 ## Source metadata
 

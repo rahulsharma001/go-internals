@@ -1,8 +1,9 @@
 ---
-type: canonical
+type: implementation-guide
 domain: infrastructure
 topic: infra-signals
 status: learning
+canonical_owner: "[[04 System Design/Observability/Logs Metrics and Traces]]"
 ---
 
 # Logs Metrics and Traces

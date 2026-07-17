@@ -29,9 +29,8 @@ Which signal distinguishes app 500 from ingress 502 and node loss? Recall: Combi
 
 ## Related notes
 
-[[Logs Metrics and Traces]] · [[Prometheus and Grafana]] · [[Incident Investigation]] · [[Kubernetes Production Failures]]
+[[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]] · [[Prometheus and Grafana]] · [[Incident Investigation]] · [[Kubernetes Production Failures]]
 
 ## Source metadata
 
 Curated from *Kubernetes for Backend Interviews* (2026-07-07, `6a4cf217-e6dc-83e8-b416-156a8354a76b`) and *AWS EKS App Deployment* (2026-06-25, `6a3ce123-1794-83e8-83ea-0c20e4b4424c`). Version/controller/CNI-specific behavior is `needs-verification`; Kubernetes and AWS official documentation are authoritative.
-

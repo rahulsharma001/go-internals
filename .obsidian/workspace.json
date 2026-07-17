@@ -292,6 +292,7 @@
   },
   "active": "4ca854d182283b79",
   "lastOpenFiles": [
+    "MIGRATION_REPORT_05_INFRASTRUCTURE.md",
     "05 Infrastructure/Infrastructure Dashboard.md",
     "05 Infrastructure/Quick Revision/Observability Interview Revision.md",
     "05 Infrastructure/Quick Revision/Terraform Interview Revision.md",
@@ -317,7 +318,6 @@
     "05 Infrastructure/Terraform/Providers Resources and Data Sources.md",
     "05 Infrastructure/Terraform/Terraform Mental Model.md",
     "05 Infrastructure/Networking/Network Troubleshooting.md",
-    "05 Infrastructure/Networking/SNMP and Traps.md",
     "08 Quick Revision/Observability",
     "08 Quick Revision/Terraform",
     "08 Quick Revision/Docker",

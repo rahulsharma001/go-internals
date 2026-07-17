@@ -29,7 +29,7 @@ Why histogram over average? Why never label by user ID? Recall owner, data path,
 
 ## Related notes
 
-[[Alert Design]] · [[SLI SLO and Error Budgets]]
+[[Alert Design]] · [[05 Infrastructure/Observability/SLI SLO and Error Budgets|SLI SLO and Error Budgets]]
 
 ## Source metadata
 

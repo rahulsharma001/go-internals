@@ -29,7 +29,7 @@ What happens to trace continuity across SQS/Kafka async work? Recall owner, data
 
 ## Related notes
 
-[[Logs Metrics and Traces]] · [[CloudWatch and X-Ray]]
+[[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]] · [[CloudWatch and X-Ray]]
 
 ## Source metadata
 

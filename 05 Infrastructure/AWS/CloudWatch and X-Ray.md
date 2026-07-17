@@ -29,7 +29,7 @@ CloudWatch versus CloudTrail versus trace? Recall the request/event path, securi
 
 ## Related notes
 
-[[Logs Metrics and Traces]] · [[OpenTelemetry]] · [[Alert Design]]
+[[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]] · [[OpenTelemetry]] · [[Alert Design]]
 
 ## Source metadata
 

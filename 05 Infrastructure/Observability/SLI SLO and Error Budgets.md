@@ -1,8 +1,9 @@
 ---
-type: canonical
+type: implementation-guide
 domain: infrastructure
 topic: infra-slo-implementation
 status: learning
+canonical_owner: "[[04 System Design/Observability/SLI SLO and Error Budgets]]"
 ---
 
 # SLI SLO and Error Budgets

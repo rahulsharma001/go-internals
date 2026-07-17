@@ -113,10 +113,10 @@ Use this dashboard to move from request flow to failure diagnosis and interview 
 - [[Datadog and APM]]
 - [[ELK and Kibana]]
 - [[Incident Investigation]]
-- [[Logs Metrics and Traces]]
+- [[05 Infrastructure/Observability/Logs Metrics and Traces|Logs Metrics and Traces]]
 - [[OpenTelemetry]]
 - [[Prometheus and Grafana]]
-- [[SLI SLO and Error Budgets]]
+- [[05 Infrastructure/Observability/SLI SLO and Error Budgets|SLI SLO and Error Budgets]]
 
 ## Quick Revision
 
