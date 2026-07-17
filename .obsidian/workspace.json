@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02 Go/Collections/Go Slices.md",
+                "file": "02 Go/Concurrency/Go Channels.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Go Slices"
+              "title": "Go Channels"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02 Go/Collections/Go Slices.md",
+                "file": "02 Go/Concurrency/Go Channels.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Go Slices"
+              "title": "Backlinks for Go Channels"
             }
           },
           {
@@ -290,14 +290,20 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "c54a305332109d86",
+  "active": "4ca854d182283b79",
   "lastOpenFiles": [
+    "00 Home/Indexes/System Design Map of Content.md",
+    "04 System Design/Interview Framework/System Design Interview Framework.md",
+    "09 Roadmaps/30-Day FAANG Sprint/Week 3 - System Design and Project Evidence.md",
+    "09 Roadmaps/30-Day FAANG Sprint/Week 2 - DSA in Go.md",
+    "09 Roadmaps/30-Day FAANG Sprint/30-Day Sprint Overview.md",
+    "08 Quick Revision/System Design/System Design Interview Framework - Quick Revision.md",
+    "02 Go/Collections/Go Slices.md",
     "02 Go/Collections/Go Maps.md",
     "02 Go/Collections/Collection Transformations in Go.md",
     "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
     "08 Quick Revision/Go/Collection Transformations in Go - Quick Revision.md",
     "00 Home/Engineering Dashboard.md",
-    "02 Go/Collections/Go Slices.md",
     "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
     "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
     "08 Quick Revision/Go/Go Internals Revision.md",
@@ -315,12 +321,6 @@
     "practice/30-day-sprint/week-01-go-recovery/README.md",
     "00 Home/Dashboards/30-Day FAANG Preparation Dashboard.md",
     "99 Archive/External Trackers/Go 7-Day Implementation Recovery Tracker - Archive Notes.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 4 - Mocks Revision and Applications.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 3 - System Design and Project Evidence.md",
-    "07 Projects/PulseCheck/PulseCheck Monitoring System.md",
-    "07 Projects/CoMarketer/CoMarketer WebSocket Architecture.md",
-    "07 Projects/CEE/CEE Conductor Migration.md",
-    "07 Projects/NCS/NCS Permission Versioning.md",
     "99 Archive/External Trackers/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
     "tools/30_day_sprint",
     "tools",
