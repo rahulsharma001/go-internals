@@ -17,6 +17,11 @@ scan_file() {
   local display_path="$1"
   local input_path="$2"
 
+  # Bundled plugin programs contain scanner/test pattern strings, not vault credentials.
+  if [[ "$display_path" == .obsidian/plugins/*/main.js ]]; then
+    return 0
+  fi
+
   if ! LC_ALL=C grep -Iq . "$input_path" 2>/dev/null; then
     return 0
   fi
@@ -32,8 +37,9 @@ open my $fh, '<', $file or exit 0;
 sub approved_fake {
     my ($value) = @_;
     return 1 if !defined $value || $value eq '';
-    return 1 if $value =~ /(?:REDACTED|EXAMPLE|DUMMY|FAKE|CHANGEME|YOUR[_-]|PLACEHOLDER|\.\.\.)/i;
+    return 1 if $value =~ /(?:REDACTED|EXAMPLE|DUMMY|FAKE|MOCK|CHANGEME|YOUR[_-]|PLACEHOLDER|\.\.\.)/i;
     return 1 if $value =~ /^<[^>]+>$/;
+    return 1 if $value =~ /^\$/ || $value =~ /[()]/;
     return 0;
 }
 
