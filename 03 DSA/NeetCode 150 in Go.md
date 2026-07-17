@@ -3,6 +3,8 @@ type: roadmap
 domain: dsa
 topic: neetcode-150
 status: implementation-needed
+practice_source: /home/rahul/go-interview-prep
+last_evidence_sync: 2026-07-17
 ---
 # NeetCode 150 in Go
 
@@ -25,6 +27,21 @@ This is a 24-problem execution set, not 24 problems to finish in one pass. The f
 | 23–25 | [[Graphs Pattern]] | [[Number of Islands]]; Clone Graph | Visited policy stated |
 | 26–27 | [[Basic Dynamic Programming Pattern]] | [[Climbing Stairs]]; [[House Robber]] | State/transition/base case from memory |
 | 28–30 | Mixed | three weakest re-attempts plus two 45-minute mocks | No new problem until evidence review |
+
+## Preparation sync — 2026-07-17
+
+Source inspected: `/home/rahul/go-interview-prep/neetcode/arrays-and-hashing`. All six `main.go` files ran successfully on their current examples and passed `go vet` on 2026-07-17. The entire `neetcode/` tree is currently untracked in that Git repository, whose only commit contains `README.md`; commit or otherwise preserve the raw files before treating them as durable attempt history. This is implementation evidence, not timed-completion evidence.
+
+| Problem | Preserved evidence | Tracker effect | Remaining gate |
+| --- | --- | --- | --- |
+| [[Contains Duplicate]] | `contains-duplicate/main.go` | D01 → `attempting` | required cases, first-duplicate modification, time/hints, explanation, re-test; run `gofmt` |
+| [[Valid Anagram]] | `valid-anagram/main.go` | D02 → `attempting` | unequal/repeated cases, Unicode modification, time/hints, explanation, re-test |
+| [[Two Sum]] | `two-sum/main.go` | D03 → `attempting` | duplicate/no-solution cases, error modification, time/hints, explanation, re-test; run `gofmt` |
+| [[Group Anagrams]] | `group-anagrams/main.go` | D04 → `attempting` | empty-string case, deterministic output modification, time/hints, explanation, re-test |
+| Top K Frequent Elements | `top-k-freq-elements/main.go` | intake only; active queue unchanged | record attempt conditions, edge cases, explanation, modification, re-test |
+| Product of Array Except Self | `products-array-except-self/main.go` | intake only; active queue unchanged | record attempt conditions, edge cases, explanation, modification, re-test; run `gofmt` |
+
+No problem is marked `solved`, `interview-ready`, or timed from this sync. The two unscheduled implementations remain intake-only so they do not expand the active sprint queue.
 
 ## Tier 2 — important after day 30
 

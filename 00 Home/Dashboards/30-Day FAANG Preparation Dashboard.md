@@ -22,26 +22,33 @@ Future weeks: [[Week 2 - DSA in Go]] · [[Week 3 - System Design and Project Evi
 ## Today’s four tasks
 
 <!-- AUTO:today:start -->
-- **G01 — Slice construction, append, copy, sub-slicing, and alias proof.** Use [[Slice Creation and Modification - Drill]]; print len/cap and caller/result ownership from a complete `main()`. _(status: `not-started`)_
-- **G02 — Insert, delete, and balanced contiguous partitioning.** Implement insert/delete helpers, then [[Balanced Slice Groups - Drill]] including `k <= 0`, empty input, and `k > len`. _(status: `not-started`)_
-- **D01 — Contains Duplicate in Go (20-minute cap).** Explain the hash-set pattern, test empty/single/duplicate cases, state O(n) time/O(n) space, and change the return to the first duplicate value. _(status: `not-started`)_
-- **R01 — Cold slice recall and review request.** After a break, explain header/backing-array ownership, rewrite the weaker helper without hints, run the review commands, and set `review:: pending` only when raw evidence exists. _(status: `not-started`)_
+- **G03 — Map lifecycle, comma-ok, delete, deterministic output, and frequency counter.** Use [[Map Frequency Counting - Drill]] with nil/empty input and explicit missing-key behavior. _(status: `not-started`)_
+- **G04 — `map[string][]T` grouping and nested-map initialization.** Combine [[Grouping and Collection Transformations - Drill]] with [[Nested Maps and Slice Values - Drill]]; print explicit keys and preserve order. _(status: `not-started`)_
+- **D02 — Valid Anagram in Go (20-minute cap).** State the byte/rune assumption, test unequal lengths and repeated characters, and modify for Unicode input. _(status: `attempting`)_
+- **R02 — Day 1 slice re-test.** Rebuild balanced partitioning from an empty file without links; compare only after the timer and record the exact remaining blocker. _(status: `not-started`)_
 <!-- AUTO:today:end -->
 
 ## Current implementation blocker
 
 User-reported baseline: slice/map syntax and struct/interface/embedding invocation become unreliable under pressure. The first timed attempts must identify one concrete current blocker; until then this is reported context, not an observed mistake record.
 
+## Preparation evidence sync
+
+Last checked 2026-07-17: `/home/rahul/go-interview-prep` contains six Arrays & Hashing implementations with runnable `main()` examples. All six current examples ran and passed `go vet`; three files still need `gofmt`, and the `neetcode/` tree is untracked in its repository. D01–D04 are now `attempting`, while completion and readiness remain gated on durable raw evidence, recorded timing/hints, required edge cases, explanation, modification, and a later re-test. Full intake: [[NeetCode 150 in Go#Preparation sync — 2026-07-17]].
+
 ## Tasks awaiting review
 
 <!-- AUTO:reviews:start -->
-No task is awaiting review. Set `review:: pending` only after preserving a raw attempt.
+- **D01 — Contains Duplicate in Go (20-minute cap).** Explain the hash-set pattern, test empty/single/duplicate cases, state O(n) time/O(n) space, and change the return to the first duplicate value. _(status: `attempting`)_
+- **D02 — Valid Anagram in Go (20-minute cap).** State the byte/rune assumption, test unequal lengths and repeated characters, and modify for Unicode input. _(status: `attempting`)_
+- **D03 — Two Sum in Go (20-minute cap).** Use a complement map, manually test duplicates and no-solution behavior, and modify to return an error when absent. _(status: `attempting`)_
+- **D04 — Group Anagrams in Go (35-minute cap).** Use `map[key][]string`, explain the key trade-off, test empty strings, and change the output to deterministic group order. _(status: `attempting`)_
 <!-- AUTO:reviews:end -->
 
 ## Re-test queue
 
 <!-- AUTO:retests:start -->
-No re-test is due today.
+- **R02 — Day 1 slice re-test.** Rebuild balanced partitioning from an empty file without links; compare only after the timer and record the exact remaining blocker. _(status: `not-started`)_
 <!-- AUTO:retests:end -->
 
 ## Repeated mistakes
@@ -90,11 +97,11 @@ No mock score is recorded.
 ## Next five actions
 
 <!-- AUTO:next-actions:start -->
-- **G01 — Slice construction, append, copy, sub-slicing, and alias proof.** Use [[Slice Creation and Modification - Drill]]; print len/cap and caller/result ownership from a complete `main()`. _(status: `not-started`)_
-- **G02 — Insert, delete, and balanced contiguous partitioning.** Implement insert/delete helpers, then [[Balanced Slice Groups - Drill]] including `k <= 0`, empty input, and `k > len`. _(status: `not-started`)_
-- **D01 — Contains Duplicate in Go (20-minute cap).** Explain the hash-set pattern, test empty/single/duplicate cases, state O(n) time/O(n) space, and change the return to the first duplicate value. _(status: `not-started`)_
-- **R01 — Cold slice recall and review request.** After a break, explain header/backing-array ownership, rewrite the weaker helper without hints, run the review commands, and set `review:: pending` only when raw evidence exists. _(status: `not-started`)_
-- **G03 — Map lifecycle, comma-ok, delete, deterministic output, and frequency counter.** Use [[Map Frequency Counting - Drill]] with nil/empty input and explicit missing-key behavior. _(status: `not-started`)_
+- **R02 — Day 1 slice re-test.** Rebuild balanced partitioning from an empty file without links; compare only after the timer and record the exact remaining blocker. _(status: `not-started`)_
+- **D01 — Contains Duplicate in Go (20-minute cap).** Explain the hash-set pattern, test empty/single/duplicate cases, state O(n) time/O(n) space, and change the return to the first duplicate value. _(status: `attempting`)_
+- **D02 — Valid Anagram in Go (20-minute cap).** State the byte/rune assumption, test unequal lengths and repeated characters, and modify for Unicode input. _(status: `attempting`)_
+- **D03 — Two Sum in Go (20-minute cap).** Use a complement map, manually test duplicates and no-solution behavior, and modify to return an error when absent. _(status: `attempting`)_
+- **D04 — Group Anagrams in Go (35-minute cap).** Use `map[key][]string`, explain the key trade-off, test empty strings, and change the output to deterministic group order. _(status: `attempting`)_
 <!-- AUTO:next-actions:end -->
 
 ## Deferred topics

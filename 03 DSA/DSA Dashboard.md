@@ -2,6 +2,8 @@
 type: dashboard
 domain: dsa
 status: active
+practice_source: /home/rahul/go-interview-prep
+last_evidence_sync: 2026-07-17
 ---
 # DSA Dashboard
 
@@ -37,11 +39,12 @@ The goal is reliable Go implementation under interview conditions, not collectin
 | --- | --- |
 | Pattern canonicals | 11 populated |
 | Selected runnable problem references | 17 populated |
+| External personal implementations | 6 runnable `main.go` files observed on 2026-07-17 |
 | Timed attempts performed | none recorded |
 | Re-attempts performed | none recorded |
 | Confirmed DSA/Go transfer gap | [[Java DSA Practice Conflicts with Go Interviews]] |
 
-Do not change the last three rows from reading or compiling reference solutions. Update them only from preserved personal attempts.
+The external files are on-disk personal implementation evidence, but their timers, hint use, explanations, modifications, and re-tests are not recorded. The `neetcode/` tree is also untracked in its source repository, so it is not yet durable attempt history. The files move matching sprint tasks to `attempting` without changing the timed-attempt or readiness gates. See [[NeetCode 150 in Go#Preparation sync — 2026-07-17]].
 
 ## Interview loop
 
