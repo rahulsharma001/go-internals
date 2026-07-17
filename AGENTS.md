@@ -24,6 +24,10 @@ It must not become an encyclopedia or passive content dump.
 - Do not perform large cross-vault changes without first creating an audit plan.
 - Prefer improving an existing canonical note over creating a duplicate.
 - Keep source traceability when content comes from imported conversations or articles.
+- Never import credentials into permanent notes; redact them before creating or updating notes.
+- Never commit raw ChatGPT exports or extracted source conversations.
+- Run `tools/security/scan-secrets.sh` before every commit.
+- Never bypass GitHub push protection or use an allow-secret URL.
 
 ## Canonical-note rule
 

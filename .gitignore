@@ -1,0 +1,9 @@
+01 Inbox/ChatGPT Export/Raw/
+01 Inbox/ChatGPT Export/Extracted/
+.cache/chatgpt_import/
+*.pem
+*.key
+.env
+.env.*
+secrets/
+credentials/

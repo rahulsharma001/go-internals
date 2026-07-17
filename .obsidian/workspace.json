@@ -292,6 +292,10 @@
   },
   "active": "4ca854d182283b79",
   "lastOpenFiles": [
+    "SECURITY_WORKFLOW.md",
+    "tools/security/scan-secrets.sh",
+    "tools/security",
+    "SECURITY_SECRET_REMEDIATION_REPORT.md",
     "00 Home/Indexes/System Design Map of Content.md",
     "04 System Design/Interview Framework/System Design Interview Framework.md",
     "09 Roadmaps/30-Day FAANG Sprint/Week 3 - System Design and Project Evidence.md",
@@ -319,14 +323,10 @@
     "practice/30-day-sprint/week-03-system-design/README.md",
     "practice/30-day-sprint/week-02-dsa/README.md",
     "practice/30-day-sprint/week-01-go-recovery/README.md",
-    "00 Home/Dashboards/30-Day FAANG Preparation Dashboard.md",
-    "99 Archive/External Trackers/Go 7-Day Implementation Recovery Tracker - Archive Notes.md",
     "99 Archive/External Trackers/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
     "tools/30_day_sprint",
     "tools",
     "practice/30-day-sprint/week-04-mocks",
-    "practice/30-day-sprint/week-03-system-design",
-    "practice/30-day-sprint/week-02-dsa",
-    "practice/30-day-sprint/week-01-go-recovery"
+    "practice/30-day-sprint/week-03-system-design"
   ]
 }
