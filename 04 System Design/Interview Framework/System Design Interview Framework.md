@@ -6,6 +6,9 @@ status: implementation-needed
 source_notes:
   - "[[Day 1 — Interview Preparation Plan]]"
   - "[[Engineering Study Plan]]"
+source_conversations:
+  - "System Design Practice Tips | 2025-05-04 | 681749e6-1698-8013-bb4c-22bcf122748c"
+  - "System Design Prep Hub | 2026-05-30 | 6a1ae0f4-402c-8324-b49e-754f47133b80"
 ---
 
 # System Design Interview Framework
@@ -66,6 +69,16 @@ Blank-design challenge: outline an event-processing system in 35 minutes. Spend 
 
 - [[System Design Map of Content]]
 - [[System Design Interview Framework - Quick Revision]]
-- [[MongoDB with Go]]
+- [[Requirements and Scope]] · [[Capacity Estimation]]
+- [[Core Entities APIs and Data Model]] · [[Architecture Presentation Strategy]]
+- [[Trade-off Communication]] · [[System Design Interview Checklist]]
 
 Mistakes and re-tests: [[Mistake Index]]
+
+## Interview scoring rubric
+
+Score each dimension 0–2 after a timed attempt: requirement clarity, useful estimates, coherent data/API model, readable architecture, complete success flow, complete failure flow, scaling depth, reliability/observability, security, and trade-off communication. A note existing is not a passing mock. Record the lowest two dimensions as the next drill.
+
+## Source metadata
+
+Curated from the existing vault framework and the two sanitized conversations listed in frontmatter. Technology selections in system notes are illustrative production choices, not claims about personal use. Version-sensitive product behavior must be checked against current official documentation before implementation.
