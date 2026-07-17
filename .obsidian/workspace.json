@@ -83,52 +83,14 @@
             "id": "76eaf19df250f926",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "Coding Problems/Worker Pool (fixed workers).md",
-                "mode": "preview",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "Worker Pool (fixed workers)"
-            }
-          },
-          {
-            "id": "c54a305332109d86",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "04 System Design/Systems/API Gateway System.md",
-                "mode": "preview",
-                "source": false,
-                "backlinks": true,
-                "backlinkOpts": {
-                  "collapseAll": false,
-                  "extraContext": false,
-                  "sortOrder": "alphabetical",
-                  "showSearch": false,
-                  "searchQuery": "",
-                  "backlinkCollapsed": false,
-                  "unlinkedCollapsed": true
-                }
-              },
-              "icon": "lucide-file",
-              "title": "API Gateway System"
+              "title": "New tab"
             }
           }
         ],
-        "currentTab": 4
+        "currentTab": 3
       }
     ],
     "direction": "vertical"
@@ -201,7 +163,6 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "04 System Design/Systems/API Gateway System.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +172,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for API Gateway System"
+              "title": "Backlinks"
             }
           },
           {
@@ -290,8 +251,9 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "c54a305332109d86",
+  "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "04 System Design/Systems/API Gateway System.md",
     "02 Go/Concurrency/Goroutines and Lifecycle.md",
     "MIGRATION_REPORT_SYSTEM_DESIGN_REBUILD.md",
     "04 System Design/FINAL SYSTEM DESIGN READINESS AUDIT.md",
@@ -314,7 +276,6 @@
     "04 System Design/System Design Practice Tracker.md",
     "04 System Design/System Coverage Matrix.md",
     "04 System Design/Systems/Monitoring System.md",
-    "04 System Design/Systems/API Gateway System.md",
     "04 System Design/Systems/Logging and Metrics Pipeline.md",
     "04 System Design/Systems/Web Crawler System.md",
     "04 System Design/Systems/Distributed Cache System.md",
