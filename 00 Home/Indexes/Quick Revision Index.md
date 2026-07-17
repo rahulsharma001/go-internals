@@ -31,8 +31,14 @@ Each card is a five-minute companion. Use the canonical for learning and the dri
 - [[Go Interface Internals - Quick Revision]]
 - [[Go Internals Revision]] — eight-topic runtime routing card
 
-## Other domains
+## System design
 
-System design, Kafka, caching, Kubernetes, databases, networking, and security cards should be added only as corresponding source-backed canonicals are developed. The vault currently has no substantive Kafka/Kubernetes canonicals to summarize.
+- [[System Design 15-Minute Revision]]
+- [[System Design Interview Framework - Quick Revision]]
+- [[Pattern Selection Guide]] · [[Database Selection Guide]]
+- [[System Design Scaling Reliability and Security Checklists]]
+- [[System Design Trade-off Vocabulary and Interview Traps]]
+
+Other infrastructure domains should be revised only after their corresponding canonicals are developed.
 
 Return: [[Engineering Dashboard]]

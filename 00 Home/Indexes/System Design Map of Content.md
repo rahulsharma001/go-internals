@@ -6,20 +6,36 @@ status: active
 
 # System Design Map of Content
 
-## Interview method
+Start: [[System Design Dashboard]]
 
-- [[System Design Interview Framework]]
+## Interview method and revision
 
-## Source-backed technical material
+- [[System Design Interview Framework]] · [[Requirements and Scope]] · [[Capacity Estimation]] · [[Core Entities APIs and Data Model]] · [[Architecture Presentation Strategy]] · [[Trade-off Communication]]
+- [[System Design 15-Minute Revision]] · [[System Design Interview Checklist]] · [[System Design Trade-off Cheatsheet]]
+
+## Foundations
+
+[[Scalability and Availability]] · [[Consistency Models]] · [[CAP and PACELC]] · [[Load Balancing]] · [[Consistent Hashing]] · [[Partitioning and Sharding]] · [[Replication]] · [[Stateless and Stateful Services]] · [[Synchronous vs Asynchronous Communication]] · [[Queues and Pub Sub]] · [[Data Storage Selection]]
+
+## Reusable patterns
+
+[[Caching Pattern]] · [[Idempotency Pattern]] · [[Retry Pattern]] · [[Circuit Breaker Pattern]] · [[Bulkhead Pattern]] · [[Backpressure Pattern]] · [[Rate Limiting Pattern]] · [[Saga Pattern]] · [[Transactional Outbox Pattern]] · [[Change Data Capture]] · [[CQRS]] · [[Distributed Locking]] · [[Leader Election]]
+
+## Representative systems
+
+[[Order Processing System]] · [[Uber System Design]] · [[YouTube System Design]] · [[Notification System]] · [[WebSocket Chat or Realtime System]] · [[Monitoring System]] · [[URL Shortener]]
+
+## Production lenses
+
+- Reliability: [[Failure Handling Strategy]] · [[Timeouts Retries and Deadlines]] · [[Graceful Degradation]] · [[Disaster Recovery]] · [[Multi Region Architecture]]
+- Observability: [[Logs Metrics and Traces]] · [[SLI SLO and Error Budgets]] · [[Alerting Strategy]]
+- Security: [[Authentication and Authorization]] · [[OAuth JWT OIDC and mTLS]] · [[API Security]]
+
+## Adjacent existing material
 
 - Databases: [[MongoDB with Go]]
 - Go-local reliability/concurrency building blocks: [[Worker Pool]], [[Context Cancellation]], [[Go Channels]]
 
-## Honest coverage gaps
-
-No substantive canonical sources currently exist for Kafka, Redis/caching, indexing and transactions as general topics, retries, circuit breakers, bulkheads, Saga, outbox, CDC, distributed locking, Kubernetes, AWS, security, or observability. Keyword mentions and unverified behavioural claims were not promoted into technical notes.
-
-Create these incrementally from traceable study sources or verified experience, following the system-design standard in `AGENTS.md`. Do not duplicate reusable patterns inside system designs.
+The System Design canonicals are learning material, not evidence of personal production ownership. Product/version-specific statements marked `needs-verification` must be checked before implementation.
 
 Revision: [[Quick Revision Index]] · Interview navigation: [[Interview Preparation Index]]
-

@@ -27,10 +27,12 @@ Common trap: spending the interview adding components while never tracing failur
 
 Interview answer: “I start with requirements and scale, build the smallest architecture, validate success/failure flows, then deepen the first bottleneck and defend trade-offs.”
 
-Production example: queue metrics are incomplete without queue age, retry/DLQ behavior, and end-to-end business correctness.
+Design example: queue metrics are incomplete without queue age, retry/quarantine behavior, and end-to-end business correctness.
 
 Active recall: design for a downstream outage and duplicate delivery.
 
 Canonical: [[System Design Interview Framework]]
+
+Revision pack: [[System Design 15-Minute Revision]] · [[Pattern Selection Guide]] · [[Database Selection Guide]] · [[System Design Scaling Reliability and Security Checklists]] · [[System Design Trade-off Vocabulary and Interview Traps]]
 
 Index: [[Quick Revision Index]]
