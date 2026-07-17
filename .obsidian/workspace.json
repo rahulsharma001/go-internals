@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
+                "file": "02 Go/Collections/Go Slices.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Stage 1 Go Foundation Implementation Gate"
+              "title": "Go Slices"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
+                "file": "02 Go/Collections/Go Slices.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Stage 1 Go Foundation Implementation Gate"
+              "title": "Backlinks for Go Slices"
             }
           },
           {
@@ -292,6 +292,13 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "02 Go/Collections/Go Maps.md",
+    "02 Go/Collections/Collection Transformations in Go.md",
+    "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
+    "08 Quick Revision/Go/Collection Transformations in Go - Quick Revision.md",
+    "00 Home/Engineering Dashboard.md",
+    "02 Go/Collections/Go Slices.md",
+    "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
     "02 Go/Coding Drills/Slice Creation and Modification - Drill.md",
     "08 Quick Revision/Go/Go Internals Revision.md",
     "02 Go/Runtime and Memory/Go Runtime Overview.md",
@@ -314,19 +321,12 @@
     "07 Projects/CoMarketer/CoMarketer WebSocket Architecture.md",
     "07 Projects/CEE/CEE Conductor Migration.md",
     "07 Projects/NCS/NCS Permission Versioning.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 2 - DSA in Go.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 1 - Go Recovery.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Sprint Exit Criteria.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Deferred Backlog.md",
-    "09 Roadmaps/30-Day FAANG Sprint/30-Day Sprint Overview.md",
     "99 Archive/External Trackers/Go_7_Day_Implementation_Recovery_Tracker.xlsx",
     "tools/30_day_sprint",
     "tools",
     "practice/30-day-sprint/week-04-mocks",
     "practice/30-day-sprint/week-03-system-design",
     "practice/30-day-sprint/week-02-dsa",
-    "practice/30-day-sprint/week-01-go-recovery",
-    "30_DAY_FAANG_SPRINT_AUDIT_PLAN.md",
-    "00 Home/Indexes/Coding Drill Index.md"
+    "practice/30-day-sprint/week-01-go-recovery"
   ]
 }
