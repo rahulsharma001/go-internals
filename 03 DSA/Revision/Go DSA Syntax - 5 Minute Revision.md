@@ -5,7 +5,7 @@ status: implementation-needed
 ---
 # Go DSA Syntax - 5 Minute Revision
 
-```go
+```text
 seen := make(map[int]int)
 if index, ok := seen[target-x]; ok { return []int{index, i} }
 seen[x] = i

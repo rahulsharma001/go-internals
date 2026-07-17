@@ -47,7 +47,7 @@ Do not change the last three rows from reading or compiling reference solutions.
 
 `Recognize → state invariant → brute force → optimal plan → code → run → explain → modify → record → re-test`
 
-Supporting Go owners: [[Go Slices]], [[Go Maps]], [[Complete Go Programs]] · Runnable scaffold: [[Go DSA Template]] · Container syntax: [[Go DSA Containers]]
+Supporting Go owners: [[Go Slices]], [[Go Maps]], [[Complete Go Programs]] · Runnable scaffold: [[Go DSA Template]] · Container syntax: [[Go DSA Containers]] · Initial transfer drill: [[Java-to-Go DSA Transfer Re-test]]
 
 ## Source boundary
 

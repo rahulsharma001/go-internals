@@ -21,4 +21,6 @@ No problem-specific personal mistake is recorded yet. Reference solutions and ge
 
 Create a separate mistake note only after the same failure recurs or materially blocks a mock. Include the raw attempt path, failed code/decision, corrected invariant, smallest drill, and dated results. Never write “off-by-one,” “forgot edge case,” or “too slow” unless an attempt demonstrates it.
 
+Initial correction: [[Java-to-Go DSA Transfer Re-test]].
+
 Capture flow: [[Timed Practice Tracker]] → this log → smallest correction → 1/3/7/21-day re-test.
