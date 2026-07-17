@@ -153,7 +153,7 @@ flowchart LR
   POL --> DNS
   FRONT -.->|leased host batch| JOB
   FETCH --> JOB
-  FETCH -->|HTTP(S) bounded fetch| DNS
+  FETCH -->|HTTPS bounded fetch| DNS
   FETCH --> OBJ
   FETCH -.-> RES
   RES -.-> PARSE
@@ -428,4 +428,3 @@ Personal readiness remains `not-started` until evidence is recorded in [[System 
 - [AWS S3 object integrity](https://docs.aws.amazon.com/AmazonS3/latest/userguide/checking-object-integrity-upload.html) — checksum verification for stored content.
 - [OWASP SSRF Prevention Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Server_Side_Request_Forgery_Prevention_Cheat_Sheet.html) — controlled outbound request defenses.
 - [Apache Kafka documentation](https://kafka.apache.org/documentation/) — partitioned replayable event transport.
-
