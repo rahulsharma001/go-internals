@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04 System Design/Systems/Uber System Design.md",
+                "file": "02 Go/Concurrency/Goroutines and Lifecycle.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Uber System Design"
+              "title": "Goroutines and Lifecycle"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "04 System Design/Systems/Uber System Design.md",
+                "file": "02 Go/Concurrency/Goroutines and Lifecycle.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Uber System Design"
+              "title": "Backlinks for Goroutines and Lifecycle"
             }
           },
           {
@@ -292,41 +292,41 @@
   },
   "active": "c54a305332109d86",
   "lastOpenFiles": [
-    "02 Go/Concurrency/Goroutines and Lifecycle.md",
-    "02 Go/Concurrency/Context Cancellation.md",
-    "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
-    "02 Go/Coding Drills/Complete Small Executable Programs - Drill.md",
-    "09 Roadmaps/Google/Google Engineering Roadmap.md",
-    "00 Home/Indexes/DSA Map of Content.md",
-    "09 Roadmaps/30-Day FAANG Sprint/Week 1 - Go Recovery.md",
-    "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
-    "00 Home/Current Focus/Current Week.md",
-    "02 Go/Design Patterns/Worker Pool.md",
-    "MIGRATION_REPORT_05_INFRASTRUCTURE.md",
-    "05 Infrastructure/Infrastructure Dashboard.md",
-    "05 Infrastructure/Quick Revision/Observability Interview Revision.md",
-    "05 Infrastructure/Quick Revision/Terraform Interview Revision.md",
-    "05 Infrastructure/Quick Revision/Docker Interview Revision.md",
-    "05 Infrastructure/Quick Revision/Networking Interview Revision.md",
-    "05 Infrastructure/Quick Revision/Linux Interview Revision.md",
-    "05 Infrastructure/Quick Revision/AWS Interview Revision.md",
-    "05 Infrastructure/Quick Revision/Kubernetes Interview Revision.md",
-    "05 Infrastructure/Observability/Incident Investigation.md",
-    "05 Infrastructure/Observability/SLI SLO and Error Budgets.md",
-    "05 Infrastructure/Observability/Alert Design.md",
-    "05 Infrastructure/Observability/OpenTelemetry.md",
-    "05 Infrastructure/Observability/ELK and Kibana.md",
-    "05 Infrastructure/Observability/Datadog and APM.md",
-    "05 Infrastructure/Observability/Prometheus and Grafana.md",
-    "08 Quick Revision/Observability",
-    "08 Quick Revision/Terraform",
-    "08 Quick Revision/Docker",
-    "08 Quick Revision/Linux",
-    "08 Quick Revision/AWS",
-    "05 Infrastructure/Quick Revision",
-    "01 Inbox/ChatGPT Export/Extracted",
-    "01 Inbox/ChatGPT Export/Extracted/XXarUl3V",
-    "01 Inbox/ChatGPT Export/Extracted/XXs8fvWg",
-    "tools/security/scan-secrets.sh"
+    "10 Templates/System Design Mock Interviewer Guide.md",
+    "10 Templates/System Design Blank Interview Template.md",
+    "04 System Design/Interview Framework/System Design Evaluation Rubric.md",
+    "04 System Design/Interview Framework/Interviewer Follow-up Strategy.md",
+    "04 System Design/Interview Framework/Trade-off Communication.md",
+    "04 System Design/Interview Framework/Reliability and Failure Analysis.md",
+    "04 System Design/Interview Framework/Finding Bottlenecks.md",
+    "04 System Design/Interview Framework/Choosing Databases and Storage.md",
+    "04 System Design/Interview Framework/Building the HLD Incrementally.md",
+    "04 System Design/Interview Framework/API and Data Model Design.md",
+    "04 System Design/Interview Framework/Invariants and Critical Paths.md",
+    "04 System Design/Interview Framework/Back-of-the-Envelope Estimation.md",
+    "04 System Design/Interview Framework/Requirements Clarification Framework.md",
+    "00 Home/Indexes/System Design Map of Content.md",
+    "04 System Design/System Design Dashboard.md",
+    "04 System Design/Interview Framework/45-Minute System Design Playbook.md",
+    "04 System Design/README - How to Learn System Design.md",
+    "04 System Design/Systems/Uber System Design.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/System Design Trade-off Vocabulary and Interview Traps.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/System Design Scaling Reliability and Security Checklists.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/System Design Interview Framework - Quick Revision.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/System Design 15-Minute Revision.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/Pattern Selection Guide.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design/Database Selection Guide.md",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision/System Design",
+    "99 Archive/Superseded Originals/System Design/08 Quick Revision",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Quick Revision/System Design Trade-off Cheatsheet.md",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Quick Revision/System Design Interview Checklist.md",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Quick Revision",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Reliability",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Observability",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Systems",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Patterns",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Foundations",
+    "99 Archive/Superseded Originals/System Design/04 System Design/Interview Framework",
+    "99 Archive/Superseded Originals/System Design/00 Home/Indexes"
   ]
 }

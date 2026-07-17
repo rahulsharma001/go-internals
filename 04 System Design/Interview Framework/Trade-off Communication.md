@@ -1,47 +1,51 @@
 ---
 type: canonical
 domain: system-design
-topic: trade-off-communication
-status: learning
+topic: tradeoff-communication
+status: active
 ---
 # Trade-off Communication
 
-## Problem it solves
+## Strong answer shape
 
-Senior interviews evaluate judgment under constraints, not whether a component list matches a reference answer.
+“Requirement **Y** needs semantic **Z**, so I select **X** over **A**. X improves **benefit** but costs **C**. I contain C with **M**, observe **N**, and would switch to A when **W** changes.”
 
-## Mental model and method
+A trade-off needs a selected option. Generic lists of pros/cons avoid the decision.
 
-Use a four-part sentence: requirement → choice → cost/risk → mitigation or reversal trigger. Example: “Because order ownership needs atomic uniqueness, I start with PostgreSQL; this limits write scaling by one primary, so I partition only when measured contention or capacity requires it.”
+## Decision dimensions
 
-## Concrete example and dry run
+- correctness vs availability during partition;
+- latency vs freshness;
+- throughput vs per-item latency;
+- synchronous simplicity vs temporal coupling;
+- asynchronous resilience vs lag/duplicates;
+- precompute/write amplification vs read latency;
+- single-writer simplicity vs global write locality;
+- normalized flexibility vs denormalized reads;
+- isolation vs capacity utilization;
+- durability/retention vs cost/privacy;
+- managed service velocity vs portability/control.
 
-For Uber driver locations: choose an in-memory geospatial store for fresh nearby lookup, accepting possible loss/staleness because durable ride ownership remains in a transactional store. Replicate location partitions and fall back to slightly stale candidates. Do not claim the same consistency for driver assignment; acceptance uses a conditional write on the ride/driver state.
+## Examples
 
-Dry run competing alternatives: broadcast offers reduce pickup latency but increase double-accept races and driver spam; sequential offers are simpler but slower; small batches balance latency and contention. State the chosen batch size is tuned from measured acceptance latency, not invented as universal.
+**Feed:** “I choose hybrid fan-out: precompute ordinary users for low read latency, but pull celebrity posts at read time to avoid massive write amplification. The cost is merge complexity and bounded staleness; I track fan-out lag and read-merge latency. Pure write fan-out wins if follower counts are bounded.”
 
-## Success and failure scenarios
+**Payments:** “I keep single-home writes per payment intent because deduplication and ordered transitions matter more than write locality. The cost is cross-region latency and regional failover complexity; I use regional routing, replicated reads, explicit epochs, and reconciliation. Active-active wins only with a proven conflict-free ownership model.”
 
-Success: every major choice maps to a requirement and has a failure consequence. Failure: absolutes such as “NoSQL is faster,” “Kafka guarantees exactly once,” or “active-active is always available.” Replace with scoped semantics and operational costs.
+## Diagram integration
 
-## Scaling and production choices
+Annotate the affected arrow/store with the decision and consistency. Keep a small rejected-alternatives table. When constraints change, point to the exact branch that changes.
 
-Useful axes: latency/throughput, availability/consistency, durability/cost, freshness/complexity, isolation/utilization, synchronous coupling/eventual consistency, build/buy, managed/self-hosted, single-region/multi-region.
+## Weak language to replace
 
-## When not to over-qualify
+- “Redis is fast” → “A bounded cache reduces repeated reads; source-of-truth fallback and TTL bound staleness.”
+- “Kafka is scalable” → “A partitioned durable log gives per-key ordering and replay; it adds lag, duplicates, and broker operations.”
+- “NoSQL for scale” → state access path, partition key, consistency, and transaction loss.
+- “Exactly once” → name the broker boundary and application idempotency.
 
-Do not list every possible alternative. Choose one, defend it, and name the signal that would cause a change.
+## Five-minute revision
 
-## Interview mistakes and follow-ups
+Decision → requirement/semantic → alternative → benefit → cost → containment → signal → switch condition.
 
-Technology-first answers; no rejected alternative; ignoring migration/operations; hiding user-visible degradation. Follow-ups: what fails first at 10×? what would you simplify for launch? how do you reverse the decision? which metric validates it?
+Related: [[Trade-off Vocabulary]] · [[CAP and PACELC]] · [[Choosing Databases and Storage]].
 
-## Five-minute recall
-
-“Given ___, choose ___; cost is ___; mitigate with ___; revisit when ___.”
-
-Related: [[System Design Trade-off Cheatsheet]], [[Data Storage Selection]], [[Multi Region Architecture]].
-
-## Source metadata
-
-Curated from the existing framework and interview-focused extracts; no personal decision is asserted.

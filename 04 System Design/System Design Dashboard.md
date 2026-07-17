@@ -5,45 +5,45 @@ status: active
 ---
 # System Design Dashboard
 
-Use this as the entry point for Senior Backend and Google/FAANG design practice. Notes provide reference knowledge; interview readiness requires a dated, timed design attempt and re-test.
+## Current operating rule
 
-## Interview sequence
+Designs are learned by reconstruction. Note completeness never changes personal readiness. Use [[README - How to Learn System Design]] and preserve every timed attempt before comparison.
 
-[[Requirements and Scope]] → [[Capacity Estimation]] → [[Core Entities APIs and Data Model]] → [[Architecture Presentation Strategy]] → success flow → failure flow → bottleneck → reliability/security → [[Trade-off Communication]].
+## Start a session
 
-Primary owner: [[System Design Interview Framework]] · 15-minute revision: [[System Design 15-Minute Revision]] · checklist: [[System Design Interview Checklist]].
+1. Open [[15-Minute Interview Launchpad]] and choose a system from [[System Coverage Matrix]].
+2. Use [[System Design Blank Interview Template]] and [[45-Minute System Design Playbook]].
+3. Score with [[System Design Mock Rubric]].
+4. Update [[System Design Practice Tracker]].
+5. Add only observed failures to [[Common Mistakes and Re-test Queue]].
 
-## Foundations
+## Curriculum layers
 
-[[Scalability and Availability]] · [[Consistency Models]] · [[CAP and PACELC]] · [[Load Balancing]] · [[Consistent Hashing]] · [[Partitioning and Sharding]] · [[Replication]] · [[Stateless and Stateful Services]] · [[Synchronous vs Asynchronous Communication]] · [[Queues and Pub Sub]] · [[Data Storage Selection]]
+- Interview method: [[45-Minute System Design Playbook]] · [[Requirements Clarification Framework]] · [[Back-of-the-Envelope Estimation]] · [[Invariants and Critical Paths]] · [[API and Data Model Design]] · [[Building the HLD Incrementally]]
+- Decisions and failure: [[Choosing Databases and Storage]] · [[Finding Bottlenecks]] · [[Reliability and Failure Analysis]] · [[Trade-off Communication]] · [[Interviewer Follow-up Strategy]]
+- Foundations: [[Scalability Availability and Reliability]] · [[Latency Throughput and Capacity]] · [[Consistency Models]] · [[Partitioning and Sharding]] · [[Queues Streams and Pub Sub]] · [[Multi-Region Design]]
+- Pattern selection: [[System Pattern Selection Guide]] · [[Caching Pattern]] · [[Idempotency Pattern]] · [[Transactional Outbox Pattern]] · [[Backpressure and Load Shedding]]
 
-## Reusable patterns
+## System sequence
 
-[[Caching Pattern]] · [[Idempotency Pattern]] · [[Retry Pattern]] · [[Circuit Breaker Pattern]] · [[Bulkhead Pattern]] · [[Backpressure Pattern]] · [[Rate Limiting Pattern]] · [[Saga Pattern]] · [[Transactional Outbox Pattern]] · [[Change Data Capture]] · [[CQRS]] · [[Distributed Locking]] · [[Leader Election]]
+| Tier | Systems | Why now |
+| --- | --- | --- |
+| 1A | [[URL Shortener]], [[Rate Limiter System]], [[Notification System]] | scope, cache, rate control, async delivery |
+| 1B | [[Order Processing System]], [[Payment System]], [[Event Ticket Booking System]] | invariants, transactions, idempotency, concurrency |
+| 1C | [[News Feed System]], [[WebSocket Chat or Realtime System]], [[Uber System Design]] | fan-out, realtime, ordering, geospatial matching |
+| 1D | [[YouTube System Design]], [[File Storage and Synchronization System]] | blob lifecycle, CDN, async processing, conflict resolution |
+| 1E | [[Distributed Job Scheduler]], [[Distributed Cache System]], [[Search Autocomplete System]] | ownership, leases/fencing, partitioning, indexes |
+| 2 | [[Monitoring System]], [[Logging and Metrics Pipeline]], [[Web Crawler System]], [[API Gateway System]] | streaming, high write, control/data planes, fairness |
 
-Selection aid: [[Pattern Selection Guide]] · quick recall: [[Patterns Quick Revision]].
+Full mapping: [[System Coverage Matrix]].
 
-## Representative systems
+## Readiness snapshot
 
-| System | Core interview depth |
-| --- | --- |
-| [[Order Processing System]] | Saga, outbox, Debezium CDC, Kafka, inbox/idempotency, compensation |
-| [[Uber System Design]] | geospatial location, matching consistency, hot regions, realtime trip flow |
-| [[YouTube System Design]] | chunked upload, asynchronous transcoding, object storage, CDN |
-| [[Notification System]] | preferences, fan-out, providers, retries, delivery status |
-| [[WebSocket Chat or Realtime System]] | connection routing, presence, ordering, offline delivery |
-| [[Monitoring System]] | scheduling, distributed probes, state transitions, alert dedupe |
-| [[URL Shortener]] | key generation, read path, cache, abuse and expiry |
+All systems begin `not-started` in [[System Design Practice Tracker]]. Canonical notes are complete curriculum assets, not evidence of a mock, re-test, or interview readiness.
 
-## Production decision lenses
+## Five-minute launch
 
-- Reliability: [[Failure Handling Strategy]], [[Timeouts Retries and Deadlines]], [[Graceful Degradation]], [[Disaster Recovery]], [[Multi Region Architecture]].
-- Observability: [[Logs Metrics and Traces]], [[SLI SLO and Error Budgets]], [[Alerting Strategy]].
-- Security: [[Authentication and Authorization]], [[OAuth JWT OIDC and mTLS]], [[API Security]].
-- Data choice: [[Database Selection Guide]].
+`Users → journey → invariant → scale → APIs/state → owner → basic HLD → bottleneck → failure → trade-off → summary`
 
-## Evidence boundary
+Quick pack: [[45-Minute Timeline Cheatsheet]] · [[Requirements Checklist]] · [[HLD Drawing Checklist]] · [[Reliability Checklist]] · [[Common Interview Traps]].
 
-No personal scale, incident, ownership, metric, or production technology is asserted here. Example scale assumptions are interview inputs, explicitly labeled as assumptions. Canonical content is `learning`; mock outcomes remain unrecorded until performed.
-
-Sources and migration decisions: [[MIGRATION_REPORT_04_SYSTEM_DESIGN]].
