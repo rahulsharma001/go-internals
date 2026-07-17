@@ -109,7 +109,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "02 Go/Design Patterns/Worker Pool.md",
+                "file": "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
                 "mode": "preview",
                 "source": false,
                 "backlinks": true,
@@ -124,7 +124,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "Worker Pool"
+              "title": "Balanced Slice Groups - Drill"
             }
           }
         ],
@@ -201,7 +201,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "02 Go/Design Patterns/Worker Pool.md",
+                "file": "02 Go/Coding Drills/Balanced Slice Groups - Drill.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -211,7 +211,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for Worker Pool"
+              "title": "Backlinks for Balanced Slice Groups - Drill"
             }
           },
           {
@@ -290,8 +290,14 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "4ca854d182283b79",
+  "active": "c54a305332109d86",
   "lastOpenFiles": [
+    "09 Roadmaps/Google/Google Engineering Roadmap.md",
+    "00 Home/Indexes/DSA Map of Content.md",
+    "09 Roadmaps/30-Day FAANG Sprint/Week 1 - Go Recovery.md",
+    "00 Home/Current Focus/Stage 1 Go Foundation Implementation Gate.md",
+    "00 Home/Current Focus/Current Week.md",
+    "02 Go/Design Patterns/Worker Pool.md",
     "MIGRATION_REPORT_05_INFRASTRUCTURE.md",
     "05 Infrastructure/Infrastructure Dashboard.md",
     "05 Infrastructure/Quick Revision/Observability Interview Revision.md",
@@ -312,12 +318,6 @@
     "05 Infrastructure/Terraform/Terraform Production Practices.md",
     "05 Infrastructure/Terraform/Terraform with AWS and EKS.md",
     "05 Infrastructure/Terraform/Plan Apply and Drift.md",
-    "05 Infrastructure/Terraform/Modules.md",
-    "05 Infrastructure/Terraform/State Locking.md",
-    "05 Infrastructure/Terraform/State and Remote Backends.md",
-    "05 Infrastructure/Terraform/Providers Resources and Data Sources.md",
-    "05 Infrastructure/Terraform/Terraform Mental Model.md",
-    "05 Infrastructure/Networking/Network Troubleshooting.md",
     "08 Quick Revision/Observability",
     "08 Quick Revision/Terraform",
     "08 Quick Revision/Docker",
