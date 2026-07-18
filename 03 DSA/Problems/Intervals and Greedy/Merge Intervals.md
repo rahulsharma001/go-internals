@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
-pattern: intervals
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
+pattern: interval-sorting
+difficulty:
+leetcode_url: https://leetcode.com/problems/merge-intervals/
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 source_conversations:
   - "DSA Plan for Working Professionals | 2025-07-14 | 6874a2d8-b030-8013-b0b6-a32294ecf165"
   - "Amazon SDE I Prep | 2026-07-13 | 6a548ae5-bf68-83ee-9235-aeb4e863e479"

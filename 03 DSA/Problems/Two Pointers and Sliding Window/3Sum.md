@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
 pattern: two-pointers
+difficulty:
+leetcode_url: https://leetcode.com/problems/3sum/
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 source_conversations:
   - "Two pointer questions FAANG | 2025-12-02 | 692e82d7-f7e4-8324-964d-f935b2756421"
   - "Amazon SDE I Prep | 2026-07-13 | 6a548ae5-bf68-83ee-9235-aeb4e863e479"

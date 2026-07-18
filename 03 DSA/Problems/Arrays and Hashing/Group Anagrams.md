@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
-pattern: arrays-hash-maps
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
+pattern: frequency-signature
+difficulty:
+leetcode_url: https://leetcode.com/problems/group-anagrams/
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 source_conversations:
   - "Neetcode 49 Naive Approach | 2025-04-29 | 68107169-0520-8013-a1a3-7b8aaac0a30b"
   - "Amazon SDE I Prep | 2026-07-13 | 6a548ae5-bf68-83ee-9235-aeb4e863e479"

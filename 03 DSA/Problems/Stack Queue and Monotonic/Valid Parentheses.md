@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
-pattern: stack-queue
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
+pattern: stack
+difficulty:
+leetcode_url: 
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 ---
 # Valid Parentheses
 

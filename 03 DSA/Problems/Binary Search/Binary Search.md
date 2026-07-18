@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
 pattern: binary-search
+difficulty:
+leetcode_url: https://leetcode.com/problems/binary-search/
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 source_conversations:
   - "Amazon SDE I Prep | 2026-07-13 | 6a548ae5-bf68-83ee-9235-aeb4e863e479"
 ---

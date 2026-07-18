@@ -1,8 +1,20 @@
 ---
-type: problem
-domain: dsa
-status: reference-not-attempted
-pattern: graphs
+type: dsa-problem
+language: go
+company_focus:
+  - apple
+  - uber
+priority: P0
+pattern: grid-dfs-bfs
+difficulty:
+leetcode_url: https://leetcode.com/problems/number-of-islands/
+status: not-started
+first_attempt_date:
+last_attempt_date:
+next_review_date:
+attempt_count: 0
+best_time_minutes:
+needs_revisit: true
 source_conversations:
   - "Graph DSA Basics | 2026-06-04 | 6a20ddd5-f634-83a2-ab1d-5faee9224afa"
   - "DFS vs BFS Understanding | 2026-06-10 | 6a290bd3-fa54-83a3-913f-6fdfa422abd2"
