@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/16 In-Process Pub Sub Broker/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/16 In-Process Pub Sub Broker/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/16 In-Process Pub Sub Broker/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/16_in_process_pub_sub_broker/README|Package README]]
+- [[02 Go/Backend LLD/implementation/16_in_process_pub_sub_broker/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/16_in_process_pub_sub_broker/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

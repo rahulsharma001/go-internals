@@ -87,6 +87,19 @@ No repeated observed mistake is recorded. The reported baseline remains in **Cur
 No mock score is recorded.
 <!-- AUTO:mocks:end -->
 
+## Apple / Uber Coding Tracks
+
+This manually maintained section sits outside the sprint automation markers.
+
+| Track | Scope | Running/tested references | Timed-ready | Interview-ready | Reviews due | Tracker |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| DSA in Go | 75 core + 3 extensions | Existing references preserved; completion not inferred | 0 | 0 | 0 scheduled | [[DSA Practice Tracker]] |
+| Backend LLD in Go | 50 | 5 enriched; final race validation pending | 0 | 0 | 0 scheduled | [[Backend LLD Practice Tracker]] |
+
+Next: due reviews first; then [[Two Sum]] cold reconstruction; then [[Top K Frequent Elements]]; then [[Thread-Safe Bounded Queue]] from a blank editor; finish the week with one [[DSA Mock Interview Template|timed coding mock]] or [[LLD Machine Coding Mock Template|machine-coding mock]].
+
+Dashboards: [[DSA Dashboard]] · [[Backend LLD Dashboard]] · schedule: [[Apple Uber SDE2 - 75 DSA Plan]].
+
 ## Application pipeline
 
 <!-- AUTO:applications:start -->

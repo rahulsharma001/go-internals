@@ -9,11 +9,11 @@ import (
 // that closes/replaces it. Closing drains accepted items before Dequeue returns
 // ErrClosed.
 type Queue[T any] struct {
-	mu      sync.Mutex
-	items   []T
+	mu       sync.Mutex
+	items    []T
 	capacity int
-	closed  bool
-	changed chan struct{}
+	closed   bool
+	changed  chan struct{}
 }
 
 func New[T any](capacity int) (*Queue[T], error) {

@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/02 Generic Queue/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/02 Generic Queue/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/02 Generic Queue/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/02_generic_queue/README|Package README]]
+- [[02 Go/Backend LLD/implementation/02_generic_queue/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/02_generic_queue/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -128,4 +128,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

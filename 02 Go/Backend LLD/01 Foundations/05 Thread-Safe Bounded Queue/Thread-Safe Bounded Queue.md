@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/05 Thread-Safe Bounded Queue/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/05 Thread-Safe Bounded Queue/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/05 Thread-Safe Bounded Queue/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/05_thread_safe_bounded_queue/README|Package README]]
+- [[02 Go/Backend LLD/implementation/05_thread_safe_bounded_queue/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/05_thread_safe_bounded_queue/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

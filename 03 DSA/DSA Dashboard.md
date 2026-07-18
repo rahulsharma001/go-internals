@@ -9,6 +9,31 @@ last_evidence_sync: 2026-07-17
 
 The goal is reliable Go implementation under interview conditions, not collecting solved-note checkboxes. A problem becomes evidence only after a blank-editor attempt, a runnable invocation, an explanation, a modification, and a later re-test.
 
+## Apple / Uber SDE-2 Core Track
+
+Source of truth: [[DSA Practice Tracker]] · execution order: [[Apple Uber SDE2 - 75 DSA Plan]] · quick revision: [[08 Quick Revision/DSA/Sliding Window - Quick Revision|DSA quick revision]]
+
+| Metric | Current evidence |
+| --- | ---: |
+| Core problems | 75 |
+| Mandatory extensions | 3 |
+| P0 completed | 0 |
+| P1 completed | 0 |
+| P2 completed | 0 |
+| Timed-ready | 0 |
+| Interview-ready | 0 |
+| Reviews due | 0 scheduled |
+| Weakest patterns | Not measurable until attempts are recorded |
+
+### Next Recommended Work
+
+1. Due reviews: none scheduled; do not invent review dates.
+2. Incomplete P0: [[Two Sum]] cold reconstruction from the preserved reference.
+3. Next new P0: [[Top K Frequent Elements]] from a blank editor.
+4. Weekly mock: create one from [[DSA Mock Interview Template]] in [[03 DSA/Mocks|DSA Mocks]].
+
+Generated notes and existing runnable references are curriculum assets, not personal completion evidence.
+
 ## Start here
 
 1. Review [[DSA Pattern Recognition - 5 Minute Revision]].

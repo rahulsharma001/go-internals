@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/02 Infrastructure Components/28 Singleflight Request Coalescer/README|Package README]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/28 Singleflight Request Coalescer/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/28 Singleflight Request Coalescer/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/28_singleflight_request_coalescer/README|Package README]]
+- [[02 Go/Backend LLD/implementation/28_singleflight_request_coalescer/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/28_singleflight_request_coalescer/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

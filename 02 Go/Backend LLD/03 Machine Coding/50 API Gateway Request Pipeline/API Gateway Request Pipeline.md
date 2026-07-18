@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/03 Machine Coding/50 API Gateway Request Pipeline/README|Package README]]
-- [[02 Go/Backend LLD/03 Machine Coding/50 API Gateway Request Pipeline/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/03 Machine Coding/50 API Gateway Request Pipeline/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/50_api_gateway_request_pipeline/README|Package README]]
+- [[02 Go/Backend LLD/implementation/50_api_gateway_request_pipeline/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/50_api_gateway_request_pipeline/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

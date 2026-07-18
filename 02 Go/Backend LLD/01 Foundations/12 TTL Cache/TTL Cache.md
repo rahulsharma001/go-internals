@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/12 TTL Cache/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/12 TTL Cache/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/12 TTL Cache/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/12_ttl_cache/README|Package README]]
+- [[02 Go/Backend LLD/implementation/12_ttl_cache/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/12_ttl_cache/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

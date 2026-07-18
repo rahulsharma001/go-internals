@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/19 Router With Path Parameters/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/19 Router With Path Parameters/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/19 Router With Path Parameters/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/19_router_with_path_parameters/README|Package README]]
+- [[02 Go/Backend LLD/implementation/19_router_with_path_parameters/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/19_router_with_path_parameters/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/01 Foundations/03 Circular Deque/README|Package README]]
-- [[02 Go/Backend LLD/01 Foundations/03 Circular Deque/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/01 Foundations/03 Circular Deque/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/03_circular_deque/README|Package README]]
+- [[02 Go/Backend LLD/implementation/03_circular_deque/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/03_circular_deque/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -128,4 +128,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

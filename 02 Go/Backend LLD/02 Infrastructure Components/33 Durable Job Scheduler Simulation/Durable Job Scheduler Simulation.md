@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/02 Infrastructure Components/33 Durable Job Scheduler Simulation/README|Package README]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/33 Durable Job Scheduler Simulation/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/33 Durable Job Scheduler Simulation/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/33_durable_job_scheduler_simulation/README|Package README]]
+- [[02 Go/Backend LLD/implementation/33_durable_job_scheduler_simulation/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/33_durable_job_scheduler_simulation/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/03 Machine Coding/46 Cab-Booking Core/README|Package README]]
-- [[02 Go/Backend LLD/03 Machine Coding/46 Cab-Booking Core/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/03 Machine Coding/46 Cab-Booking Core/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/46_cab_booking_core/README|Package README]]
+- [[02 Go/Backend LLD/implementation/46_cab_booking_core/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/46_cab_booking_core/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

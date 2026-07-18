@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/02 Infrastructure Components/22 Sliding-Window Rate Limiter/README|Package README]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/22 Sliding-Window Rate Limiter/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/22 Sliding-Window Rate Limiter/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/22_sliding_window_rate_limiter/README|Package README]]
+- [[02 Go/Backend LLD/implementation/22_sliding_window_rate_limiter/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/22_sliding_window_rate_limiter/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -129,4 +129,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-

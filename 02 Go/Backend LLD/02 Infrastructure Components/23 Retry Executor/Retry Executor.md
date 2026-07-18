@@ -96,9 +96,9 @@ caller(s) -> validated public API -> owned state / worker -> result or explicit 
 
 ## Implementation Workspace
 
-- [[02 Go/Backend LLD/02 Infrastructure Components/23 Retry Executor/README|Package README]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/23 Retry Executor/implementation.go|Implementation]]
-- [[02 Go/Backend LLD/02 Infrastructure Components/23 Retry Executor/implementation_test.go|Tests]]
+- [[02 Go/Backend LLD/implementation/23_retry_executor/README|Package README]]
+- [[02 Go/Backend LLD/implementation/23_retry_executor/implementation.go|Implementation]]
+- [[02 Go/Backend LLD/implementation/23_retry_executor/implementation_test.go|Tests]]
 
 ## Test Plan
 
@@ -128,4 +128,3 @@ Record only mistakes observed during an actual design or implementation attempt.
 
 | Date | Attempt | Design min | Running-code min | Tests | Race | Next review |
 | --- | ---: | ---: | ---: | --- | --- | --- |
-
