@@ -100,3 +100,73 @@ Finish in 35 minutes, implement all five heap methods without a reference, compi
 | — | — | not-attempted | — | — | after first attempt |
 
 Observed mistakes: none recorded. The historical heap source used Java; it does not count as Go completion.
+
+## Problem in Simple Words
+
+Return the value at descending rank k, counting duplicates.
+
+## Example
+
+[6,2,6,4], k=2 returns 6.
+
+## Clarifying Questions
+
+- May input be empty, invalid, or mutated?
+- What duplicate, ordering, numeric, or node-identity guarantees apply?
+
+## Pattern Recognition
+
+- Signals in the question: size-k min-heap or quickselect.
+- Likely data structure: the structure that directly represents the invariant.
+- Common wrong approach: repeated scans or state updates that lose the invariant.
+- Key invariant: A size-k heap contains the k largest processed values and its root is their kth largest.
+
+## Approaches
+
+### Brute Force
+
+- Intuition: enumerate candidates directly.
+- Complexity: derive during the cold attempt.
+- Why it may fail: it repeats work and misses the expected bound.
+
+### Better Approach
+
+Use only if a genuine intermediate approach clarifies the progression.
+
+### Optimal Approach
+
+- Intuition and complete runnable reference: preserved above from the existing canonical note.
+- Invariant: A size-k heap contains the k largest processed values and its root is their kth largest.
+- Complexity: verify the bound above during explanation.
+
+## Small Dry Run
+
+Reconstruct the existing dry run without looking, then add one adversarial case.
+
+## Go-Specific Notes
+
+Check slice initialization, map membership, pointer rewiring, queue head indexing, recursive closure declaration, heap pointer receivers, input mutation, and byte/rune semantics as applicable.
+
+## Implementation
+
+The pre-existing executable reference above is preserved. For practice, close this note and reproduce a complete main() or test invocation from a blank editor.
+
+## Tests and Edge Cases
+
+Re-run the preserved edge cases and add one case that breaks the tempting wrong approach.
+
+## Explain Aloud
+
+Restate → pattern → invariant → one transition → complexity → Go detail → variation, within 60–90 seconds.
+
+## Variations and Follow-ups
+
+Make one constraint change after a clean reconstruction.
+
+## Mistakes I Made
+
+None recorded. Add only observed mistakes from an actual attempt.
+
+## Review History
+
+Use the preserved re-attempt table above and the central tracker; never infer an attempt from the reference solution.
