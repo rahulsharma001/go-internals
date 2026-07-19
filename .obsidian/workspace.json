@@ -85,8 +85,8 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "04 System Design/Systems/API Gateway System.md",
-                "mode": "source",
+                "file": "02 Go/Backend LLD/Backend LLD - 50 Problem Plan.md",
+                "mode": "preview",
                 "source": false,
                 "backlinks": true,
                 "backlinkOpts": {
@@ -100,7 +100,7 @@
                 }
               },
               "icon": "lucide-file",
-              "title": "API Gateway System"
+              "title": "Backend LLD - 50 Problem Plan"
             }
           }
         ],
@@ -161,7 +161,7 @@
       }
     ],
     "direction": "horizontal",
-    "width": 432.5
+    "width": 258.5
   },
   "right": {
     "id": "06b9fd80f4139a7a",
@@ -177,7 +177,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "04 System Design/Systems/API Gateway System.md",
+                "file": "02 Go/Backend LLD/Backend LLD - 50 Problem Plan.md",
                 "collapseAll": true,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -187,7 +187,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for API Gateway System"
+              "title": "Backlinks for Backend LLD - 50 Problem Plan"
             }
           },
           {
@@ -262,11 +262,14 @@
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
       "command-palette:Open command palette": false,
-      "bases:Create new base": false
+      "bases:Create new base": false,
+      "obsidian-git:Open Git source control": false
     }
   },
   "active": "76eaf19df250f926",
   "lastOpenFiles": [
+    "02 Go/Backend LLD/01 Foundations/01 Generic Stack/Generic Stack.md",
+    "04 System Design/Systems/API Gateway System.md",
     "02 Go/Interview Coding Patterns/Interview Coding Patterns Index.md",
     "02 Go/Backend LLD/Mocks/Backend LLD Mocks.md",
     "03 DSA/Mocks/DSA Mocks.md",
@@ -300,8 +303,6 @@
     "02 Go/Backend LLD/implementation/49_feature_flag_service/README.md",
     "02 Go/Backend LLD/implementation/49_feature_flag_service",
     "02 Go/Backend LLD/implementation/48_library_management_system/types.go",
-    "02 Go/Backend LLD/implementation/48_library_management_system/implementation_test.go",
-    "02 Go/Backend LLD/implementation/48_library_management_system/README.md",
-    "02 Go/Backend LLD/implementation/47_inventory_reservation_system/README.md"
+    "02 Go/Backend LLD/implementation/48_library_management_system/implementation_test.go"
   ]
 }
